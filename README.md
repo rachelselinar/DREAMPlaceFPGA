@@ -1,8 +1,9 @@
 # DREAMPlaceFPGA
 An Open-Source Analytical Placer for Large Scale Heterogeneous FPGAs using Deep-Learning Toolkit.
 
+<div style="text-align: justify">
 This work leverages the open-source ASIC placement framework, [DREAMPlace](https://github.com/limbo018/DREAMPlace), to build an open-source FPGA placement framework that is based on the [elfPlace](https://ieeexplore.ieee.org/document/8942075) algorithm.
-On the [ISPD'2016 benchmark suite](http://www.ispd.cc/contests/16/FAQ.html), DREAMPlaceFPGA is '5.4×' faster for global placement and '1.8×' faster for overall placement than [elfPlace (CPU)](https://ieeexplore.ieee.org/document/8942075), with similar quality of results.
+On the [ISPD'2016 benchmark suite](http://www.ispd.cc/contests/16/FAQ.html), DREAMPlaceFPGA is `5.4×` faster for global placement and `1.8×` faster for overall placement than [elfPlace (CPU)](https://ieeexplore.ieee.org/document/8942075), with similar quality of results.
 In addition, DREAMPlaceFPGA outperforms [elfPlace (GPU)](https://ieeexplore.ieee.org/document/9330804) by `19%` for global placement.
 For more details, please refer to the ['paper'](#citation).
 
@@ -10,10 +11,12 @@ Among the various placement stages: global placement, legalization and detailed 
 The [elfPlace (CPU)](thirdparty/elfPlace_LG_DP) binary is used to run the legalization and detailed placement stages. 
 Currently, DREAMPlaceFPGA only supports the [ISPD'2016 benchmarks](http://www.ispd.cc/contests/16/FAQ.html), which employs the Xilinx Ultrascale Architecture.
 DREAMPlaceFPGA runs on both CPU and GPU. If installed on a machine without GPU, multi-threaded CPU support is available.
+</div>
 
 * Reference Flow
-
-<img src=/images/FPGA_placement.png>
+<p align="center">
+    <img src=/images/FPGA_placement.png width=50% height=50%>
+</p>
 
 ## Developer(s)
 
@@ -144,7 +147,7 @@ python unitest/ops/hpwl_unitest.py
 
 ### JSON Configurations
 
-The most important options in the JSON file are listed as follows. For a complete list of available options refer to [paramsFPGA.json](./dreamplacefpga/paramsFPGA.json). 
+The most frequently used options in the JSON file are listed below. For the complete list of available options, please refer to [paramsFPGA.json](./dreamplacefpga/paramsFPGA.json). 
 
 | JSON Parameter                   | Default                 | Description                                                                                                                                                       |
 | -------------------------------- | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -160,9 +163,9 @@ The most important options in the JSON file are listed as follows. For a complet
 | scale_factor                     | 0.0                     | scale factor to avoid numerical overflow; 0.0 means not set                                                                                                       |
 | result_dir                       | results                 | result directory for output                                                                                                                                       |
 | global_place_flag                | 1                       | whether use global placement                                                                                                                                      |
-| legalize_and_detailed_place_flag | 1                       | whether to run legalization and detailed placement using [elfPlace (CPU)] (thirdparty/elfPlace_LG_DP)
-                                                                                          |
-| dtype                            | float32                 | data type, float32 | float64                                                                                                                                      |
+| legalize_and_detailed_place_flag | 1                       | whether to run legalization and detailed placement using elfPlace (CPU)
+                                                        |
+| dtype                            | float32                 | data type, float32 (or) float64                                                                                                                                   |
 | plot_flag                        | 0                       | whether plot solution or not                                                                                                                                      |
 
 ## Bug Report
@@ -171,7 +174,7 @@ Please report bugs to [rachelselina dot r at utexas dot edu](mailto:rachelselina
 
 ## Citation
 
-If you use LGE routine in your work, please cite: 
+If you use DREAMPlaceFPGA in your work, please cite: 
 
 ```
 R. S. Rajarathnam, M. B. Alawieh, Z. Jiang, M. A. Iyer and D. Z. Pan, "DREAMPlaceFPGA: An Open-Source Analytical Placer for Large Scale Heterogeneous FPGAs using Deep-Learning Toolkit," IEEE/ACM Asian and South Pacific Design Automation Conference (ASP-DAC), Jan 17-20, 2022 (accepted).
