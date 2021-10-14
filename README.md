@@ -3,9 +3,9 @@ An Open-Source Analytical Placer for Large Scale Heterogeneous FPGAs using Deep-
 
 This work leverages the open-source ASIC placement framework, [DREAMPlace](https://github.com/limbo018/DREAMPlace), to build an open-source placement framework for FPGAs that is based on the [elfPlace](https://ieeexplore.ieee.org/document/8942075) algorithm. On the [ISPD'2016 benchmark suite](http://www.ispd.cc/contests/16/FAQ.html), *DREAMPlaceFPGA* is `5.4×` faster for global placement and `1.8×` faster for overall placement than [elfPlace (CPU)](https://ieeexplore.ieee.org/document/8942075), with similar quality of results. In addition, *DREAMPlaceFPGA* outperforms [elfPlace (GPU)](https://ieeexplore.ieee.org/document/9330804) by `19%` for global placement. For more details, please refer to the ['paper'](#citation).
 
-Among the various placement stages: global placement, legalization and detailed placement, only the global placement stage is accelerated using *DREAMPlaceFPGA*. The [elfPlace (CPU)](thirdparty/elfPlace_LG_DP) binary is used to run the legalization and detailed placement stages. Currently, *DREAMPlaceFPGA* only supports the [ISPD'2016 benchmarks](http://www.ispd.cc/contests/16/FAQ.html), which employs the Xilinx Ultrascale architecture. *DREAMPlaceFPGA* runs on both CPU and GPU. If installed on a machine without GPU, multi-threaded CPU support is available.
+Among the various placement stages: global placement (GP), legalization (LG), and detailed placement (DP), only the global placement stage is accelerated using *DREAMPlaceFPGA*. The [elfPlace (CPU)](thirdparty/elfPlace_LG_DP) binary is used to run the legalization and detailed placement stages. Currently, *DREAMPlaceFPGA* only supports the [ISPD'2016 benchmarks](http://www.ispd.cc/contests/16/FAQ.html), which employs the Xilinx Ultrascale architecture. *DREAMPlaceFPGA* runs on both CPU and GPU. If installed on a machine without GPU, multi-threaded CPU support is available.
 
-* Reference Flow
+* *DREAMPlaceFPGA* Placement Flow
 <p align="center">
     <img src=/images/FPGA_placement.png width=40% height=40%>
 </p>
@@ -143,7 +143,7 @@ The most frequently used options in the JSON file are listed below. For the comp
 
 | JSON Parameter                   | Default                 | Description                                                                                                                                                       |
 | -------------------------------- | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| aux_input                        | required for Bookshelf  | input .aux file                                                                                                                                                   |
+| aux_input                        | required for bookshelf  | input .aux file                                                                                                                                                   |
 | gpu                              | 1                       | enable gpu or not                                                                                                                                                 |
 | num_threads                      | 8                       | number of CPU threads                                                                                                                                             |
 | num_bins_x                       | 512                     | number of bins in horizontal direction                                                                                                                            |
