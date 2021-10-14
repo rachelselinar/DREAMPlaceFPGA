@@ -1,21 +1,13 @@
 # DREAMPlaceFPGA
 An Open-Source Analytical Placer for Large Scale Heterogeneous FPGAs using Deep-Learning Toolkit.
 
-<div style="text-align: justify">
-This work leverages the open-source ASIC placement framework, [DREAMPlace](https://github.com/limbo018/DREAMPlace), to build an open-source FPGA placement framework that is based on the [elfPlace](https://ieeexplore.ieee.org/document/8942075) algorithm.
-On the [ISPD'2016 benchmark suite](http://www.ispd.cc/contests/16/FAQ.html), DREAMPlaceFPGA is `5.4×` faster for global placement and `1.8×` faster for overall placement than [elfPlace (CPU)](https://ieeexplore.ieee.org/document/8942075), with similar quality of results.
-In addition, DREAMPlaceFPGA outperforms [elfPlace (GPU)](https://ieeexplore.ieee.org/document/9330804) by `19%` for global placement.
-For more details, please refer to the ['paper'](#citation).
+This work leverages the open-source ASIC placement framework, [DREAMPlace](https://github.com/limbo018/DREAMPlace), to build an open-source placement framework for FPGAs that is based on the [elfPlace](https://ieeexplore.ieee.org/document/8942075) algorithm. On the [ISPD'2016 benchmark suite](http://www.ispd.cc/contests/16/FAQ.html), *DREAMPlaceFPGA* is `5.4×` faster for global placement and `1.8×` faster for overall placement than [elfPlace (CPU)](https://ieeexplore.ieee.org/document/8942075), with similar quality of results. In addition, *DREAMPlaceFPGA* outperforms [elfPlace (GPU)](https://ieeexplore.ieee.org/document/9330804) by `19%` for global placement. For more details, please refer to the ['paper'](#citation).
 
-Among the various placement stages: global placement, legalization and detailed placement, only the global placement stage is accelerated using DREAMPlaceFPGA.
-The [elfPlace (CPU)](thirdparty/elfPlace_LG_DP) binary is used to run the legalization and detailed placement stages. 
-Currently, DREAMPlaceFPGA only supports the [ISPD'2016 benchmarks](http://www.ispd.cc/contests/16/FAQ.html), which employs the Xilinx Ultrascale Architecture.
-DREAMPlaceFPGA runs on both CPU and GPU. If installed on a machine without GPU, multi-threaded CPU support is available.
-</div>
+Among the various placement stages: global placement, legalization and detailed placement, only the global placement stage is accelerated using *DREAMPlaceFPGA*. The [elfPlace (CPU)](thirdparty/elfPlace_LG_DP) binary is used to run the legalization and detailed placement stages. Currently, *DREAMPlaceFPGA* only supports the [ISPD'2016 benchmarks](http://www.ispd.cc/contests/16/FAQ.html), which employs the Xilinx Ultrascale architecture. *DREAMPlaceFPGA* runs on both CPU and GPU. If installed on a machine without GPU, multi-threaded CPU support is available.
 
 * Reference Flow
 <p align="center">
-    <img src=/images/FPGA_placement.png width=50% height=50%>
+    <img src=/images/FPGA_placement.png width=40% height=40%>
 </p>
 
 ## Developer(s)
@@ -127,7 +119,7 @@ Here are the available options for CMake.
 
 ## Sample Benchmarks
 
-DREAMPlaceFPGA only supports designs for *Xilinx Ultrascale Architecture* in bookshelf format with fixed IOs.
+*DREAMPlaceFPGA* only supports designs for *Xilinx Ultrascale Architecture* in bookshelf format with fixed IOs.
 Refer to [ISPD'2016 contest](http://www.ispd.cc/contests/16/FAQ.html) for more information.
 
 Four sample designs are included in `benchmarks` directory.
@@ -163,8 +155,7 @@ The most frequently used options in the JSON file are listed below. For the comp
 | scale_factor                     | 0.0                     | scale factor to avoid numerical overflow; 0.0 means not set                                                                                                       |
 | result_dir                       | results                 | result directory for output                                                                                                                                       |
 | global_place_flag                | 1                       | whether use global placement                                                                                                                                      |
-| legalize_and_detailed_place_flag | 1                       | whether to run legalization and detailed placement using elfPlace (CPU)
-                                                        |
+| legalize_and_detailed_place_flag | 1                       | whether to run legalization and detailed placement using elfPlace                                                                                                 |
 | dtype                            | float32                 | data type, float32 (or) float64                                                                                                                                   |
 | plot_flag                        | 0                       | whether plot solution or not                                                                                                                                      |
 
@@ -172,23 +163,11 @@ The most frequently used options in the JSON file are listed below. For the comp
 
 Please report bugs to [rachelselina dot r at utexas dot edu](mailto:rachelselina.r@utexas.edu).
 
-## Citation
+## Publication(s) 
 
-If you use DREAMPlaceFPGA in your work, please cite: 
-
-```
-R. S. Rajarathnam, M. B. Alawieh, Z. Jiang, M. A. Iyer and D. Z. Pan, "DREAMPlaceFPGA: An Open-Source Analytical Placer for Large Scale Heterogeneous FPGAs using Deep-Learning Toolkit," IEEE/ACM Asian and South Pacific Design Automation Conference (ASP-DAC), Jan 17-20, 2022 (accepted).
-```
-
-Bibtex:
-```
-@inproceedings{Rajarathnam2022DREAMPlaceFPGA,
-  title={DREAMPlaceFPGA: An Open-Source Analytical Placer for Large Scale Heterogeneous FPGAs using Deep-Learning Toolkit},
-  author={Rajarathnam, Rachel Selina and Alawieh, Mohamaed Baker and Jiang, Zixuan and Iyer, Mahesh A. and Pan, David Z.},
-  booktitle={IEEE/ACM Asian and South Pacific Design Automation Conference (ASP-DAC)},
-  year={2022}
-}
-```
+* Rachel Selina Rajarathnam, Mohamed Baker Alawieh, Zixuan Jiang, Mahesh A. Iyer, and [David Z. Pan](http://users.ece.utexas.edu/~dpan), 
+  "**DREAMPlaceFPGA: An Open-Source Analytical Placer for Large Scale Heterogeneous FPGAs using Deep-Learning Toolkit**", 
+  IEEE/ACM Asian and South Pacific Design Automation Conference (ASP-DAC), Jan 17-20, 2022 (accepted)
 
 ## Copyright
 
