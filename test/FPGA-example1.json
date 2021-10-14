@@ -1,0 +1,17 @@
+{
+"aux_input" : "benchmarks/FPGA-example1/design.aux", 
+"gpu" : 1,
+"num_threads" : 1,
+"num_bins_x" : 512,
+"num_bins_y" : 512,
+"global_place_stages" : [
+    {"num_bins_x" : 512, "num_bins_y" : 512, "iteration" : 2000, "learning_rate" : 0.01, "wirelength" : "weighted_average", "optimizer" : "nesterov"}
+],
+"target_density" : 1.0,
+"density_weight" : 8e-5,
+"random_seed" : 1000,
+"scale_factor" : 1.0,
+"global_place_flag" : 1,
+"legalize_and_detailed_place_flag" : 1,
+"dtype" : "float32"
+}
