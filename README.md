@@ -10,9 +10,10 @@ Among the various placement stages: global placement (GP), legalization (LG), an
     <img src=/images/FPGA_placement.png width=40% height=40%>
 </p>
 
-## Developer(s)
+## Developers
 
 - Rachel Selina Rajarathnam, [UTDA](https://www.cerc.utexas.edu/utda), ECE Department, The University of Texas at Austin
+- Zixuan Jiang, [UTDA](https://www.cerc.utexas.edu/utda), ECE Department, The University of Texas at Austin
 
 ## External Dependencies
 
@@ -40,7 +41,7 @@ Among the various placement stages: global placement (GP), legalization (LG), an
     - Need to install and visible for linking
 
 - [Limbo](https://github.com/limbo018/Limbo)
-    - Integrated as a git submodule
+    - Integrated as a submodule: the bookshelf parser is modified for FPGAs.
 
 - [Flute](https://doi.org/10.1109/TCAD.2007.907068)
     - Integrated as a submodule
