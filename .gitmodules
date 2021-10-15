@@ -1,0 +1,6 @@
+[submodule "thirdparty/munkres-cpp"]
+	path = thirdparty/munkres-cpp
+	url = https://github.com/saebyn/munkres-cpp.git
+[submodule "thirdparty/cub"]
+	path = thirdparty/cub
+	url = https://github.com/NVIDIA/cub.git
