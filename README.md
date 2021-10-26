@@ -145,20 +145,21 @@ The most frequently used options in the JSON file are listed below. For the comp
 | JSON Parameter                   | Default                 | Description                                                                                                                                                       |
 | -------------------------------- | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | aux_input                        | required for bookshelf  | input .aux file                                                                                                                                                   |
-| gpu                              | 1                       | enable gpu or not                                                                                                                                                 |
+| gpu                              | 1                       | enable GPU acceleration or run on CPU                                                                                                                             |
 | num_threads                      | 8                       | number of CPU threads                                                                                                                                             |
 | num_bins_x                       | 512                     | number of bins in horizontal direction                                                                                                                            |
 | num_bins_y                       | 512                     | number of bins in vertical direction                                                                                                                              |
-| global_place_stages              | required                | global placement configurations of each stage, a dictionary of {"num_bins_x", "num_bins_y", "iteration", "learning_rate"}, learning_rate is relative to bin size  |
+| global_place_stages              | required                | global placement configuration of each stage, a dictionary of {"num_bins_x", "num_bins_y", "iteration", "learning_rate"}, learning_rate is relative to bin size   |
 | density_weight                   | 1.0                     | initial weight of density cost                                                                                                                                    |
-| gamma                            | 0.5                     | initial coefficient for log-sum-exp and weighted-average wirelength                                                                                               |
+| gamma                            | 5.0                     | initial coefficient for log-sum-exp and weighted-average wirelength                                                                                               |
 | random_seed                      | 1000                    | random seed                                                                                                                                                       |
 | scale_factor                     | 0.0                     | scale factor to avoid numerical overflow; 0.0 means not set                                                                                                       |
 | result_dir                       | results                 | result directory for output                                                                                                                                       |
-| global_place_flag                | 1                       | whether use global placement                                                                                                                                      |
+| global_place_flag                | 1                       | whether to run global placement                                                                                                                                   |
 | legalize_and_detailed_place_flag | 1                       | whether to run legalization and detailed placement using elfPlace                                                                                                 |
 | dtype                            | float32                 | data type, float32 (or) float64                                                                                                                                   |
-| plot_flag                        | 0                       | whether plot solution or not                                                                                                                                      |
+| plot_flag                        | 0                       | whether to plot solution or not (Increases runtime)                                                                                                               |
+| deterministic_flag               | 0                       | Ensures reproducible run-to-run results on GPU (May increase runtime)                                                                                             |
 
 ## Bug Report
 

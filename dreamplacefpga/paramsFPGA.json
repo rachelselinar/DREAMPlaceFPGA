@@ -93,11 +93,11 @@
     "default" : 1
     },
 "global_place_flag" : {
-    "descripton" : "whether use global placement", 
+    "descripton" : "whether to run global placement", 
     "default" : 1
     },
 "legalize_and_detailed_place_flag" : {
-    "descripton" : "run legalization and detailed placement using UTPlaceF", 
+    "descripton" : "run legalization and detailed placement using elfPlace", 
     "default" : 1
     },
 "stop_overflow" : {
@@ -105,7 +105,7 @@
     "default" : 0.1
     },
 "dtype" : {
-    "descripton" : "data type, float32 | float64", 
+    "descripton" : "data type, float32 (or) float64", 
     "default" : "float32"
     },
 "detailed_place_engine" : {
@@ -117,7 +117,7 @@
     "default" : "-nolegal -nodetail"
     },
 "plot_flag" : {
-    "descripton" : "whether plot solution or not", 
+    "descripton" : "whether to plot solution or not (Increases runtime)", 
     "default" : 0
     },
 "gamma" : {
@@ -221,7 +221,7 @@
     "default" : 3.0
     }, 
 "deterministic_flag" : {
-    "descripton" : "whether require run-to-run determinism, may have efficiency overhead", 
+    "descripton" : "Ensures reproducible run-to-run results (May increase runtime)", 
     "default" : 0
     }
 }

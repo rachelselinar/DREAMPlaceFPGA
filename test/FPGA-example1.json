@@ -13,5 +13,6 @@
 "scale_factor" : 1.0,
 "global_place_flag" : 1,
 "legalize_and_detailed_place_flag" : 1,
-"dtype" : "float32"
+"dtype" : "float32",
+"deterministic_flag" : 0
 }
