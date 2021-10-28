@@ -62,6 +62,8 @@ def placeFPGA(params):
         tt = time.time()
         os.system(cmd)
         logging.info("Legalization and detailed placement completed in %.3f seconds" % (time.time()-tt))
+    elif params.legalize_and_detailed_place_flag == 0:
+        logging.info("Legalization & Detailed Placement not run")
     else:
         logging.warning("External legalization & detailed placement engine NOT found at thirdparty/elfPlace_LG_DP")
 
