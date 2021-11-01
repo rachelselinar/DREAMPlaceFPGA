@@ -92,7 +92,7 @@ at::Tensor density_map_fpga(
     double xh, double yh, double bin_size_x, double bin_size_y,
     double targetHalfSizeX, double targetHalfSizeY,
     int num_movable_nodes, int num_filler_nodes, int num_bins_x,
-    int num_bins_y, int deterministic_flag) {
+    int num_bins_y) {
   CHECK_FLAT_CPU(pos);
   CHECK_EVEN(pos);
   CHECK_CONTIGUOUS(pos);
@@ -111,26 +111,12 @@ at::Tensor density_map_fpga(
   // Call the cuda kernel launcher
   DREAMPLACE_DISPATCH_FLOATING_TYPES(
       pos.type(), "computeFPGADensityMapLauncher", [&] {
-        if (deterministic_flag) {
-          std::vector<long> buf(num_bins, 0);
-          AtomicAdd<long> atomic_add_op(scale_factor);
-          CALL_FPGA_LAUNCHER(0, num_movable_nodes, atomic_add_op,
-                             buf.data());
-          if (num_filler_nodes) {
-            CALL_FPGA_LAUNCHER(num_nodes - num_filler_nodes, num_nodes,
-                               atomic_add_op, buf.data());
-          }
-          scaleAdd(DREAMPLACE_TENSOR_DATA_PTR(density_map, scalar_t),
-                   buf.data(), 1.0 / scale_factor, num_bins,
-                   at::get_num_threads());
-        } else {
           auto buf = DREAMPLACE_TENSOR_DATA_PTR(density_map, scalar_t);
           AtomicAdd<scalar_t> atomic_add_op;
           CALL_FPGA_LAUNCHER(0, num_movable_nodes, atomic_add_op, buf);
           if (num_filler_nodes) {
             CALL_FPGA_LAUNCHER(num_nodes - num_filler_nodes, num_nodes,
                                    atomic_add_op, buf);
-          }
         }
       });
 

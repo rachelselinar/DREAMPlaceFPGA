@@ -94,8 +94,7 @@ class ElectricDensityMapFunction(Function):
                 node_size_y_clamped, offset_x, offset_y, ratio.mul(0.25),
                 initial_density_map, xl, yl, xh, yh, bin_size_x, bin_size_y,
                 targetHalfSizeX, targetHalfSizeY, num_movable_nodes, 
-                num_filler_nodes, num_bins_x, num_bins_y,
-                deterministic_flag)
+                num_filler_nodes, num_bins_x, num_bins_y)
 
         density_map = output.view([num_bins_x, num_bins_y])
         
