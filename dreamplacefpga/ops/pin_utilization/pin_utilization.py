@@ -63,11 +63,11 @@ class PinUtilization(nn.Module):
         if pos.is_cuda:
             output = pin_utilization_cuda.forward(
                     pos,
-                    self.node_size_x.float(),
-                    self.node_size_y.float(),
-                    self.half_node_size_stretch_x.float(),
-                    self.half_node_size_stretch_y.float(),
-                    self.pin_weights.float(),
+                    self.node_size_x,
+                    self.node_size_y,
+                    self.half_node_size_stretch_x,
+                    self.half_node_size_stretch_y,
+                    self.pin_weights,
                     self.xl,
                     self.yl,
                     self.xh,

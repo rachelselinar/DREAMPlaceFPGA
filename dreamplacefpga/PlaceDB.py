@@ -397,7 +397,7 @@ class PlaceDBFPGA (object):
         num_filler = int(math.floor(total_filler_node_area/(filler_size_x*filler_size_y)))
         logging.info("Region:%2d #movable_nodes = %8d movable_node_area =%10.1f, placeable_area =%10.1f, filler_node_area =%10.1f, #fillers =%8d, filler sizes =%2.4gx%g\n" % (region_id, fence_region_mask.sum(), total_movable_node_area, placeable_area, total_filler_node_area, num_filler, filler_size_x, filler_size_y))
 
-        return num_filler, total_movable_node_area, np.sum(fence_region_mask).astype(np.float32)
+        return num_filler, total_movable_node_area, np.sum(fence_region_mask)
 
 
     def initialize(self, params):
@@ -405,8 +405,8 @@ class PlaceDBFPGA (object):
         @brief initialize data members after reading 
         @param params parameters 
         """
-        self.resource_size_x = np.ones(4, dtype=np.float32)
-        self.resource_size_y = np.ones(4, dtype=np.float32)
+        self.resource_size_x = np.ones(4, dtype=datatypes[params.dtype])
+        self.resource_size_y = np.ones(4, dtype=datatypes[params.dtype])
         self.resource_size_y[2] = 2.5
         self.resource_size_y[3] = 5.0
 
@@ -603,7 +603,7 @@ class PlaceDBFPGA (object):
         node_z = self.node_z
 
         # update raw database 
-        place_io.PlaceIOFunction.apply(self.rawdb, node_x.astype(np.float32), node_y.astype(np.float32), node_z.astype(np.int32))
+        place_io.PlaceIOFunction.apply(self.rawdb, node_x.astype(datatypes[params.dtype]), node_y.astype(datatypes[params.dtype]), node_z.astype(np.int32))
 
 
 if __name__ == "__main__":

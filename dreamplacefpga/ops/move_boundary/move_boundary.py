@@ -36,8 +36,8 @@ class MoveBoundaryFunction(Function):
         if pos.is_cuda:
             output = move_boundary_cuda.forward(
                     pos.view(pos.numel()), 
-                    node_size_x.float(),
-                    node_size_y.float(),
+                    node_size_x,
+                    node_size_y,
                     xl, 
                     yl, 
                     xh, 
