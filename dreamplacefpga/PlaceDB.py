@@ -405,8 +405,8 @@ class PlaceDBFPGA (object):
         @brief initialize data members after reading 
         @param params parameters 
         """
-        self.resource_size_x = np.ones(4, dtype=np.float32)
-        self.resource_size_y = np.ones(4, dtype=np.float32)
+        self.resource_size_x = np.ones(4, dtype=params.dtype)
+        self.resource_size_y = np.ones(4, dtype=params.dtype)
         self.resource_size_y[2] = 2.5
         self.resource_size_y[3] = 5.0
 
@@ -603,7 +603,7 @@ class PlaceDBFPGA (object):
         node_z = self.node_z
 
         # update raw database 
-        place_io.PlaceIOFunction.apply(self.rawdb, node_x.astype(np.float32), node_y.astype(np.float32), node_z.astype(np.int32))
+        place_io.PlaceIOFunction.apply(self.rawdb, node_x.astype(params.dtype), node_y.astype(params.dtype), node_z.astype(np.int32))
 
 
 if __name__ == "__main__":

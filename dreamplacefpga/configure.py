@@ -8,7 +8,7 @@
 compile_configurations = {
         "CMAKE_CXX_COMPILER" : "/usr/bin/g++-6", 
         "CMAKE_CC_COMPILER" : "", 
-        "CMAKE_BUILD_TYPE" : "RELEASE", 
+        "CMAKE_BUILD_TYPE" : "Release", 
         "CMAKE_CXX_ABI" : "0", 
         "CMAKE_CXX_STANDARD" : "11", 
         "PYTHON" : "/home/local/eda02/python-3.7.4-venv/bin/python", 

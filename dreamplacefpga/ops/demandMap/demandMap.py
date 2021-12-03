@@ -52,7 +52,7 @@ class DemandMap(nn.Module):
         self.num_threads = num_threads
 
     def forward(self): 
-        binCapMap0 = torch.zeros((self.num_bins_x, self.num_bins_y), dtype=torch.float32, device=self.device)
+        binCapMap0 = torch.zeros((self.num_bins_x, self.num_bins_y), dtype=self.node_size_x.dtype, device=self.device)
         binCapMap1 = torch.zeros_like(binCapMap0)
         binCapMap2 = torch.zeros_like(binCapMap0)
         binCapMap3 = torch.zeros_like(binCapMap0)
