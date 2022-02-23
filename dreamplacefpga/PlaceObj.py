@@ -812,21 +812,20 @@ class PlaceObjFPGA(nn.Module):
     def build_multi_fence_region_density_op(self):
         # region 0, ..., region n, non_fence_region
         self.op_collections.fence_region_density_ops = []
-        #self.streams = [torch.cuda.Stream() for i in range(len(self.fixedDemMaps))]
-        self.streams = [torch.cuda.Stream() for i in range(2)]
+        #self.streams = [torch.cuda.Stream() for i in range(2)]
 
         for i, fence_region_map in enumerate(self.fixedDemMaps):
-            with torch.cuda.stream(self.streams[i%2]):
-                self.op_collections.fence_region_density_ops.append(self.build_electric_potential(
-                            self.params,
-                            self.placedb,
-                            self.data_collections,
-                            self.num_bins_x,
-                            self.num_bins_y,
-                            name=self.name,
-                            region_id=i,
-                            fence_regions=fence_region_map)
-                )
+            #with torch.cuda.stream(self.streams[i%2]):
+            self.op_collections.fence_region_density_ops.append(self.build_electric_potential(
+                        self.params,
+                        self.placedb,
+                        self.data_collections,
+                        self.num_bins_x,
+                        self.num_bins_y,
+                        name=self.name,
+                        region_id=i,
+                        fence_regions=fence_region_map)
+            )
 
         def merged_density_op(pos):
             #### stop mask is to stop forward of density

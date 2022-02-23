@@ -52,22 +52,22 @@ class PlaceDataCollectionFPGA(object):
         with torch.no_grad():
             # other tensors required to build ops
 
-            self.node_size_x = torch.from_numpy(placedb.node_size_x.astype(params.dtype)).to(device)
-            self.node_size_y = torch.from_numpy(placedb.node_size_y.astype(params.dtype)).to(device)
-            self.resource_size_x = torch.from_numpy(placedb.resource_size_x.astype(params.dtype)).to(device)
-            self.resource_size_y = torch.from_numpy(placedb.resource_size_y.astype(params.dtype)).to(device)
-            self.node_x = torch.from_numpy(placedb.node_x.astype(params.dtype)).to(device)
-            self.node_y = torch.from_numpy(placedb.node_y.astype(params.dtype)).to(device)
+            self.node_size_x = torch.from_numpy(placedb.node_size_x).to(device)
+            self.node_size_y = torch.from_numpy(placedb.node_size_y).to(device)
+            self.resource_size_x = torch.from_numpy(placedb.resource_size_x).to(device)
+            self.resource_size_y = torch.from_numpy(placedb.resource_size_y).to(device)
+            self.node_x = torch.from_numpy(placedb.node_x).to(device)
+            self.node_y = torch.from_numpy(placedb.node_y).to(device)
             self.node_z = torch.from_numpy(placedb.node_z.astype(np.int32)).to(device)
             self.site_type_map = torch.from_numpy(placedb.site_type_map.astype(np.int32)).to(device)
-            self.lg_siteXYs = torch.from_numpy(placedb.lg_siteXYs.astype(params.dtype)).to(device)
+            self.lg_siteXYs = torch.from_numpy(placedb.lg_siteXYs).to(device)
 
             if params.routability_opt_flag:
                 self.original_node_size_x = self.node_size_x.clone()
                 self.original_node_size_y = self.node_size_y.clone()
 
-            self.pin_offset_x = torch.from_numpy(placedb.pin_offset_x.astype(params.dtype)).to(device)
-            self.pin_offset_y = torch.from_numpy(placedb.pin_offset_y.astype(params.dtype)).to(device)
+            self.pin_offset_x = torch.from_numpy(placedb.pin_offset_x).to(device)
+            self.pin_offset_y = torch.from_numpy(placedb.pin_offset_y).to(device)
 
             # original pin offset for legalization, since they will be adjusted in global placement
             if params.routability_opt_flag:
@@ -84,8 +84,8 @@ class PlaceDataCollectionFPGA(object):
             self.node2pincount_map = torch.from_numpy(placedb.node2pincount_map).to(device)
             self.net2pincount_map = torch.from_numpy(placedb.net2pincount_map).to(device)
 
-            self.dspSiteXYs = torch.from_numpy(placedb.dspSiteXYs).to(device=device)
-            self.ramSiteXYs = torch.from_numpy(placedb.ramSiteXYs).to(device=device)
+            self.dspSiteXYs = torch.from_numpy(placedb.dspSiteXYs).to(dtype=datatypes[params.dtype],device=device)
+            self.ramSiteXYs = torch.from_numpy(placedb.ramSiteXYs).to(dtype=datatypes[params.dtype],device=device)
 
             # number of pins for each cell
             self.pin_weights = (self.flat_node2pin_start_map[1:] -
@@ -109,8 +109,8 @@ class PlaceDataCollectionFPGA(object):
             self.flop2ctrlSetId_map = torch.from_numpy(placedb.flop2ctrlSetId_map).to(dtype=torch.int32,device=device)
             #Resource type indexing
             self.flop_indices = torch.from_numpy(placedb.flop_indices).to(dtype=torch.int32,device=device)
-            self.lut_indices = torch.nonzero(self.lut_mask.float(), as_tuple=True)[0].to(dtype=torch.int32)
-            self.flop_lut_indices = torch.nonzero(self.flop_lut_mask.float(), as_tuple=True)[0].to(dtype=torch.int32)
+            self.lut_indices = torch.nonzero(self.lut_mask, as_tuple=True)[0].to(dtype=torch.int32)
+            self.flop_lut_indices = torch.nonzero(self.flop_lut_mask, as_tuple=True)[0].to(dtype=torch.int32)
             self.pin_weights[self.flop_mask] = params.ffPinWeight
             self.unit_pin_capacity = torch.empty(1, dtype=self.pos[0].dtype, device=device)
             self.unit_pin_capacity.data.fill_(params.unit_pin_capacity)
