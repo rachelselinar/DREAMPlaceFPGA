@@ -65,7 +65,7 @@ void forward(
     CHECK_FLAT(node_size_y);
     CHECK_CONTIGUOUS(node_size_y);
 
-    DREAMPLACE_DISPATCH_FLOATING_TYPES(node_size_x.type(), "computeDemandMapLauncher", [&] {
+    DREAMPLACE_DISPATCH_FLOATING_TYPES(node_size_x, "computeDemandMapLauncher", [&] {
             auto buf0 = DREAMPLACE_TENSOR_DATA_PTR(binCapMap0, scalar_t);
             auto buf2 = DREAMPLACE_TENSOR_DATA_PTR(binCapMap2, scalar_t);
             auto buf3 = DREAMPLACE_TENSOR_DATA_PTR(binCapMap3, scalar_t);

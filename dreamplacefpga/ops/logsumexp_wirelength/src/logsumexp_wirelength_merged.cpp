@@ -139,7 +139,7 @@ std::vector<at::Tensor> logsumexp_wirelength_forward(
     at::Tensor grad_intermediate = at::zeros_like(pos);
     auto inv_gamma = 1.0 / gamma; 
 
-    DREAMPLACE_DISPATCH_FLOATING_TYPES(pos.type(), "computeLogSumExpWirelengthLauncher", [&] {
+    DREAMPLACE_DISPATCH_FLOATING_TYPES(pos, "computeLogSumExpWirelengthLauncher", [&] {
         computeLogSumExpWirelengthLauncher<scalar_t>(
             DREAMPLACE_TENSOR_DATA_PTR(pos, scalar_t), DREAMPLACE_TENSOR_DATA_PTR(pos, scalar_t) + num_pins,
             DREAMPLACE_TENSOR_DATA_PTR(flat_netpin, int),
@@ -206,7 +206,7 @@ at::Tensor logsumexp_wirelength_backward(
 
     at::Tensor grad_out = grad_intermediate.mul_(grad_pos);
 
-    DREAMPLACE_DISPATCH_FLOATING_TYPES(pos.type(), "computeLogSumExpWirelengthLauncher", [&] {
+    DREAMPLACE_DISPATCH_FLOATING_TYPES(pos, "computeLogSumExpWirelengthLauncher", [&] {
         if (net_weights.numel())
         {
             integrateNetWeightsLauncher<scalar_t>(

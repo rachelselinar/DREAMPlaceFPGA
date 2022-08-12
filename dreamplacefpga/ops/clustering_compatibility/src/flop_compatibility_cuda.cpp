@@ -96,7 +96,7 @@ at::Tensor flop_compatibility(
     double half_slice = slice_capacity/2.0;
 
     // Call the cuda kernel launcher
-    DREAMPLACE_DISPATCH_FLOATING_TYPES(pos.type(), "fillDemandMapFFCuda", [&] {
+    DREAMPLACE_DISPATCH_FLOATING_TYPES(pos, "fillDemandMapFFCuda", [&] {
         fillDemandMapFFCuda<scalar_t>(
             DREAMPLACE_TENSOR_DATA_PTR(pos, scalar_t), DREAMPLACE_TENSOR_DATA_PTR(pos, scalar_t) + num_nodes,
             DREAMPLACE_TENSOR_DATA_PTR(indices, int),
@@ -113,7 +113,7 @@ at::Tensor flop_compatibility(
 
     at::Tensor areaMap = demMap.clone();
 
-    DREAMPLACE_DISPATCH_FLOATING_TYPES(pos.type(), "computeInstanceAreaFFCuda", [&] {
+    DREAMPLACE_DISPATCH_FLOATING_TYPES(pos, "computeInstanceAreaFFCuda", [&] {
         computeInstanceAreaFFCuda<scalar_t>(
             DREAMPLACE_TENSOR_DATA_PTR(demMap, scalar_t),
             num_bins_x, num_bins_y,
@@ -122,7 +122,7 @@ at::Tensor flop_compatibility(
             DREAMPLACE_TENSOR_DATA_PTR(areaMap, scalar_t));
     });
 
-    DREAMPLACE_DISPATCH_FLOATING_TYPES(pos.type(), "collectInstanceAreasFFCuda", [&] {
+    DREAMPLACE_DISPATCH_FLOATING_TYPES(pos, "collectInstanceAreasFFCuda", [&] {
         collectInstanceAreasFFCuda<scalar_t>(
             DREAMPLACE_TENSOR_DATA_PTR(pos, scalar_t), DREAMPLACE_TENSOR_DATA_PTR(pos, scalar_t) + num_nodes,
             DREAMPLACE_TENSOR_DATA_PTR(indices, int),

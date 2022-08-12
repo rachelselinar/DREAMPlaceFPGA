@@ -48,7 +48,7 @@ void forward(
     CHECK_FLAT(node_size_y);
     CHECK_CONTIGUOUS(node_size_y);
 
-    DREAMPLACE_DISPATCH_FLOATING_TYPES(node_size_x.type(), "computeDemandMapCudaLauncher", [&] {
+    DREAMPLACE_DISPATCH_FLOATING_TYPES(node_size_x, "computeDemandMapCudaLauncher", [&] {
             computeDemandMapCudaLauncher<scalar_t>(
                     DREAMPLACE_TENSOR_DATA_PTR(site_type_map, int),
                     num_bins_x, num_bins_y,

@@ -121,7 +121,7 @@ std::vector<at::Tensor> density_potential_forward(
     //int num_nodes = pos.numel()/2; 
 
     // Call the cuda kernel launcher
-    DREAMPLACE_DISPATCH_FLOATING_TYPES(pos.type(), "computeDensityPotentialMapLauncher", [&] {
+    DREAMPLACE_DISPATCH_FLOATING_TYPES(pos, "computeDensityPotentialMapLauncher", [&] {
             computeDensityPotentialMapLauncher<scalar_t>(
                     DREAMPLACE_TENSOR_DATA_PTR(pos, scalar_t), DREAMPLACE_TENSOR_DATA_PTR(pos, scalar_t)+pos.numel()/2, 
                     DREAMPLACE_TENSOR_DATA_PTR(node_size_x, scalar_t), DREAMPLACE_TENSOR_DATA_PTR(node_size_y, scalar_t), 
@@ -142,7 +142,7 @@ std::vector<at::Tensor> density_potential_forward(
             });
     if (num_filler_nodes)
     {
-        DREAMPLACE_DISPATCH_FLOATING_TYPES(pos.type(), "computeDensityPotentialMapLauncher", [&] {
+        DREAMPLACE_DISPATCH_FLOATING_TYPES(pos, "computeDensityPotentialMapLauncher", [&] {
                 computeDensityPotentialMapLauncher<scalar_t>(
                         DREAMPLACE_TENSOR_DATA_PTR(pos, scalar_t)+pos.numel()/2-num_filler_nodes, DREAMPLACE_TENSOR_DATA_PTR(pos, scalar_t)+pos.numel()-num_filler_nodes, 
                         DREAMPLACE_TENSOR_DATA_PTR(node_size_x, scalar_t)+pos.numel()/2-num_filler_nodes, DREAMPLACE_TENSOR_DATA_PTR(node_size_y, scalar_t)+pos.numel()/2-num_filler_nodes, 
@@ -235,7 +235,7 @@ at::Tensor density_potential_backward(
     //int num_nodes = pos.numel()/2; 
 
     // Call the cuda kernel launcher
-    DREAMPLACE_DISPATCH_FLOATING_TYPES(pos.type(), "computeDensityPotentialMapLauncher", [&] {
+    DREAMPLACE_DISPATCH_FLOATING_TYPES(pos, "computeDensityPotentialMapLauncher", [&] {
             computeDensityPotentialMapLauncher<scalar_t>(
                     DREAMPLACE_TENSOR_DATA_PTR(pos, scalar_t), DREAMPLACE_TENSOR_DATA_PTR(pos, scalar_t)+pos.numel()/2, 
                     DREAMPLACE_TENSOR_DATA_PTR(node_size_x, scalar_t), DREAMPLACE_TENSOR_DATA_PTR(node_size_y, scalar_t), 
@@ -256,7 +256,7 @@ at::Tensor density_potential_backward(
             });
     if (num_filler_nodes)
     {
-        DREAMPLACE_DISPATCH_FLOATING_TYPES(pos.type(), "computeDensityPotentialMapLauncher", [&] {
+        DREAMPLACE_DISPATCH_FLOATING_TYPES(pos, "computeDensityPotentialMapLauncher", [&] {
                 computeDensityPotentialMapLauncher<scalar_t>(
                         DREAMPLACE_TENSOR_DATA_PTR(pos, scalar_t)+pos.numel()/2-num_filler_nodes, DREAMPLACE_TENSOR_DATA_PTR(pos, scalar_t)+pos.numel()-num_filler_nodes, 
                         DREAMPLACE_TENSOR_DATA_PTR(node_size_x, scalar_t)+pos.numel()/2-num_filler_nodes, DREAMPLACE_TENSOR_DATA_PTR(node_size_y, scalar_t)+pos.numel()/2-num_filler_nodes, 
@@ -335,7 +335,7 @@ at::Tensor fixed_density_potential_map(
     // Call the cuda kernel launcher
     if (num_terminals && num_impacted_bins_x && num_impacted_bins_y)
     {
-        DREAMPLACE_DISPATCH_FLOATING_TYPES(pos.type(), "computeDensityOverflowMapLauncher", [&] {
+        DREAMPLACE_DISPATCH_FLOATING_TYPES(pos, "computeDensityOverflowMapLauncher", [&] {
                 computeDensityOverflowMapLauncher<scalar_t>(
                         DREAMPLACE_TENSOR_DATA_PTR(pos, scalar_t)+num_movable_nodes, DREAMPLACE_TENSOR_DATA_PTR(pos, scalar_t)+num_nodes+num_movable_nodes, 
                         DREAMPLACE_TENSOR_DATA_PTR(node_size_x, scalar_t)+num_movable_nodes, DREAMPLACE_TENSOR_DATA_PTR(node_size_y, scalar_t)+num_movable_nodes, 

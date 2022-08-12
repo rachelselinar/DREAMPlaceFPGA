@@ -42,7 +42,7 @@ at::Tensor move_boundary_forward(
     CHECK_CONTIGUOUS(pos);
 
     // Call the cuda kernel launcher
-    DREAMPLACE_DISPATCH_FLOATING_TYPES(pos.type(), "computeMoveBoundaryMapLauncher", [&] {
+    DREAMPLACE_DISPATCH_FLOATING_TYPES(pos, "computeMoveBoundaryMapLauncher", [&] {
             computeMoveBoundaryMapLauncher<scalar_t>(
                     DREAMPLACE_TENSOR_DATA_PTR(pos, scalar_t), DREAMPLACE_TENSOR_DATA_PTR(pos, scalar_t)+pos.numel()/2, 
                     DREAMPLACE_TENSOR_DATA_PTR(node_size_x, scalar_t), DREAMPLACE_TENSOR_DATA_PTR(node_size_y, scalar_t), 

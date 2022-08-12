@@ -32,7 +32,7 @@ void dct2_fft2_forward(
     auto N = x.size(-1);
     auto M = x.numel() / N;
 
-    DREAMPLACE_DISPATCH_FLOATING_TYPES(x.type(), "dct2_fft2_forward", [&] {
+    DREAMPLACE_DISPATCH_FLOATING_TYPES(x, "dct2_fft2_forward", [&] {
         dct2dPreprocessCudaLauncher<scalar_t>(
             DREAMPLACE_TENSOR_DATA_PTR(x, scalar_t),
             DREAMPLACE_TENSOR_DATA_PTR(out, scalar_t),
@@ -73,7 +73,7 @@ void idct2_fft2_forward(
     auto N = x.size(-1);
     auto M = x.numel() / N;
 
-    DREAMPLACE_DISPATCH_FLOATING_TYPES(x.type(), "idct2_fft2_forward", [&] {
+    DREAMPLACE_DISPATCH_FLOATING_TYPES(x, "idct2_fft2_forward", [&] {
         idct2_fft2PreprocessCudaLauncher<scalar_t>(
             DREAMPLACE_TENSOR_DATA_PTR(x, scalar_t),
             DREAMPLACE_TENSOR_DATA_PTR(buf, scalar_t),
@@ -82,7 +82,7 @@ void idct2_fft2_forward(
             DREAMPLACE_TENSOR_DATA_PTR(expkM, scalar_t),
             DREAMPLACE_TENSOR_DATA_PTR(expkN, scalar_t));
 
-        auto y = at::irfft(buf, 2, false, true, {M, N});
+        auto y = at::irfft(buf, 2, false, true, {{M, N}});
 
         idct2_fft2PostprocessCudaLauncher<scalar_t>(
             DREAMPLACE_TENSOR_DATA_PTR(y, scalar_t),
@@ -114,7 +114,7 @@ void idct_idxst_forward(
     auto N = x.size(-1);
     auto M = x.numel() / N;
 
-    DREAMPLACE_DISPATCH_FLOATING_TYPES(x.type(), "idct_idxst_forward", [&] {
+    DREAMPLACE_DISPATCH_FLOATING_TYPES(x, "idct_idxst_forward", [&] {
         idct_idxstPreprocessCudaLauncher<scalar_t>(
             DREAMPLACE_TENSOR_DATA_PTR(x, scalar_t),
             DREAMPLACE_TENSOR_DATA_PTR(buf, scalar_t),
@@ -123,7 +123,7 @@ void idct_idxst_forward(
             DREAMPLACE_TENSOR_DATA_PTR(expkM, scalar_t),
             DREAMPLACE_TENSOR_DATA_PTR(expkN, scalar_t));
 
-        auto y = at::irfft(buf, 2, false, true, {M, N});
+        auto y = at::irfft(buf, 2, false, true, {{M, N}});
 
         idct_idxstPostprocessCudaLauncher<scalar_t>(
             DREAMPLACE_TENSOR_DATA_PTR(y, scalar_t),
@@ -155,7 +155,7 @@ void idxst_idct_forward(
     auto N = x.size(-1);
     auto M = x.numel() / N;
 
-    DREAMPLACE_DISPATCH_FLOATING_TYPES(x.type(), "idxst_idct_forward", [&] {
+    DREAMPLACE_DISPATCH_FLOATING_TYPES(x, "idxst_idct_forward", [&] {
         idxst_idctPreprocessCudaLauncher<scalar_t>(
             DREAMPLACE_TENSOR_DATA_PTR(x, scalar_t),
             DREAMPLACE_TENSOR_DATA_PTR(buf, scalar_t),
@@ -164,7 +164,7 @@ void idxst_idct_forward(
             DREAMPLACE_TENSOR_DATA_PTR(expkM, scalar_t),
             DREAMPLACE_TENSOR_DATA_PTR(expkN, scalar_t));
 
-        auto y = at::irfft(buf, 2, false, true, {M, N});
+        auto y = at::irfft(buf, 2, false, true, {{M, N}});
 
         idxst_idctPostprocessCudaLauncher<scalar_t>(
             DREAMPLACE_TENSOR_DATA_PTR(y, scalar_t),

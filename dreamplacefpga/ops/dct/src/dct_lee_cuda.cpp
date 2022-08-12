@@ -13,7 +13,7 @@ void dct_lee_precompute_dct_cos(int N, at::Tensor out)
 {
     out.resize_(N);
 
-    DREAMPLACE_DISPATCH_FLOATING_TYPES(out.type(), "dct_lee_precompute_dct_cos", [&] {
+    DREAMPLACE_DISPATCH_FLOATING_TYPES(out, "dct_lee_precompute_dct_cos", [&] {
             lee::precompute_dct_cos<scalar_t>(
                     DREAMPLACE_TENSOR_DATA_PTR(out, scalar_t), 
                     N
@@ -25,7 +25,7 @@ void dct_lee_precompute_idct_cos(int N, at::Tensor out)
 {
     out.resize_(N);
 
-    DREAMPLACE_DISPATCH_FLOATING_TYPES(out.type(), "dct_lee_precompute_idct_cos", [&] {
+    DREAMPLACE_DISPATCH_FLOATING_TYPES(out, "dct_lee_precompute_idct_cos", [&] {
             lee::precompute_idct_cos<scalar_t>(
                     DREAMPLACE_TENSOR_DATA_PTR(out, scalar_t), 
                     N
@@ -48,7 +48,7 @@ inline void dct_lee_forward(
     auto N = x.size(-1);
     auto M = x.numel()/N; 
 
-    DREAMPLACE_DISPATCH_FLOATING_TYPES(x.type(), "dct_lee_forward", [&] {
+    DREAMPLACE_DISPATCH_FLOATING_TYPES(x, "dct_lee_forward", [&] {
             lee::dct(
                     DREAMPLACE_TENSOR_DATA_PTR(x, scalar_t), 
                     DREAMPLACE_TENSOR_DATA_PTR(out, scalar_t), 
@@ -77,7 +77,7 @@ inline void idct_lee_forward(
     auto N = x.size(-1);
     auto M = x.numel()/N; 
 
-    DREAMPLACE_DISPATCH_FLOATING_TYPES(x.type(), "idct_lee_forward", [&] {
+    DREAMPLACE_DISPATCH_FLOATING_TYPES(x, "idct_lee_forward", [&] {
             lee::idct(
                     DREAMPLACE_TENSOR_DATA_PTR(x, scalar_t), 
                     DREAMPLACE_TENSOR_DATA_PTR(out, scalar_t), 
@@ -101,7 +101,7 @@ void dst_lee_forward(
     auto N = x.size(-1);
     auto M = x.numel()/N; 
 
-    DREAMPLACE_DISPATCH_FLOATING_TYPES(x.type(), "dst_lee_forward", [&] {
+    DREAMPLACE_DISPATCH_FLOATING_TYPES(x, "dst_lee_forward", [&] {
             //std::cout << "x\n" << x << "\n";
             buf.copy_(x);
             negateOddEntriesCudaLauncher<scalar_t>(
@@ -134,7 +134,7 @@ void idst_lee_forward(
     auto N = x.size(-1);
     auto M = x.numel()/N; 
 
-    DREAMPLACE_DISPATCH_FLOATING_TYPES(x.type(), "idst_lee_forward", [&] {
+    DREAMPLACE_DISPATCH_FLOATING_TYPES(x, "idst_lee_forward", [&] {
             //std::cout << "x\n" << x << "\n";
             computeFlipCudaLauncher<scalar_t>(
                     DREAMPLACE_TENSOR_DATA_PTR(x, scalar_t), 
@@ -176,8 +176,8 @@ void dct2_lee_forward(
     auto N = x.size(-1);
     auto M = x.numel()/N; 
 
-    out.resize_({M, N});
-    buf.resize_({M, N});
+    out.resize_({{M, N}});
+    buf.resize_({{M, N}});
 
     dct_lee_forward(x, cos1, out, buf); 
 
@@ -188,7 +188,7 @@ void dct2_lee_forward(
 
     dct_lee_forward(out, cos0, out, buf); 
 
-    out.resize_({M, N}); 
+    out.resize_({{M, N}});
     out.copy_(buf.transpose(-2, -1)); 
 }
 
@@ -213,8 +213,8 @@ void idct2_lee_forward(
     auto N = x.size(-1);
     auto M = x.numel()/N; 
 
-    out.resize_({M, N});
-    buf.resize_({M, N});
+    out.resize_({{M, N}});
+    buf.resize_({{M, N}});
 
     idct_lee_forward(x, cos1, out, buf); 
 
@@ -225,7 +225,7 @@ void idct2_lee_forward(
 
     idct_lee_forward(out, cos0, out, buf); 
 
-    out.resize_({M, N}); 
+    out.resize_({{M, N}});
     out.copy_(buf.transpose(-2, -1)); 
 }
 
@@ -239,7 +239,7 @@ void idxct_lee_forward(
     auto N = x.size(-1);
     auto M = x.numel()/N; 
 
-    DREAMPLACE_DISPATCH_FLOATING_TYPES(x.type(), "idxct_lee_forward", [&] {
+    DREAMPLACE_DISPATCH_FLOATING_TYPES(x, "idxct_lee_forward", [&] {
             idct_lee_forward(x, cos, buf, out);
 
             //std::cout << __func__ << " z\n" << z << "\n";
@@ -263,7 +263,7 @@ void idxst_lee_forward(
     auto N = x.size(-1);
     auto M = x.numel()/N; 
 
-    DREAMPLACE_DISPATCH_FLOATING_TYPES(x.type(), "idxst_lee_forward", [&] {
+    DREAMPLACE_DISPATCH_FLOATING_TYPES(x, "idxst_lee_forward", [&] {
             //std::cout << "x\n" << x << "\n";
             computeFlipAndShiftCudaLauncher<scalar_t>(
                     DREAMPLACE_TENSOR_DATA_PTR(x, scalar_t), 
@@ -319,7 +319,7 @@ void idcct2_lee_forward(
 
     idxct_lee_forward(buf0, cos0, out, buf1); 
 
-    out.resize_({M, N}); 
+    out.resize_({{M, N}});
     out.copy_(buf1.transpose(-2, -1));
 }
 
@@ -357,7 +357,7 @@ void idcst2_lee_forward(
 
     idxct_lee_forward(buf0, cos0, out, buf1); 
 
-    out.resize_({M, N}); 
+    out.resize_({{M, N}});
     out.copy_(buf1.transpose(-2, -1));
 }
 
@@ -395,7 +395,7 @@ void idsct2_lee_forward(
 
     idxst_lee_forward(buf0, cos0, out, buf1); 
 
-    out.resize_({M, N}); 
+    out.resize_({{M, N}});
     out.copy_(buf1.transpose(-2, -1));
 }
 
