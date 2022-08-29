@@ -168,8 +168,8 @@ Please report bugs to [rachelselina dot r at utexas dot edu](mailto:rachelselina
 ## Publication(s) 
 
 * Rachel Selina Rajarathnam, Mohamed Baker Alawieh, Zixuan Jiang, Mahesh A. Iyer, and [David Z. Pan](http://users.ece.utexas.edu/~dpan), 
-  "**DREAMPlaceFPGA: An Open-Source Analytical Placer for Large Scale Heterogeneous FPGAs using Deep-Learning Toolkit**", 
-  IEEE/ACM Asian and South Pacific Design Automation Conference (ASP-DAC), Jan 17-20, 2022 (accepted)
+  "**[DREAMPlaceFPGA: An Open-Source Analytical Placer for Large Scale Heterogeneous FPGAs using Deep-Learning Toolkit](https://ieeexplore.ieee.org/document/9712562)**", 
+  27th IEEE/ACM Asian and South Pacific Design Automation Conference (ASP-DAC), pp. 300-306, 2022.
 
 ## Copyright
 
