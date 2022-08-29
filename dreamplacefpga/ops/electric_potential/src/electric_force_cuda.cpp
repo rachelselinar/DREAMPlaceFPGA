@@ -74,7 +74,7 @@ at::Tensor electric_force_fpga(
   int num_nodes = pos.numel() / 2;
 
   DREAMPLACE_DISPATCH_FLOATING_TYPES(
-      pos.type(), "computeElectricForceFPGACudaLauncher", [&] {
+      pos, "computeElectricForceFPGACudaLauncher", [&] {
         computeElectricForceFPGACudaLauncher<scalar_t>(
             num_bins_x, num_bins_y, 
             DREAMPLACE_TENSOR_DATA_PTR(field_map_x, scalar_t),
@@ -92,7 +92,7 @@ at::Tensor electric_force_fpga(
   if (num_filler_nodes) {
     int num_physical_nodes = num_nodes - num_filler_nodes;
     DREAMPLACE_DISPATCH_FLOATING_TYPES(
-        pos.type(), "computeElectricForceFPGACudaLauncher", [&] {
+        pos, "computeElectricForceFPGACudaLauncher", [&] {
           computeElectricForceFPGACudaLauncher<scalar_t>(
               num_bins_x, num_bins_y, 
               DREAMPLACE_TENSOR_DATA_PTR(field_map_x, scalar_t),

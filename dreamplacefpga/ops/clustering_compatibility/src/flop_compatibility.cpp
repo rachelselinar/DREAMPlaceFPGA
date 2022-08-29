@@ -251,7 +251,7 @@ at::Tensor flop_compatibility(
     int num_nodes = pos.numel() / 2;
     double half_slice = slice_capacity/2.0;
 
-    DREAMPLACE_DISPATCH_FLOATING_TYPES(pos.type(), "fillDemandMapFF", [&] {
+    DREAMPLACE_DISPATCH_FLOATING_TYPES(pos, "fillDemandMapFF", [&] {
         fillDemandMapFF<scalar_t>(
             DREAMPLACE_TENSOR_DATA_PTR(pos, scalar_t), DREAMPLACE_TENSOR_DATA_PTR(pos, scalar_t) + num_nodes,
             DREAMPLACE_TENSOR_DATA_PTR(indices, int),
@@ -270,7 +270,7 @@ at::Tensor flop_compatibility(
 
     at::Tensor areaMap = demMap.clone();
 
-    DREAMPLACE_DISPATCH_FLOATING_TYPES(pos.type(), "computeInstanceAreaFF", [&] {
+    DREAMPLACE_DISPATCH_FLOATING_TYPES(pos, "computeInstanceAreaFF", [&] {
         computeInstanceAreaFF<scalar_t>(
             DREAMPLACE_TENSOR_DATA_PTR(demMap, scalar_t),
             num_bins_x, num_bins_y,
@@ -280,7 +280,7 @@ at::Tensor flop_compatibility(
             DREAMPLACE_TENSOR_DATA_PTR(areaMap, scalar_t));
     });
 
-    DREAMPLACE_DISPATCH_FLOATING_TYPES(pos.type(), "collectInstanceAreasFF", [&] {
+    DREAMPLACE_DISPATCH_FLOATING_TYPES(pos, "collectInstanceAreasFF", [&] {
         collectInstanceAreasFF<scalar_t>(
             DREAMPLACE_TENSOR_DATA_PTR(pos, scalar_t), DREAMPLACE_TENSOR_DATA_PTR(pos, scalar_t) + num_nodes,
             DREAMPLACE_TENSOR_DATA_PTR(indices, int),

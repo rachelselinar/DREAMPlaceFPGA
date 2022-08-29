@@ -60,7 +60,7 @@ int draw_place_forward(
 
     // Call the kernel launcher
     int ret = 0; 
-    DREAMPLACE_DISPATCH_FLOATING_TYPES(pos.type(), "drawPlaceLauncher", [&] {
+    DREAMPLACE_DISPATCH_FLOATING_TYPES(pos, "drawPlaceLauncher", [&] {
             ret = drawPlaceLauncher<scalar_t>(
                     DREAMPLACE_TENSOR_DATA_PTR(pos, scalar_t), DREAMPLACE_TENSOR_DATA_PTR(pos, scalar_t)+num_nodes, 
                     DREAMPLACE_TENSOR_DATA_PTR(node_size_x, scalar_t), DREAMPLACE_TENSOR_DATA_PTR(node_size_y, scalar_t), 
@@ -109,7 +109,7 @@ int draw_place_fpga(
 
     // Call the kernel launcher
     int ret = 0; 
-    DREAMPLACE_DISPATCH_FLOATING_TYPES(pos.type(), "drawPlaceLauncherFPGA", [&] {
+    DREAMPLACE_DISPATCH_FLOATING_TYPES(pos, "drawPlaceLauncherFPGA", [&] {
             ret = drawPlaceLauncherFPGA<scalar_t>(
                     DREAMPLACE_TENSOR_DATA_PTR(pos, scalar_t), DREAMPLACE_TENSOR_DATA_PTR(pos, scalar_t)+num_nodes, 
                     DREAMPLACE_TENSOR_DATA_PTR(node_size_x, scalar_t), DREAMPLACE_TENSOR_DATA_PTR(node_size_y, scalar_t), 

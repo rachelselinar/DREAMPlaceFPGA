@@ -51,7 +51,7 @@ int rmst_wl_forward(
     CHECK_CONTIGUOUS(rmst_wl);
 
     int ret = 0; 
-    DREAMPLACE_DISPATCH_FLOATING_TYPES(pos.type(), "computeRMSTWLLauncher", [&] {
+    DREAMPLACE_DISPATCH_FLOATING_TYPES(pos, "computeRMSTWLLauncher", [&] {
             computeRMSTWLLauncher<scalar_t>(
                     DREAMPLACE_TENSOR_DATA_PTR(pos, scalar_t), DREAMPLACE_TENSOR_DATA_PTR(pos, scalar_t)+pos.numel()/2, 
                     DREAMPLACE_TENSOR_DATA_PTR(flat_netpin, int), 

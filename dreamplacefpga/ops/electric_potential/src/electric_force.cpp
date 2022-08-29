@@ -87,7 +87,7 @@ at::Tensor electric_force_fpga(
   int num_nodes = pos.numel() / 2;
 
   DREAMPLACE_DISPATCH_FLOATING_TYPES(
-      pos.type(), "computeElectricForceFPGALauncher", [&] {
+      pos, "computeElectricForceFPGALauncher", [&] {
         CALL_FPGA_LAUNCHER(0, num_movable_nodes);
         if (num_filler_nodes) {
           int num_physical_nodes = num_nodes - num_filler_nodes;

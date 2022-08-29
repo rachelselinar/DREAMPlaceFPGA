@@ -57,7 +57,7 @@ at::Tensor pin_pos_forward(
     int num_nodes = pos.numel()/2;
     int num_pins = pin_offset_x.numel();
 
-    DREAMPLACE_DISPATCH_FLOATING_TYPES(pos.type(), "computePinPosCudaLauncher", [&] {
+    DREAMPLACE_DISPATCH_FLOATING_TYPES(pos, "computePinPosCudaLauncher", [&] {
             computePinPosCudaLauncher<scalar_t>(
                     DREAMPLACE_TENSOR_DATA_PTR(pos, scalar_t), DREAMPLACE_TENSOR_DATA_PTR(pos, scalar_t)+num_nodes, 
                     DREAMPLACE_TENSOR_DATA_PTR(pin_offset_x, scalar_t), 
@@ -95,7 +95,7 @@ at::Tensor pin_pos_backward(
     int num_nodes = pos.numel()/2;
     int num_pins = pin_offset_x.numel();
 
-    DREAMPLACE_DISPATCH_FLOATING_TYPES(pos.type(), "computePinPosGradCudaLauncher", [&] {
+    DREAMPLACE_DISPATCH_FLOATING_TYPES(pos, "computePinPosGradCudaLauncher", [&] {
             computePinPosGradCudaLauncher<scalar_t>(
                     DREAMPLACE_TENSOR_DATA_PTR(grad_out, scalar_t), DREAMPLACE_TENSOR_DATA_PTR(grad_out, scalar_t)+num_pins, 
                     DREAMPLACE_TENSOR_DATA_PTR(pos, scalar_t), DREAMPLACE_TENSOR_DATA_PTR(pos, scalar_t)+num_nodes, 

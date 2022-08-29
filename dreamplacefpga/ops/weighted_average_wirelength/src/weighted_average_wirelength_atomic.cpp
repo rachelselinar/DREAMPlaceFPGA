@@ -111,7 +111,7 @@ std::vector<at::Tensor> weighted_average_wirelength_atomic_forward(
     at::Tensor xy_min = at::full({2, num_nets}, std::numeric_limits<V>::max(), at::kInt);
 
     DREAMPLACE_DISPATCH_FLOATING_TYPES(
-        pos.type(), "computeWeightedAverageWirelengthAtomicLauncher", [&] {
+        pos, "computeWeightedAverageWirelengthAtomicLauncher", [&] {
             computeWeightedAverageWirelengthAtomicLauncher<scalar_t, V>(
                 DREAMPLACE_TENSOR_DATA_PTR(pos, scalar_t), // x then y
                 DREAMPLACE_TENSOR_DATA_PTR(pin2net_map, int), DREAMPLACE_TENSOR_DATA_PTR(flat_netpin, int),
@@ -197,7 +197,7 @@ at::Tensor weighted_average_wirelength_atomic_backward(
     int num_pins = pin2net_map.numel();
 
     DREAMPLACE_DISPATCH_FLOATING_TYPES(
-        pos.type(), "computeWeightedAverageWirelengthAtomicLauncher", [&] {
+        pos, "computeWeightedAverageWirelengthAtomicLauncher", [&] {
             computeWeightedAverageWirelengthAtomicLauncher<scalar_t, V>(
                 DREAMPLACE_TENSOR_DATA_PTR(pos, scalar_t), // x then y
                 DREAMPLACE_TENSOR_DATA_PTR(pin2net_map, int), DREAMPLACE_TENSOR_DATA_PTR(flat_netpin, int),

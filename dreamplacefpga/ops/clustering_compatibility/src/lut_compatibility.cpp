@@ -216,7 +216,7 @@ at::Tensor lut_compatibility(
 
     int num_nodes = pos.numel() / 2;
 
-    DREAMPLACE_DISPATCH_FLOATING_TYPES(pos.type(), "fillDemandMapLUT", [&] {
+    DREAMPLACE_DISPATCH_FLOATING_TYPES(pos, "fillDemandMapLUT", [&] {
         fillDemandMapLUT<scalar_t>(
             DREAMPLACE_TENSOR_DATA_PTR(pos, scalar_t), DREAMPLACE_TENSOR_DATA_PTR(pos, scalar_t) + num_nodes,
             DREAMPLACE_TENSOR_DATA_PTR(indices, int),
@@ -234,7 +234,7 @@ at::Tensor lut_compatibility(
 
     at::Tensor areaMap = demMap.clone();
 
-    DREAMPLACE_DISPATCH_FLOATING_TYPES(pos.type(), "computeInstanceAreaLUT", [&] {
+    DREAMPLACE_DISPATCH_FLOATING_TYPES(pos, "computeInstanceAreaLUT", [&] {
         computeInstanceAreaLUT<scalar_t>(
             DREAMPLACE_TENSOR_DATA_PTR(demMap, scalar_t),
             num_bins_x, num_bins_y, num_bins_l, num_threads,
@@ -242,7 +242,7 @@ at::Tensor lut_compatibility(
             DREAMPLACE_TENSOR_DATA_PTR(areaMap, scalar_t));
     });
 
-    DREAMPLACE_DISPATCH_FLOATING_TYPES(pos.type(), "collectInstanceAreasLUT", [&] {
+    DREAMPLACE_DISPATCH_FLOATING_TYPES(pos, "collectInstanceAreasLUT", [&] {
         collectInstanceAreasLUT<scalar_t>(
             DREAMPLACE_TENSOR_DATA_PTR(pos, scalar_t), DREAMPLACE_TENSOR_DATA_PTR(pos, scalar_t) + num_nodes,
             DREAMPLACE_TENSOR_DATA_PTR(indices, int),

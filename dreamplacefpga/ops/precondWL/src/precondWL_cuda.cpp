@@ -48,7 +48,7 @@ void forward(
     CHECK_FLAT(flat_net2pin);
     CHECK_CONTIGUOUS(flat_net2pin);
 
-    DREAMPLACE_DISPATCH_FLOATING_TYPES(out.type(), "computePrecondWLCudaLauncher", [&] {
+    DREAMPLACE_DISPATCH_FLOATING_TYPES(out, "computePrecondWLCudaLauncher", [&] {
             computePrecondWLCudaLauncher<scalar_t>(
                     DREAMPLACE_TENSOR_DATA_PTR(flat_node2pin_start_map, int),
                     DREAMPLACE_TENSOR_DATA_PTR(flat_node2pin_map, int), 

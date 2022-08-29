@@ -125,7 +125,7 @@ std::vector<at::Tensor> weighted_average_wirelength_forward(
     // timed with grad_in yet 
     at::Tensor grad_intermediate = at::zeros_like(pos);
 
-    DREAMPLACE_DISPATCH_FLOATING_TYPES(pos.type(), "computeWeightedAverageWirelengthCudaMergedLauncher", [&] {
+    DREAMPLACE_DISPATCH_FLOATING_TYPES(pos, "computeWeightedAverageWirelengthCudaMergedLauncher", [&] {
         computeWeightedAverageWirelengthCudaMergedLauncher<scalar_t>(
             DREAMPLACE_TENSOR_DATA_PTR(pos, scalar_t), DREAMPLACE_TENSOR_DATA_PTR(pos, scalar_t) + num_pins,
             DREAMPLACE_TENSOR_DATA_PTR(flat_netpin, int),
@@ -197,7 +197,7 @@ std::vector<at::Tensor> weighted_average_wirelength_forward_fpga(
     // timed with grad_in yet 
     at::Tensor grad_intermediate = at::zeros_like(pos);
 
-    DREAMPLACE_DISPATCH_FLOATING_TYPES(pos.type(), "computeWeightedAverageWirelengthCudaMergedLauncherFPGA", [&] {
+    DREAMPLACE_DISPATCH_FLOATING_TYPES(pos, "computeWeightedAverageWirelengthCudaMergedLauncherFPGA", [&] {
         computeWeightedAverageWirelengthCudaMergedLauncherFPGA<scalar_t>(
             DREAMPLACE_TENSOR_DATA_PTR(pos, scalar_t), DREAMPLACE_TENSOR_DATA_PTR(pos, scalar_t) + num_pins,
             DREAMPLACE_TENSOR_DATA_PTR(flat_netpin, int),
@@ -261,7 +261,7 @@ at::Tensor weighted_average_wirelength_backward(
     //int num_nets = netpin_start.numel() - 1;
     int num_pins = pos.numel() / 2;
 
-    DREAMPLACE_DISPATCH_FLOATING_TYPES(pos.type(), "computeWeightedAverageWirelengthCudaMergedLauncher", [&] {
+    DREAMPLACE_DISPATCH_FLOATING_TYPES(pos, "computeWeightedAverageWirelengthCudaMergedLauncher", [&] {
         if (net_weights.numel())
         {
             integrateNetWeightsCudaLauncher(

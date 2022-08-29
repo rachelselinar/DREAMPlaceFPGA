@@ -110,7 +110,7 @@ at::Tensor density_map_fpga(
 
   // Call the cuda kernel launcher
   DREAMPLACE_DISPATCH_FLOATING_TYPES(
-      pos.type(), "computeFPGADensityMapLauncher", [&] {
+      pos, "computeFPGADensityMapLauncher", [&] {
           auto buf = DREAMPLACE_TENSOR_DATA_PTR(density_map, scalar_t);
           AtomicAdd<scalar_t> atomic_add_op;
           CALL_FPGA_LAUNCHER(0, num_movable_nodes, atomic_add_op, buf);

@@ -20,7 +20,7 @@ at::Tensor idxct_forward(
 
     //std::cout << __func__ << " z\n" << z << "\n";
 
-    DREAMPLACE_DISPATCH_FLOATING_TYPES(x.type(), "idxct_forward", [&] {
+    DREAMPLACE_DISPATCH_FLOATING_TYPES(x, "idxct_forward", [&] {
             addX0AndScale<scalar_t>(
                     DREAMPLACE_TENSOR_DATA_PTR(x, scalar_t), 
                     M, 
@@ -44,10 +44,10 @@ at::Tensor idxst_forward(
 
     //std::cout << "x\n" << x << "\n";
     //auto x_reorder = at::empty_like(x);
-    auto x_reorder = at::empty({M, N}, x.options());
+    auto x_reorder = at::empty({{M, N}}, x.options());
     auto y = at::empty_like(x); 
 
-    DREAMPLACE_DISPATCH_FLOATING_TYPES(x.type(), "idxst_forward", [&] {
+    DREAMPLACE_DISPATCH_FLOATING_TYPES(x, "idxst_forward", [&] {
             computeFlipAndShift<scalar_t>(
                     DREAMPLACE_TENSOR_DATA_PTR(x, scalar_t), 
                     M, 
@@ -96,7 +96,7 @@ at::Tensor idcct2_forward(
     // vk is hermitian symmetric, only fill in half 
     auto v = at::empty({M*N+std::max(M, N)}, x.options()).resize_({M, N/2+1, 2});
 
-    DREAMPLACE_DISPATCH_FLOATING_TYPES(x.type(), "idcct2_forward", [&] {
+    DREAMPLACE_DISPATCH_FLOATING_TYPES(x, "idcct2_forward", [&] {
             computeVk<scalar_t>(
                     DREAMPLACE_TENSOR_DATA_PTR(x, scalar_t), 
                     DREAMPLACE_TENSOR_DATA_PTR(expk1, scalar_t), 
@@ -114,7 +114,7 @@ at::Tensor idcct2_forward(
             //std::cout << "y\n" << y << "\n";
 
             //std::cout << "expk\n" << expk << "\n";
-            v.resize_({M, N});
+            v.resize_({{M, N}});
             computeReorderReverse(
                     DREAMPLACE_TENSOR_DATA_PTR(y, scalar_t), 
                     M, 
@@ -202,9 +202,9 @@ at::Tensor idsct2_forward(
     // vk = 0.5*W_{4N}^{k} (c[k] - c[N-k])
     // vk is hermitian symmetric, only fill in half 
     auto v = at::empty({M*N+std::max(M, N)}, x.type()).resize_({M, N/2+1, 2});
-    auto z = at::empty({M, N}, x.options());
+    auto z = at::empty({{M, N}}, x.options());
 
-    DREAMPLACE_DISPATCH_FLOATING_TYPES(x.type(), "idsct2_forward", [&] {
+    DREAMPLACE_DISPATCH_FLOATING_TYPES(x, "idsct2_forward", [&] {
             computeVk<scalar_t>(
                     DREAMPLACE_TENSOR_DATA_PTR(x, scalar_t), 
                     DREAMPLACE_TENSOR_DATA_PTR(expk1, scalar_t), 
@@ -319,9 +319,9 @@ at::Tensor idcst2_forward(
     // idxst for rows 
     //std::cout << "x\n" << x << "\n";
     //auto z = at::empty_like(x);
-    auto z = at::empty({M, N}, x.options());
+    auto z = at::empty({{M, N}}, x.options());
 
-    DREAMPLACE_DISPATCH_FLOATING_TYPES(x.type(), "idcst2_forward", [&] {
+    DREAMPLACE_DISPATCH_FLOATING_TYPES(x, "idcst2_forward", [&] {
             computeFlipAndShift<scalar_t>(
                     DREAMPLACE_TENSOR_DATA_PTR(x, scalar_t), 
                     M, 
@@ -439,9 +439,9 @@ at::Tensor idxst_idct_forward(
     // vk = 0.5*W_{4N}^{k} (c[k] - c[N-k])
     // vk is hermitian symmetric, only fill in half 
     auto v = at::empty({M*N+std::max(M, N)}, x.type()).resize_({M, N/2+1, 2});
-    auto z = at::empty({M, N}, x.options());
+    auto z = at::empty({{M, N}}, x.options());
 
-    DREAMPLACE_DISPATCH_FLOATING_TYPES(x.type(), "idsct2_forward", [&] {
+    DREAMPLACE_DISPATCH_FLOATING_TYPES(x, "idsct2_forward", [&] {
             computeVk<scalar_t>(
                     DREAMPLACE_TENSOR_DATA_PTR(x, scalar_t), 
                     DREAMPLACE_TENSOR_DATA_PTR(expk1, scalar_t), 
@@ -545,9 +545,9 @@ at::Tensor idct_idxst_forward(
     // idxst for rows 
     //std::cout << "x\n" << x << "\n";
     //auto z = at::empty_like(x);
-    auto z = at::empty({M, N}, x.options());
+    auto z = at::empty({{M, N}}, x.options());
 
-    DREAMPLACE_DISPATCH_FLOATING_TYPES(x.type(), "idcst2_forward", [&] {
+    DREAMPLACE_DISPATCH_FLOATING_TYPES(x, "idcst2_forward", [&] {
             computeFlipAndShift<scalar_t>(
                     DREAMPLACE_TENSOR_DATA_PTR(x, scalar_t), 
                     M, 

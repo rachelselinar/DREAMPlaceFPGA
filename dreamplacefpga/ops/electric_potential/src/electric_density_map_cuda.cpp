@@ -77,7 +77,7 @@ at::Tensor density_map_fpga(
 
   // Added by Rachel
   DREAMPLACE_DISPATCH_FLOATING_TYPES(
-      pos.type(), "computeFPGADensityMapCudaLauncher", [&] {
+      pos, "computeFPGADensityMapCudaLauncher", [&] {
         computeFPGADensityMapCudaLauncher<scalar_t>(
             DREAMPLACE_TENSOR_DATA_PTR(pos, scalar_t),
             DREAMPLACE_TENSOR_DATA_PTR(pos, scalar_t) + num_nodes,
@@ -96,7 +96,7 @@ at::Tensor density_map_fpga(
   if (num_filler_nodes) {
     int num_physical_nodes = num_nodes - num_filler_nodes;
     DREAMPLACE_DISPATCH_FLOATING_TYPES(
-        pos.type(), "computeFPGADensityMapCudaLauncher", [&] {
+        pos, "computeFPGADensityMapCudaLauncher", [&] {
           computeFPGADensityMapCudaLauncher<scalar_t>(
               DREAMPLACE_TENSOR_DATA_PTR(pos, scalar_t) + num_physical_nodes,
               DREAMPLACE_TENSOR_DATA_PTR(pos, scalar_t) + num_nodes +

@@ -110,7 +110,7 @@ std::vector<at::Tensor> weighted_average_wirelength_forward(
     at::Tensor xy_max = at::full({2, num_nets}, std::numeric_limits<V>::min(), at::CUDA(at::kInt));
     at::Tensor xy_min = at::full({2, num_nets}, std::numeric_limits<V>::max(), at::CUDA(at::kInt));
 
-    DREAMPLACE_DISPATCH_FLOATING_TYPES(pos.type(), "computeWeightedAverageWirelengthCudaLauncher", [&] {
+    DREAMPLACE_DISPATCH_FLOATING_TYPES(pos, "computeWeightedAverageWirelengthCudaLauncher", [&] {
         computeWeightedAverageWirelengthCudaLauncher<scalar_t, V>(
             DREAMPLACE_TENSOR_DATA_PTR(pos, scalar_t), DREAMPLACE_TENSOR_DATA_PTR(pos, scalar_t) + num_pins,
             nullptr,
@@ -176,7 +176,7 @@ at::Tensor weighted_average_wirelength_backward(
     int num_nets = netpin_start.numel() - 1;
     int num_pins = pos.numel() / 2;
 
-    DREAMPLACE_DISPATCH_FLOATING_TYPES(pos.type(), "computeWeightedAverageWirelengthCudaLauncher", [&] {
+    DREAMPLACE_DISPATCH_FLOATING_TYPES(pos, "computeWeightedAverageWirelengthCudaLauncher", [&] {
         computeWeightedAverageWirelengthCudaLauncher<scalar_t, V>(
             DREAMPLACE_TENSOR_DATA_PTR(pos, scalar_t), DREAMPLACE_TENSOR_DATA_PTR(pos, scalar_t) + num_pins,
             DREAMPLACE_TENSOR_DATA_PTR(pin2net_map, int),

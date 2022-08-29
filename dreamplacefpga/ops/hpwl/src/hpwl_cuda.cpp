@@ -68,7 +68,7 @@ at::Tensor hpwl_forward(
     int num_nets = net_mask.numel();
     at::Tensor partial_wl = at::zeros({2, num_nets}, pos.options()); 
 
-    DREAMPLACE_DISPATCH_FLOATING_TYPES(pos.type(), "computeHPWLCudaLauncher", [&] {
+    DREAMPLACE_DISPATCH_FLOATING_TYPES(pos, "computeHPWLCudaLauncher", [&] {
             computeHPWLCudaLauncher<scalar_t>(
                     DREAMPLACE_TENSOR_DATA_PTR(pos, scalar_t), DREAMPLACE_TENSOR_DATA_PTR(pos, scalar_t)+pos.numel()/2, 
                     DREAMPLACE_TENSOR_DATA_PTR(flat_netpin, int), 
@@ -119,7 +119,7 @@ at::Tensor hpwl_forward_fpga(
     int num_nets = net_mask.numel();
     at::Tensor partial_wl = at::zeros({2, num_nets}, pos.options()); 
 
-    DREAMPLACE_DISPATCH_FLOATING_TYPES(pos.type(), "computeHPWLCudaLauncherFPGA", [&] {
+    DREAMPLACE_DISPATCH_FLOATING_TYPES(pos, "computeHPWLCudaLauncherFPGA", [&] {
             computeHPWLCudaLauncherFPGA<scalar_t>(
                     DREAMPLACE_TENSOR_DATA_PTR(pos, scalar_t), DREAMPLACE_TENSOR_DATA_PTR(pos, scalar_t)+pos.numel()/2, 
                     DREAMPLACE_TENSOR_DATA_PTR(flat_netpin, int), 

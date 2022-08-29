@@ -23,7 +23,7 @@ at::Tensor dct_2N_forward(
 
     auto x_pad = at::zeros({M, 2*N}, x.options());
 
-    DREAMPLACE_DISPATCH_FLOATING_TYPES(x.type(), "dct_2N_forward", [&] {
+    DREAMPLACE_DISPATCH_FLOATING_TYPES(x, "dct_2N_forward", [&] {
             computePad<scalar_t>(
                     DREAMPLACE_TENSOR_DATA_PTR(x, scalar_t), 
                     M, 
@@ -35,7 +35,7 @@ at::Tensor dct_2N_forward(
             auto y = at::rfft(x_pad, 1, false, true);
 
             // re-use x_pad as output 
-            x_pad.resize_({M, N});
+            x_pad.resize_({{M, N}});
             computeMulExpk_2N(
                     DREAMPLACE_TENSOR_DATA_PTR(y, scalar_t), 
                     DREAMPLACE_TENSOR_DATA_PTR(expk, scalar_t), 
@@ -66,7 +66,7 @@ at::Tensor idct_2N_forward(
 
     auto x_pad = at::zeros({M, 2*N, 2}, x.options());
 
-    DREAMPLACE_DISPATCH_FLOATING_TYPES(x.type(), "idct_2N_forward", [&] {
+    DREAMPLACE_DISPATCH_FLOATING_TYPES(x, "idct_2N_forward", [&] {
             computeMulExpkAndPad_2N<scalar_t>(
                     DREAMPLACE_TENSOR_DATA_PTR(x, scalar_t), 
                     DREAMPLACE_TENSOR_DATA_PTR(expk, scalar_t), 
@@ -80,7 +80,7 @@ at::Tensor idct_2N_forward(
             auto y = at::irfft(x_pad, 1, false, false, {2*N});
 
             // reuse x_pad 
-            x_pad.resize_({M, N});
+            x_pad.resize_({{M, N}});
             computeTruncation(
                     DREAMPLACE_TENSOR_DATA_PTR(y, scalar_t), 
                     M, 
@@ -119,7 +119,7 @@ at::Tensor dct2_2N_forward(
     auto M = x.numel()/N; 
     auto x_pad = at::zeros({M, 2*N}, x.options());
 
-    DREAMPLACE_DISPATCH_FLOATING_TYPES(x.type(), "dct2_2N_forward", [&] {
+    DREAMPLACE_DISPATCH_FLOATING_TYPES(x, "dct2_2N_forward", [&] {
             computePad<scalar_t>(
                     DREAMPLACE_TENSOR_DATA_PTR(x, scalar_t), 
                     M, 
@@ -131,7 +131,7 @@ at::Tensor dct2_2N_forward(
             auto y = at::rfft(x_pad, 1, false, true);
 
             // re-use x_pad as output 
-            x_pad.resize_({M, N});
+            x_pad.resize_({{M, N}});
             computeMulExpk_2N(
                     DREAMPLACE_TENSOR_DATA_PTR(y, scalar_t), 
                     DREAMPLACE_TENSOR_DATA_PTR(expk1, scalar_t), 
@@ -197,7 +197,7 @@ at::Tensor idct2_2N_forward(
 
     auto x_pad = at::zeros({M, 2*N, 2}, x.options());
 
-    DREAMPLACE_DISPATCH_FLOATING_TYPES(x.type(), "idct2_2N_forward", [&] {
+    DREAMPLACE_DISPATCH_FLOATING_TYPES(x, "idct2_2N_forward", [&] {
             computeMulExpkAndPad_2N<scalar_t>(
                     DREAMPLACE_TENSOR_DATA_PTR(x, scalar_t), 
                     DREAMPLACE_TENSOR_DATA_PTR(expk1, scalar_t), 
@@ -211,7 +211,7 @@ at::Tensor idct2_2N_forward(
             auto y = at::irfft(x_pad, 1, false, false, {2*N});
 
             // reuse x_pad 
-            x_pad.resize_({M, N});
+            x_pad.resize_({{M, N}});
             computeTruncation(
                     DREAMPLACE_TENSOR_DATA_PTR(y, scalar_t), 
                     M, 
