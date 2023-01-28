@@ -1,5 +1,5 @@
 {
-"aux_input" : "benchmarks/FPGA-example2/design.aux", 
+"aux_input" : "benchmarks/sample_ispd2016_benchmarks/FPGA-example2/design.aux", 
 "gpu" : 1,
 "num_threads" : 1,
 "num_bins_x" : 512,

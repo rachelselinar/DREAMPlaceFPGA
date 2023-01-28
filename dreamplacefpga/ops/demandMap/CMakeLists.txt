@@ -19,7 +19,7 @@ install(TARGETS
 
 if(TORCH_ENABLE_CUDA)
 
-add_torch_extension(demandMap_cuda
+add_pytorch_extension(demandMap_cuda
   src/demandMap_cuda.cpp
   src/demandMap_cuda_kernel.cu
   EXTRA_INCLUDE_DIRS ${INCLUDE_DIRS}
