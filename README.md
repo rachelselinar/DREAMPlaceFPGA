@@ -1,7 +1,29 @@
-# DREAMPlaceFPGA
+## Table of Contents
+
+* [DREAMPlaceFPGA](#dreamplacefpga)
+    - [FPGA Placement: Overview](#fpga_placement)
+    - [Global Placer](#global_placer)
+    - [Packer-Legalizer](#packer_legalizer)
+    - [Performance](#performance)
+    - [Target Architecture](#target_arch)
+* [Developers](#developers)
+* [Publications](#publications)
+* [External Dependencies](#dependencies)
+* [Cloning the Repository](#cloning)
+* [Build Instructions](#build)
+    - [To install Python dependency](#python_dependency)
+    - [To Build](#build_dreamplacefpga)
+    - [Cmake Options](#cmake)
+* [Sample Benchmarks](#sample)
+* [Running DREAMPlaceFPGA](#running)
+* [JSON Configurations](#json)
+* [Bug Report](#bug)
+* [Copyright](#copyright)
+
+# <a name="dreamplacefpga"></a>DREAMPlaceFPGA
 *DREAMPlaceFPGA* is an Open-Source GPU-Accelerated Placer for Large Scale Heterogeneous FPGAs using a Deep Learning Toolkit.
 
-### FPGA Placement
+### <a name="fpga_placement"></a>FPGA Placement: An Overview
 Placement is a crucial and computationally intensive step in the FPGA design flow that determines the physical locations of various heterogeneous instances in the design.
 In general, placement consists of three stages - global placement (GP), packing/clustering and legalization (LG), and detailed placement (DP).
 
@@ -18,7 +40,7 @@ The disruptive movement of instances to the fixed physical site locations during
 
 Among the various placement stages, the global placement and pack-legalize stages are accelerated in *DREAMPlaceFPGA*.
 
-### DREAMPlaceFPGA Global Placer
+### <a name="global_placer"></a>Global Placer
 By leveraging the open-source ASIC placement framework, [DREAMPlace](https://github.com/limbo018/DREAMPlace), we build an open-source placement framework for FPGAs that is based on the [elfPlace](https://ieeexplore.ieee.org/document/8942075) algorithm.
 The global placement flow in [*DREAMPlaceFPGA*](https://ieeexplore.ieee.org/document/9712562):
 <p align="center">
@@ -26,7 +48,7 @@ The global placement flow in [*DREAMPlaceFPGA*](https://ieeexplore.ieee.org/docu
 </p>
 The operators for wirelength, density, and instance area update are accelerated on a GPU.
 
-### DREAMPlaceFPGA Packer-Legalizer
+### <a name="packer_legalizer"></a>Packer-Legalizer
 Starting with a flat global placement solution, the [direct legalization](https://ieeexplore.ieee.org/document/8500228) (DL) algorithm allows for clustering (or) packing of LUTs and FFs, followed by legalization to their respective sites.
 The packing-legalization flow in *DREAMPlaceFPGA*:
 <p align="center">
@@ -34,22 +56,31 @@ The packing-legalization flow in *DREAMPlaceFPGA*:
 </p>
 *DREAMPlaceFPGA* enhances the DL algorithm and accelerates it on a GPU.
 
-### DREAMPlaceFPGA Performance
+### <a name="performance"></a>Performance
 *DREAMPlaceFPGA* outperforms [elfPlace (GPU)](https://ieeexplore.ieee.org/document/9330804) by `19%` for global placementruntime.
 On the [ISPD'2016 benchmark suite](http://www.ispd.cc/contests/16/FAQ.html), *DREAMPlaceFPGA* is `5.3×` faster for global placement, `2.2×` faster for packing-legalization and `2.4×` faster for overall placement than 16-thread [elfPlace (CPU)](https://ieeexplore.ieee.org/document/8942075)[^1], with a slight increase in (+0.6%) placement HPWL and (+0.9%) routed wirelength. For more details, please refer to the ['publications'](#publications).
 [^1]: The runtime results vary based on the hardware used.
 
-### Target Architecture
+### <a name="target_arch"></a>Target Architecture
 Currently, *DREAMPlaceFPGA* only supports the [ISPD'2016 benchmarks](http://www.ispd.cc/contests/16/FAQ.html), which employs a simplified Xilinx Ultrascale architecture. 
 The [elfPlace (CPU)](thirdparty/elfPlace_LG_DP) binary is available to run the legalization and detailed placement stages, when *DREAMPlaceFPGA* is used to only run the global placement stage.
 *DREAMPlaceFPGA* runs on both CPU and GPU. If installed on a machine without GPU, multi-threaded CPU support is available.
 
-## Developers
+## <a name="developers"></a>Developers
 
 - Rachel Selina Rajarathnam, [UTDA](https://www.cerc.utexas.edu/utda), ECE Department, The University of Texas at Austin
 - Zixuan Jiang, [UTDA](https://www.cerc.utexas.edu/utda), ECE Department, The University of Texas at Austin
 
-## External Dependencies
+## <a name="publications"></a>Publications 
+
+* Rachel Selina Rajarathnam, Mohamed Baker Alawieh, Zixuan Jiang, Mahesh A. Iyer, and [David Z. Pan](http://users.ece.utexas.edu/~dpan), 
+  "**[DREAMPlaceFPGA: An Open-Source Analytical Placer for Large Scale Heterogeneous FPGAs using Deep-Learning Toolkit](https://ieeexplore.ieee.org/document/9712562)**", 
+  27th IEEE/ACM Asian and South Pacific Design Automation Conference (ASP-DAC), pp. 300-306, 2022.
+* Rachel Selina Rajarathnam, Zixuan Jiang, Mahesh A. Iyer, and [David Z. Pan](http://users.ece.utexas.edu/~dpan), 
+  "**DREAMPlaceFPGA-PL: An Open-Source GPU-Accelerated Packer-Leglaizer for Heterogeneous FPGAs**", 
+  International Symposium on Physical Design (ISPD), 2023. (accepted)
+
+## <a name="dependencies"></a>External Dependencies
 
 - Python 2.7 or Python 3.5/3.6/3.7
 
@@ -101,7 +132,7 @@ The [elfPlace (CPU)](thirdparty/elfPlace_LG_DP) binary is available to run the l
     - Otherwise, python implementation is used. 
 
 
-## Cloning the repository
+## <a name="cloning"></a>Cloning the Repository
 
 To pull git submodules in the root directory
 ```
@@ -114,16 +145,16 @@ Or alternatively, pull all the submodules when cloning the repository.
 git clone --recursive https://github.com/rachelselinar/DREAMPlaceFPGA.git
 ```
 
-## Build Instructions
+## <a name="build"></a>Build Instructions
 
-### To install Python dependency 
+### <a name="python_dependency"></a>To install Python dependency 
 
 At the root directory:
 ```
 pip install -r requirements.txt 
 ```
 
-### To Build 
+### <a name="build_dreamplacefpga"></a>To Build 
 
 At the root directory, 
 ```
@@ -139,7 +170,7 @@ To clean, go to the root directory.
 ```
 rm -r build
 ```
-### Cmake Options 
+### <a name="cmake"></a>Cmake Options 
 
 Here are the available options for CMake. 
 - CMAKE_INSTALL_PREFIX: installation directory
@@ -152,14 +183,14 @@ Here are the available options for CMake.
     - PyTorch in default is compiled with _GLIBCXX_USE_CXX11_ABI=0, but in a customized PyTorch environment, it might be compiled with _GLIBCXX_USE_CXX11_ABI=1. 
 
 
-## Sample Benchmarks
+## <a name="sample"></a>Sample Benchmarks
 
 *DREAMPlaceFPGA* only supports designs for *Xilinx Ultrascale Architecture* in bookshelf format with fixed IOs.
 Refer to [ISPD'2016 contest](http://www.ispd.cc/contests/16/FAQ.html) for more information.
 
 Four sample designs are included in `benchmarks` directory.
 
-## Running DREAMPlaceFPGA
+## <a name="running"></a>Running DREAMPlaceFPGA
 
 Before running, ensure that all python dependent packages have been installed. 
 Go to the **install directory** and run with JSON configuration file.  
@@ -172,7 +203,7 @@ Unitests for some of the pytorch operators are provided. To run:
 python unitest/ops/hpwl_unitest.py
 ```
 
-### JSON Configurations
+### <a name="json"></a>JSON Configurations
 
 The most frequently used options in the JSON file are listed below. For the complete list of available options, please refer to [paramsFPGA.json](./dreamplacefpga/paramsFPGA.json). 
 
@@ -195,20 +226,11 @@ The most frequently used options in the JSON file are listed below. For the comp
 | plot_flag                        | 0                       | whether to plot solution or not (Increases runtime)                                                                                                               |
 | deterministic_flag               | 0                       | Ensures reproducible run-to-run results on GPU (May increase runtime)                                                                                             |
 
-## Bug Report
+## <a name="bug"></a>Bug Report
 
 Please report bugs to [rachelselina dot r at utexas dot edu](mailto:rachelselina.r@utexas.edu).
 
-## <a name="publications"></a>Publications 
-
-* Rachel Selina Rajarathnam, Mohamed Baker Alawieh, Zixuan Jiang, Mahesh A. Iyer, and [David Z. Pan](http://users.ece.utexas.edu/~dpan), 
-  "**[DREAMPlaceFPGA: An Open-Source Analytical Placer for Large Scale Heterogeneous FPGAs using Deep-Learning Toolkit](https://ieeexplore.ieee.org/document/9712562)**", 
-  27th IEEE/ACM Asian and South Pacific Design Automation Conference (ASP-DAC), pp. 300-306, 2022.
-* Rachel Selina Rajarathnam, Zixuan Jiang, Mahesh A. Iyer, and [David Z. Pan](http://users.ece.utexas.edu/~dpan), 
-  "**DREAMPlaceFPGA-PL: An Open-Source GPU-Accelerated Packer-Leglaizer for Heterogeneous FPGAs**", 
-  International Symposium on Physical Design (ISPD), 2023. (accepted)
-
-## Copyright
+## <a name="copyright"></a>Copyright
 
 This software is released under *BSD 3-Clause "New" or "Revised" License*. Please refer to [LICENSE](./LICENSE) for details.
 
