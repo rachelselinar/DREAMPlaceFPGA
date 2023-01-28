@@ -59,7 +59,7 @@ The packing-legalization flow in *DREAMPlaceFPGA*:
 ### <a name="performance"></a>Performance
 *DREAMPlaceFPGA* outperforms [elfPlace (GPU)](https://ieeexplore.ieee.org/document/9330804) by `19%` for global placementruntime.
 On the [ISPD'2016 benchmark suite](http://www.ispd.cc/contests/16/FAQ.html), *DREAMPlaceFPGA* is `5.3×` faster for global placement, `2.2×` faster for packing-legalization and `2.4×` faster for overall placement than 16-thread [elfPlace (CPU)](https://ieeexplore.ieee.org/document/8942075)[^1], with a slight increase in (+0.6%) placement HPWL and (+0.9%) routed wirelength. For more details, please refer to the ['publications'](#publications).
-[^1]: The runtime results vary based on the hardware used.
+[^1]: The runtime results vary based on the hardware used. These results are based on a Linux machine with an Intel i9-7900 CPU (running at 3.30 GHz) and an NVIDIA Titan Xp (Pascal) GPU.
 
 ### <a name="target_arch"></a>Target Architecture
 Currently, *DREAMPlaceFPGA* only supports the [ISPD'2016 benchmarks](http://www.ispd.cc/contests/16/FAQ.html), which employs a simplified Xilinx Ultrascale architecture. 
