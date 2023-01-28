@@ -1,28 +1,45 @@
 # DREAMPlaceFPGA
 *DREAMPlaceFPGA* is an Open-Source GPU-Accelerated Placer for Large Scale Heterogeneous FPGAs using a Deep Learning Toolkit.
 
+### FPGA Placement
 Placement is a crucial and computationally intensive step in the FPGA design flow that determines the physical locations of various heterogeneous instances in the design.
 In general, placement consists of three stages - global placement (GP), packing/clustering and legalization (LG), and detailed placement (DP).
 
 * Stages in an FPGA Placement
 <p align="center">
-    <img src=/images/fpga_placement_stages.png height=80%>
+    <img src=/images/fpga_placement_stages.png height="200">
 </p>
 
-This work leverages the open-source ASIC placement framework, [DREAMPlace](https://github.com/limbo018/DREAMPlace), to build an open-source placement framework for FPGAs that is based on the [elfPlace](https://ieeexplore.ieee.org/document/8942075) algorithm.
+With a synthesized logic-mapped design netlist and the FPGA architecture description as inputs, the global placer obtains roughly legal locations for all the design instances.
+Based on the global placement (GP) solution, the packer clusters the FFs and LUTs to be placed on the corresponding sites.
+Then the legalizer assigns all the instances to their corresponding physical sites on the FPGA to obtain a legal placement.
+A placement is legal when an instance occupies a site of the same type, and all instances can be routed with the limited routed resources available on an FPGA.
+The disruptive movement of instances to the fixed physical site locations during legalization results in quality degradation, and thus detailed placement (DP) further refines the legalized placement.
+
 Among the various placement stages, the global placement and pack-legalize stages are accelerated in *DREAMPlaceFPGA*.
 
-The global placement flow and packing-legalization flow are shown below:
-<p align="middle">
-  <img src="images/FPGA_placement.png" width=40% height=40%/>
-  <img src="images/LG_flow.png" width=40% height=40%/>
+### DREAMPlaceFPGA Global Placer
+By leveraging the open-source ASIC placement framework, [DREAMPlace](https://github.com/limbo018/DREAMPlace), we build an open-source placement framework for FPGAs that is based on the [elfPlace](https://ieeexplore.ieee.org/document/8942075) algorithm.
+The global placement flow in [*DREAMPlaceFPGA*](https://ieeexplore.ieee.org/document/9712562):
+<p align="center">
+  <img src="images/FPGA_placement.png" height="500"/>
 </p>
+The operators for wirelength, density, and instance area update are accelerated on a GPU.
 
+### DREAMPlaceFPGA Packer-Legalizer
+Starting with a flat global placement solution, the [direct legalization](https://ieeexplore.ieee.org/document/8500228) (DL) algorithm allows for clustering (or) packing of LUTs and FFs, followed by legalization to their respective sites.
+The packing-legalization flow in *DREAMPlaceFPGA*:
+<p align="center">
+  <img src="images/LG_flow.png" height="500"/>
+</p>
+*DREAMPlaceFPGA* enhances the DL algorithm and accelerates it on a GPU.
 
+### DREAMPlaceFPGA Performance
 *DREAMPlaceFPGA* outperforms [elfPlace (GPU)](https://ieeexplore.ieee.org/document/9330804) by `19%` for global placementruntime.
-On the [ISPD'2016 benchmark suite](http://www.ispd.cc/contests/16/FAQ.html), *DREAMPlaceFPGA* is `5.3×` faster for global placement, `2.2×` faster for packing-legalization and `2.4×` faster for overall placement than 16-thread [elfPlace (CPU)](https://ieeexplore.ieee.org/document/8942075), with 0.6% higher placement HPWL and 0.9% higher routed wirelength.
-For more details, please refer to the ['paper'](#Publications).
+On the [ISPD'2016 benchmark suite](http://www.ispd.cc/contests/16/FAQ.html), *DREAMPlaceFPGA* is `5.3×` faster for global placement, `2.2×` faster for packing-legalization and `2.4×` faster for overall placement than 16-thread [elfPlace (CPU)](https://ieeexplore.ieee.org/document/8942075)[^1], with a slight increase in (+0.6%) placement HPWL and (+0.9%) routed wirelength. For more details, please refer to the ['publications'](#publications).
+[^1]: The runtime results vary based on the hardware used.
 
+### Target Architecture
 Currently, *DREAMPlaceFPGA* only supports the [ISPD'2016 benchmarks](http://www.ispd.cc/contests/16/FAQ.html), which employs a simplified Xilinx Ultrascale architecture. 
 The [elfPlace (CPU)](thirdparty/elfPlace_LG_DP) binary is available to run the legalization and detailed placement stages, when *DREAMPlaceFPGA* is used to only run the global placement stage.
 *DREAMPlaceFPGA* runs on both CPU and GPU. If installed on a machine without GPU, multi-threaded CPU support is available.
@@ -182,7 +199,7 @@ The most frequently used options in the JSON file are listed below. For the comp
 
 Please report bugs to [rachelselina dot r at utexas dot edu](mailto:rachelselina.r@utexas.edu).
 
-## Publications 
+## <a name="publications"></a>Publications 
 
 * Rachel Selina Rajarathnam, Mohamed Baker Alawieh, Zixuan Jiang, Mahesh A. Iyer, and [David Z. Pan](http://users.ece.utexas.edu/~dpan), 
   "**[DREAMPlaceFPGA: An Open-Source Analytical Placer for Large Scale Heterogeneous FPGAs using Deep-Learning Toolkit](https://ieeexplore.ieee.org/document/9712562)**", 
