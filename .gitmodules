@@ -7,3 +7,9 @@
 [submodule "thirdparty/pybind11"]
 	path = thirdparty/pybind11
 	url = https://github.com/pybind/pybind11.git
+[submodule "thirdparty/thirdparty/munkres-cpp"]
+	path = thirdparty/thirdparty/munkres-cpp
+	url = https://github.com/saebyn/munkres-cpp.git
+[submodule "thirdparty/thirdparty/cub"]
+	path = thirdparty/thirdparty/cub
+	url = https://github.com/NVIDIA/cub.git
