@@ -48,7 +48,7 @@ def placeFPGA(params):
     path = "%s/%s" % (params.result_dir, params.design_name())
     if not os.path.exists(path):
         os.system("mkdir -p %s" % (path))
-    if params.global_place_flag and !params.legalize_flag: ##Only global placement is run
+    if params.global_place_flag and params.legalize_flag == 0: ##Only global placement is run
         gp_out_file = os.path.join(path, "%s.gp.pl" % (params.design_name()))
         placedb.write(params, gp_out_file)
         
