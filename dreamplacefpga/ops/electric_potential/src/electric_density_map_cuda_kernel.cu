@@ -4,12 +4,12 @@
  * @date   Oct 2020
  */
 #include <float.h>
+#include <cstdint>
 #include <math.h>
 #include <stdio.h>
 #include "cuda_runtime.h"
 #include "utility/src/utils.cuh"
 // local dependency
-#include "electric_potential/src/atomic_ops.cuh"
 #include "electric_potential/src/density_function.h"
 
 DREAMPLACE_BEGIN_NAMESPACE
@@ -111,14 +111,6 @@ int computeFPGADensityMapCallKernel(
   return 0;
 }
 
-template <typename T, typename V>
-__global__ void copyScaleArray(T *dst, V *src, T scale_factor, int n) {
-  int i = blockIdx.x * blockDim.x + threadIdx.x;
-  if (i < n) {
-    dst[i] = src[i] * scale_factor;
-  }
-}
-
 template <typename T>
 int computeFPGADensityMapCudaLauncher(
     const T *x_tensor, const T *y_tensor, const T *node_size_x_clamped_tensor,
@@ -140,7 +132,7 @@ int computeFPGADensityMapCudaLauncher(
     unsigned long long int *scaled_density_map_tensor = NULL;
     allocateCUDA(scaled_density_map_tensor, num_bins, unsigned long long int);
 
-    AtomicAdd<unsigned long long int> atomicAddOp(scale_factor);
+    AtomicAddCUDA<unsigned long long int> atomicAddOp(scale_factor);
 
     int thread_count = 512;
     copyScaleArray<<<(num_bins + thread_count - 1) / thread_count,
@@ -159,7 +151,7 @@ int computeFPGADensityMapCudaLauncher(
 
     destroyCUDA(scaled_density_map_tensor);
   } else {
-    AtomicAdd<T> atomicAddOp;
+    AtomicAddCUDA<T> atomicAddOp;
 
     computeFPGADensityMapCallKernel<T, decltype(atomicAddOp)>(
         x_tensor, y_tensor, node_size_x_clamped_tensor,
@@ -173,7 +165,7 @@ int computeFPGADensityMapCudaLauncher(
 }
 
 #define REGISTER_KERNEL_LAUNCHER(T)                                            \
-  int instantiateComputeFPGADensityMapLauncher(                                \
+  template int computeFPGADensityMapCudaLauncher<T>(                       \
       const T *x_tensor, const T *y_tensor,                                    \
       const T *node_size_x_clamped_tensor,                                     \
       const T *node_size_y_clamped_tensor, const T *offset_x_tensor,           \
@@ -182,14 +174,7 @@ int computeFPGADensityMapCudaLauncher(
       const T xl, const T yl, const T xh, const T yh, const T bin_size_x,      \
       const T bin_size_y, bool deterministic_flag, T *density_map_tensor,      \
       const int *sorted_node_map, const T targetHalfSizeX,                     \
-      const T targetHalfSizeY) {                                               \
-    return computeFPGADensityMapCudaLauncher(                                  \
-        x_tensor, y_tensor, node_size_x_clamped_tensor,                        \
-        node_size_y_clamped_tensor, offset_x_tensor, offset_y_tensor,          \
-        ratio_tensor, num_nodes, num_bins_x, num_bins_y, xl,                   \
-        yl, xh, yh, bin_size_x, bin_size_y, deterministic_flag,                \
-        density_map_tensor, sorted_node_map, targetHalfSizeX, targetHalfSizeY);\
-  }
+      const T targetHalfSizeY);
 
 REGISTER_KERNEL_LAUNCHER(float);
 REGISTER_KERNEL_LAUNCHER(double);

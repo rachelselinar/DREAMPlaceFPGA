@@ -96,6 +96,10 @@
     "descripton" : "whether to run global placement", 
     "default" : 1
     },
+"legalize_flag" : {
+    "descripton" : "whether use internal legalization", 
+    "default" : 1
+    },
 "legalize_and_detailed_place_flag" : {
     "descripton" : "run legalization and detailed placement using elfPlace", 
     "default" : 1
@@ -119,6 +123,18 @@
 "plot_flag" : {
     "descripton" : "whether to plot solution or not (Increases runtime)", 
     "default" : 0
+    },
+"RePlAce_ref_hpwl" : {
+    "descripton" : "reference HPWL used in RePlAce for updating density weight", 
+    "default" : 350000
+    },
+"RePlAce_LOWER_PCOF" : {
+    "descripton" : "lower bound ratio used in RePlAce for updating density weight", 
+    "default" : 0.95
+    },
+"RePlAce_UPPER_PCOF" : {
+    "descripton" : "upper bound ratio used in RePlAce for updating density weight", 
+    "default" : 1.05
     },
 "gamma" : {
     "descripton" : "elfPlace: The base wirelenGamma is <this value> * average bin size",

@@ -14,7 +14,7 @@ DREAMPLACE_BEGIN_NAMESPACE
 BenchMetrics::BenchMetrics()
 {
     initPlaceDBFlag = false; 
-    initAlgoDBFlag = false; 
+    //initAlgoDBFlag = false; 
 }
 
 void BenchMetrics::print() const

@@ -2,8 +2,7 @@
 #include <stdio.h>
 #include "assert.h"
 #include "cuda_runtime.h"
-#include "utility/src/print.h"
-#include "utility/src/Msg.h"
+#include "utility/src/utils.cuh"
 
 DREAMPLACE_BEGIN_NAMESPACE
 
@@ -107,7 +106,7 @@ int computeLogSumExpWirelengthCudaLauncher(
 
 
 #define REGISTER_KERNEL_LAUNCHER(T) \
-    int instantiateComputeLogSumExpWirelengthLauncher(\
+    template int computeLogSumExpWirelengthCudaLauncher<T>(\
                 const T* x, const T* y,       \
                 const int* flat_netpin,       \
                 const int* netpin_start,       \
@@ -117,20 +116,8 @@ int computeLogSumExpWirelengthCudaLauncher(
                 const T* inv_gamma,       \
                 T* partial_wl,      \
                 T* grad_intermediate_x, T* grad_intermediate_y      \
-            )\
-    {\
-        return computeLogSumExpWirelengthCudaLauncher(\
-                    x, y,      \
-                    flat_netpin,      \
-                    netpin_start,      \
-                    net_mask,      \
-                    num_nets,      \
-                    gamma,       \
-                    inv_gamma,      \
-                    partial_wl,      \
-                    grad_intermediate_x, grad_intermediate_y      \
-                );\
-    }
+            );
+
 REGISTER_KERNEL_LAUNCHER(float);
 REGISTER_KERNEL_LAUNCHER(double);
 

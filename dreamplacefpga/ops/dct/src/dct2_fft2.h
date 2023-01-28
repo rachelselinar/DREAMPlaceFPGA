@@ -11,85 +11,50 @@
 #include <math.h>
 #include <float.h>
 #include "utility/src/torch.h"
-#include "utility/src/Msg.h"
-#include "utility/src/ComplexNumber.h"
+#include "utility/src/utils.h"
 
 DREAMPLACE_BEGIN_NAMESPACE
 
-#define CHECK_CPU(x) AT_ASSERTM(!x.is_cuda(), #x "must be a tensor on CPU")
-#define CHECK_FLAT(x) AT_ASSERTM(!x.is_cuda() && x.ndimension() == 1, #x "must be a flat tensor on GPU")
-#define CHECK_EVEN(x) AT_ASSERTM((x.numel()&1) == 0, #x "must have even number of elements")
-#define CHECK_CONTIGUOUS(x) AT_ASSERTM(x.is_contiguous(), #x "must be contiguous")
+void dct2_fft2_forward(at::Tensor x, at::Tensor expkM, at::Tensor expkN,
+                       at::Tensor out, at::Tensor buf, int num_threads);
 
-void dct2_fft2_forward(
-    at::Tensor x,
-    at::Tensor expkM,
-    at::Tensor expkN,
-    at::Tensor out,
-    at::Tensor buf,
-    int num_threads);
+void idct2_fft2_forward(at::Tensor x, at::Tensor expkM, at::Tensor expkN,
+                        at::Tensor out, at::Tensor buf, int num_threads);
 
-void idct2_fft2_forward(
-    at::Tensor x,
-    at::Tensor expkM,
-    at::Tensor expkN,
-    at::Tensor out,
-    at::Tensor buf,
-    int num_threads);
+void idct_idxst_forward(at::Tensor x, at::Tensor expkM, at::Tensor expkN,
+                        at::Tensor out, at::Tensor buf, int num_threads);
 
-void idct_idxst_forward(
-    at::Tensor x,
-    at::Tensor expkM,
-    at::Tensor expkN,
-    at::Tensor out,
-    at::Tensor buf,
-    int num_threads);
+void idxst_idct_forward(at::Tensor x, at::Tensor expkM, at::Tensor expkN,
+                        at::Tensor out, at::Tensor buf, int num_threads);
 
-void idxst_idct_forward(
-    at::Tensor x,
-    at::Tensor expkM,
-    at::Tensor expkN,
-    at::Tensor out,
-    at::Tensor buf,
-    int num_threads);
-
-inline int INDEX(const int hid, const int wid, const int N)
-{
-    return (hid * N + wid);
+inline int INDEX(const int hid, const int wid, const int N) {
+  return (hid * N + wid);
 }
 
 template <typename T>
-void dct2dPreprocessCpu(
-            const T* x,
-            T* y,
-            const int M,
-            const int N,
-            int num_threads)
-{
+void dct2dPreprocessCpu(const T* x, T* y, const int M, const int N,
+        int num_threads) {
     int halfN = N / 2;
 #pragma omp parallel for num_threads(num_threads)
-    for(int hid = 0; hid < M; ++hid)
-    {
-        for(int wid = 0; wid < N; ++wid)
-        {
+    for(int hid = 0; hid < M; ++hid) {
+        for(int wid = 0; wid < N; ++wid) {
             int index;
             int cond = (((hid & 1) == 0) << 1) | ((wid & 1) == 0);
-            switch (cond)
-            {
-            case 0:
-                index = INDEX(2 * M - (hid + 1), N - (wid + 1) / 2, halfN);
-                break;
-            case 1:
-                index = INDEX(2 * M - (hid + 1), wid / 2, halfN);
-                break;
-            case 2:
-                index = INDEX(hid, N - (wid + 1) / 2, halfN);
-                break;
-            case 3:
-                index = INDEX(hid, wid / 2, halfN);
-                break;
-            default:
-                break;
+            switch (cond) {
+                case 0:
+                    index = INDEX(2 * M - (hid + 1), N - (wid + 1) / 2, halfN);
+                    break;
+                case 1:
+                    index = INDEX(2 * M - (hid + 1), wid / 2, halfN);
+                    break;
+                case 2:
+                    index = INDEX(hid, N - (wid + 1) / 2, halfN);
+                    break;
+                case 3:
+                    index = INDEX(hid, wid / 2, halfN);
+                    break;
+                default:
+                    break;
             }
             y[index] = x[INDEX(hid, wid, N)];
         }
@@ -97,39 +62,25 @@ void dct2dPreprocessCpu(
 }
 
 template <typename T>
-void dct2dPreprocessCpuLauncher(
-            const T* x,
-            T* y,
-            const int M,
-            const int N,
-            int num_threads)
-{
-    dct2dPreprocessCpu<T>(x, y, M, N, num_threads);
+void dct2dPreprocessCpuLauncher(const T* x, T* y, const int M, const int N,
+                                int num_threads) {
+  dct2dPreprocessCpu<T>(x, y, M, N, num_threads);
 }
 
 template <typename T, typename TComplex>
-void dct2dPostprocessCpu(
-            const TComplex* V,
-            T* y,
-            const int  M,
-            const int N,
-            const TComplex* expkM,
-            const TComplex* expkN,
-            int num_threads)
-{
+void dct2dPostprocessCpu(const TComplex* V, T* y, const int M, const int N,
+                         const TComplex* expkM, const TComplex* expkN,
+                         int num_threads) {
     int halfM = M / 2;
     int halfN = N / 2;
     T four_over_MN =(T)(4. / (M * N));
     T two_over_MN =(T)(2. / (M * N));
 
 #pragma omp parallel for num_threads(num_threads)
-    for (int hid = 0; hid < halfM; ++hid)
-    {
-        for (int wid = 0; wid < halfN; ++wid)
-        {
+    for (int hid = 0; hid < halfM; ++hid) {
+        for (int wid = 0; wid < halfN; ++wid) {
             int cond = ((hid != 0) << 1) | (wid != 0);
-            switch (cond)
-            {
+            switch (cond) {
             case 0:
             {
                 y[0] = V[0].x * four_over_MN;
@@ -196,42 +147,26 @@ void dct2dPostprocessCpu(
             }
         }
     }
-
 }
 
 template <typename T>
-void dct2dPostprocessCpuLauncher(
-            const T* x,
-            T* y,
-            const int  M,
-            const int N,
-            const T* expkM,
-            const T* expkN,
-            int num_threads)
-{
+void dct2dPostprocessCpuLauncher(const T* x, T* y, const int M, const int N,
+                                 const T* expkM, const T* expkN,
+                                 int num_threads) {
     dct2dPostprocessCpu<T, ComplexType<T>>((ComplexType<T> *)x, y, M, N, (ComplexType<T> *)expkM, (ComplexType<T> *)expkN, num_threads);
 }
 
 template <typename T, typename TComplex>
-void idct2_fft2PreprocessCpu(
-            const T* input,
-            TComplex* output,
-            const int M,
-            const int N,
-            const TComplex* expkM,
-            const TComplex* expkN,
-            int num_threads)
-{
+void idct2_fft2PreprocessCpu(const T* input, TComplex* output, const int M,
+                             const int N, const TComplex* expkM,
+                             const TComplex* expkN, int num_threads) {
     const int halfM = M / 2;
     const int halfN = N / 2;
 #pragma omp parallel for num_threads(num_threads)
-    for (int hid = 0; hid < halfM; ++hid)
-    {
-        for (int wid = 0; wid < halfN; ++wid)
-        {
+    for (int hid = 0; hid < halfM; ++hid) {
+        for (int wid = 0; wid < halfN; ++wid) {
             int cond = ((hid != 0) << 1) | (wid != 0);
-            switch (cond)
-            {
+            switch (cond) {
             case 0:
             {
                 T tmp1;
@@ -325,36 +260,22 @@ void idct2_fft2PreprocessCpu(
 }
 
 template <typename T>
-void idct2_fft2PreprocessCpuLauncher(
-            const T* x,
-            T* y,
-            const int M,
-            const int N,
-            const T* expkM,
-            const T* expkN,
-            int num_threads)
-{
+void idct2_fft2PreprocessCpuLauncher(const T* x, T* y, const int M, const int N,
+                                     const T* expkM, const T* expkN,
+                                     int num_threads) {
     idct2_fft2PreprocessCpu<T, ComplexType<T>>(x, (ComplexType<T>*)y, M, N, (ComplexType<T>*)expkM, (ComplexType<T>*)expkN, num_threads);
 }
 
 template <typename T>
-void idct2_fft2PostprocessCpu(
-            const T *x,
-            T *y,
-            const int M,
-            const int N,
-            int num_threads)
-{
+void idct2_fft2PostprocessCpu(const T* x, T* y, const int M, const int N,
+                              int num_threads) {
 	int MN = M * N; 
     #pragma omp parallel for num_threads(num_threads)
-    for (int hid = 0; hid < M; ++hid)
-    {
-        for (int wid = 0; wid < N; ++wid)
-        {
+    for (int hid = 0; hid < M; ++hid) {
+        for (int wid = 0; wid < N; ++wid) {
             int cond = ((hid < M / 2) << 1) | (wid < N / 2);
             int index;
-            switch (cond)
-            {
+            switch (cond) {
             case 0:
                 index = INDEX(((M - hid) << 1) - 1, ((N - wid) << 1) - 1, N);
                 break;
@@ -377,25 +298,15 @@ void idct2_fft2PostprocessCpu(
 }
 
 template <typename T>
-void idct2_fft2PostprocessCpuLauncher(
-            const T *x,
-            T *y,
-            const int M,
-            const int N,
-            int num_threads)
-{
+void idct2_fft2PostprocessCpuLauncher(const T* x, T* y, const int M,
+                                      const int N, int num_threads) {
     idct2_fft2PostprocessCpu<T>(x, y, M, N, num_threads);
 }
 
 template <typename T, typename TComplex>
-void idct_idxstPreprocessCpu(
-            const T* input,
-            TComplex* output,
-            const int M,
-            const int N,
-            const TComplex* expkM,
-            const TComplex* expkN,
-            int num_threads)
+void idct_idxstPreprocessCpu(const T* input, TComplex* output, const int M,
+                             const int N, const TComplex* expkM,
+                             const TComplex* expkN, int num_threads)
 {
     int halfM = M / 2;
     int halfN = N / 2;
@@ -493,26 +404,15 @@ void idct_idxstPreprocessCpu(
 }
 
 template <typename T>
-void idct_idxstPreprocessCpuLauncher(
-            const T* x,
-            T* y,
-            const int M,
-            const int N,
-            const T* expkM,
-            const T* expkN,
-            int num_threads)
-{
+void idct_idxstPreprocessCpuLauncher(const T* x, T* y, const int M, const int N,
+                                     const T* expkM, const T* expkN,
+                                     int num_threads) {
     idct_idxstPreprocessCpu<T, ComplexType<T>>(x, (ComplexType<T>*)y, M, N, (ComplexType<T>*)expkM, (ComplexType<T>*)expkN, num_threads);
 }
 
 template <typename T>
-void idct_idxstPostprocessCpu(
-            const T* x,
-            T* y,
-            const int M,
-            const int N,
-            int num_threads)
-{
+void idct_idxstPostprocessCpu(const T* x, T* y, const int M, const int N,
+                              int num_threads) {
     //const int halfN = N / 2;
     const int MN = M * N;
 #pragma omp parallel for num_threads(num_threads)
@@ -549,26 +449,15 @@ void idct_idxstPostprocessCpu(
 }
 
 template <typename T>
-void idct_idxstPostprocessCpuLauncher(
-            const T* x,
-            T* y,
-            const int M,
-            const int N,
-            int num_threads)
-{
+void idct_idxstPostprocessCpuLauncher(const T* x, T* y, const int M,
+                                      const int N, int num_threads) {
     idct_idxstPostprocessCpu<T>(x, y, M, N, num_threads);
 }
 
 template <typename T, typename TComplex>
-void idxst_idctPreprocessCpu(
-            const T* input,
-            TComplex* output,
-            const int M,
-            const int N,
-            const TComplex* expkM,
-            const TComplex* expkN,
-            int num_threads)
-{
+void idxst_idctPreprocessCpu(const T* input, TComplex* output, const int M,
+                             const int N, const TComplex* expkM,
+                             const TComplex* expkN, int num_threads) {
     const int halfM = M / 2;
     const int halfN = N / 2;
 #pragma omp parallel for num_threads(num_threads)
@@ -669,26 +558,15 @@ void idxst_idctPreprocessCpu(
 }
 
 template <typename T>
-void idxst_idctPreprocessCpuLauncher(
-            const T* x,
-            T* y,
-            const int M,
-            const int N,
-            const T* expkM,
-            const T* expkN,
-            int num_threads)
-{
+void idxst_idctPreprocessCpuLauncher(const T* x, T* y, const int M, const int N,
+                                     const T* expkM, const T* expkN,
+                                     int num_threads) {
     idxst_idctPreprocessCpu<T, ComplexType<T>>(x, (ComplexType<T>*)y, M, N, (ComplexType<T>*)expkM, (ComplexType<T>*)expkN, num_threads);
 }
 
 template <typename T>
-void idxst_idctPostprocessCpu(
-            const T* x,
-            T* y,
-            const int M,
-            const int N,
-            int num_threads)
-{
+void idxst_idctPostprocessCpu(const T* x, T* y, const int M, const int N,
+                              int num_threads) {
     //const int halfN = N / 2;
     const int MN = M * N;
 #pragma omp parallel for num_threads(num_threads)
@@ -725,13 +603,8 @@ void idxst_idctPostprocessCpu(
 }
 
 template <typename T>
-void idxst_idctPostprocessCpuLauncher(
-            const T* x,
-            T* y,
-            const int M,
-            const int N,
-            int num_threads)
-{
+void idxst_idctPostprocessCpuLauncher(const T* x, T* y, const int M,
+                                      const int N, int num_threads) {
     idxst_idctPostprocessCpu<T>(x, y, M, N, num_threads);
 }
 

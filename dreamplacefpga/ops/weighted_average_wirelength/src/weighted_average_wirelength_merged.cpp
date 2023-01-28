@@ -1,5 +1,4 @@
 #include "utility/src/torch.h"
-#include "utility/src/Msg.h"
 #include "utility/src/utils.h"
 #include "weighted_average_wirelength/src/functional.h"
 

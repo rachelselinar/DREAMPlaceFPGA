@@ -12,7 +12,6 @@
 #include <pybind11/stl_bind.h>
 #include <pybind11/numpy.h>
 #include <sstream>
-#include "utility/src/Msg.h"
 #include "utility/src/utils.h"
 #include "utility/src/torch.h"
 // Lemon for min cost flow

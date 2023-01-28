@@ -8,10 +8,9 @@
 #include <stdio.h>
 #include <math.h>
 #include <float.h>
+#include <cstdint>
 #include "cuda_runtime.h"
-//#include "utility/src/gemm.h"
-#include "utility/src/print.h"
-#include "utility/src/Msg.h"
+#include "utility/src/utils.cuh"
 
 DREAMPLACE_BEGIN_NAMESPACE
 
@@ -27,9 +26,10 @@ __global__ void computeDensityMap(
         const int num_impacted_bins_x, const int num_impacted_bins_y,
         T* density_map_tensor)
 {
-    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    int64_t i = blockIdx.x * blockDim.x + threadIdx.x;
+    int64_t bound = int64_t(num_nodes)*num_impacted_bins_x*num_impacted_bins_y;
     // rank-one update density map
-    if (i < num_nodes*num_impacted_bins_x*num_impacted_bins_y)
+    if (i < bound)
     {
         // density overflow function
         auto computeDensityOverflowFunc = [](T x, T node_size, T bin_center, T bin_size){
@@ -74,8 +74,9 @@ int computeDensityOverflowMapCudaLauncher(
         T* density_map_tensor
         )
 {
-    int thread_count = 512;
-    int block_count = (num_nodes*num_impacted_bins_x*num_impacted_bins_y - 1 + thread_count) /thread_count;
+    int64_t thread_count = 512;
+    int64_t block_count = (int64_t(num_nodes)*num_impacted_bins_x*num_impacted_bins_y - 1 + thread_count) /thread_count;
+    dreamplaceAssert(block_count >= 0); // avoid numerical overflow
 
     computeDensityMap<<<block_count, thread_count>>>(
             x_tensor, y_tensor,
@@ -92,7 +93,7 @@ int computeDensityOverflowMapCudaLauncher(
 }
 
 #define REGISTER_KERNEL_LAUNCHER(T) \
-    int instantiateComputeDensityOverflowMapLauncher(\
+    template int computeDensityOverflowMapCudaLauncher<T>(\
             const T* x_tensor, const T* y_tensor, \
             const T* node_size_x_tensor, const T* node_size_y_tensor, \
             const T* bin_center_x_tensor, const T* bin_center_y_tensor, \
@@ -102,75 +103,57 @@ int computeDensityOverflowMapCudaLauncher(
             const T xl, const T yl, const T xh, const T yh, \
             const T bin_size_x, const T bin_size_y, \
             T* density_map_tensor\
-            )\
-    { \
-        return computeDensityOverflowMapCudaLauncher(\
-                x_tensor, y_tensor, \
-                node_size_x_tensor, node_size_y_tensor, \
-                bin_center_x_tensor, bin_center_y_tensor, \
-                num_nodes, \
-                num_bins_x, num_bins_y, \
-                num_impacted_bins_x, num_impacted_bins_y, \
-                xl, yl, xh, yh, \
-                bin_size_x, bin_size_y, \
-                density_map_tensor\
-                );\
-    }
+            );
+
 REGISTER_KERNEL_LAUNCHER(float);
 REGISTER_KERNEL_LAUNCHER(double);
 
-//template <typename T>
-//__global__ void computeGaussianFilterWeights(
-//        const int num_bins_x, const int num_bins_y,
-//        const T sigma,
-//        T* gaussian_filter_tensor
-//        )
-//{
-//    int i = blockIdx.x * blockDim.x + threadIdx.x;
-//    if (i < num_bins_x*num_bins_y)
-//    {
-//        int x = i/num_bins_y;
-//        int y = i-x*num_bins_y;
-//        T sigma_square = sigma*sigma;
-//        T x2_y2 = (x-num_bins_x/2)*(x-num_bins_x) + (y-num_bins_y/2)*(y-num_bins_y);
-//        //gaussian_filter_tensor[i] = 1.0/(2*M_PI*sigma_square) * exp(-x2_y2/(2*sigma_square));
-//        gaussian_filter_tensor[i] = 2 * exp(-x2_y2/(2*sigma_square));
-//    }
-//}
-//
-//template <typename T>
-//int computeGaussianFilterLauncher(
-//        const int num_bins_x, const int num_bins_y,
-//        const T sigma,
-//        T* gaussian_filter_tensor
-//        )
-//{
-//    int thread_count = 512;
-//    int block_count = (num_bins_x*num_bins_y - 1 + thread_count) / thread_count;
-//
-//    computeGaussianFilterWeights<<<block_count, thread_count>>>(
-//            num_bins_x, num_bins_y,
-//            sigma,
-//            gaussian_filter_tensor
-//            );
-//
-//    return 0;
-//}
-//
-//#define REGISTER_GAUSSIAN_FILTER_LAUNCHER(T) \
-//    int instantiateComputeGaussianFilterLauncher(\
-//            const int num_bins_x, const int num_bins_y, \
-//            const T sigma, \
-//            T* gaussian_filter_tensor\
-//            )\
-//    { \
-//        return computeGaussianFilterLauncher(\
-//                num_bins_x, num_bins_y, \
-//                sigma, \
-//                gaussian_filter_tensor\
-//                );\
-//    }
-//REGISTER_GAUSSIAN_FILTER_LAUNCHER(float);
-//REGISTER_GAUSSIAN_FILTER_LAUNCHER(double);
+template <typename T>
+__global__ void computeGaussianFilterWeights(
+        const int num_bins_x, const int num_bins_y,
+        const T sigma,
+        T* gaussian_filter_tensor
+        )
+{
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < num_bins_x*num_bins_y)
+    {
+        int x = i/num_bins_y;
+        int y = i-x*num_bins_y;
+        T sigma_square = sigma*sigma;
+        T x2_y2 = (x-num_bins_x/2)*(x-num_bins_x) + (y-num_bins_y/2)*(y-num_bins_y);
+        //gaussian_filter_tensor[i] = 1.0/(2*M_PI*sigma_square) * exp(-x2_y2/(2*sigma_square));
+        gaussian_filter_tensor[i] = 2 * exp(-x2_y2/(2*sigma_square));
+    }
+}
+
+template <typename T>
+int computeGaussianFilterLauncher(
+        const int num_bins_x, const int num_bins_y,
+        const T sigma,
+        T* gaussian_filter_tensor
+        )
+{
+    int thread_count = 512;
+    int block_count = (num_bins_x*num_bins_y - 1 + thread_count) / thread_count;
+
+    computeGaussianFilterWeights<<<block_count, thread_count>>>(
+            num_bins_x, num_bins_y,
+            sigma,
+            gaussian_filter_tensor
+            );
+
+    return 0;
+}
+
+#define REGISTER_GAUSSIAN_FILTER_LAUNCHER(T) \
+    template int computeGaussianFilterLauncher<T>(\
+            const int num_bins_x, const int num_bins_y, \
+            const T sigma, \
+            T* gaussian_filter_tensor\
+            );
+
+REGISTER_GAUSSIAN_FILTER_LAUNCHER(float);
+REGISTER_GAUSSIAN_FILTER_LAUNCHER(double);
 
 DREAMPLACE_END_NAMESPACE

@@ -25,6 +25,8 @@ import dreamplacefpga.ops.draw_place.draw_place as draw_place
 import dreamplacefpga.ops.pin_pos.pin_pos as pin_pos
 import dreamplacefpga.ops.precondWL.precondWL as precondWL
 import dreamplacefpga.ops.demandMap.demandMap as demandMap
+import dreamplacefpga.ops.sortNode2Pin.sortNode2Pin as sortNode2Pin
+import dreamplacefpga.ops.lut_ff_legalization.lut_ff_legalization as lut_ff_legalization
 import pdb
 
 datatypes = {
@@ -68,6 +70,8 @@ class PlaceDataCollectionFPGA(object):
 
             self.pin_offset_x = torch.from_numpy(placedb.pin_offset_x).to(device)
             self.pin_offset_y = torch.from_numpy(placedb.pin_offset_y).to(device)
+            self.lg_pin_offset_x = torch.from_numpy(placedb.lg_pin_offset_x).to(device)
+            self.lg_pin_offset_y = torch.from_numpy(placedb.lg_pin_offset_y).to(device)
 
             # original pin offset for legalization, since they will be adjusted in global placement
             if params.routability_opt_flag:
@@ -107,6 +111,9 @@ class PlaceDataCollectionFPGA(object):
             self.flop_ctrlSets = torch.from_numpy(placedb.flat_ctrlSets).to(dtype=torch.int32,device=device)
             #FF to ctrlset ID
             self.flop2ctrlSetId_map = torch.from_numpy(placedb.flop2ctrlSetId_map).to(dtype=torch.int32,device=device)
+            #Spiral accessor for legalization
+            self.spiral_accessor = torch.from_numpy(placedb.spiral_accessor).to(dtype=torch.int32,device=device)
+
             #Resource type indexing
             self.flop_indices = torch.from_numpy(placedb.flop_indices).to(dtype=torch.int32,device=device)
             self.lut_indices = torch.nonzero(self.lut_mask, as_tuple=True)[0].to(dtype=torch.int32)
@@ -132,13 +139,10 @@ class PlaceDataCollectionFPGA(object):
             self.pin2net_map = torch.from_numpy(placedb.pin2net_map.astype(np.int32)).to(device)
             self.flat_net2pin_map = torch.from_numpy(placedb.flat_net2pin_map).to(device)
             self.flat_net2pin_start_map = torch.from_numpy(placedb.flat_net2pin_start_map).to(device)
-            if np.amin(placedb.net_weights) != np.amax(
-                    placedb.net_weights):  # weights are meaningful
-                self.net_weights = torch.from_numpy(
-                    placedb.net_weights).to(device)
-            else:  # an empty tensor
+            if np.amin(placedb.net_weights) == np.amax(placedb.net_weights):  # empty tensor
                 logging.warning("net weights are all the same, ignored")
-                self.net_weights = torch.Tensor().to(device)
+                #self.net_weights = torch.Tensor().to(device)
+            self.net_weights = torch.from_numpy(placedb.net_weights).to(device)
 
             # regions
             self.region_boxes = [torch.tensor(region).to(device) for region in placedb.region_boxes]
@@ -206,6 +210,8 @@ class PlaceOpCollectionFPGA(object):
         self.clustering_compatibility_lut_area_op= None
         self.clustering_compatibility_ff_area_op= None
         self.adjust_node_area_op = None
+        self.sort_node2pin_op = None
+        self.lut_ff_legalization_op = None
 
 class BasicPlaceFPGA(nn.Module):
     """
@@ -218,9 +224,18 @@ class BasicPlaceFPGA(nn.Module):
         @param params parameter 
         @param placedb placement database 
         """
+        torch.manual_seed(params.random_seed)
         super(BasicPlaceFPGA, self).__init__()
 
         self.init_pos = np.zeros(placedb.num_nodes * 2, dtype=placedb.dtype)
+
+        ##Settings to ensure reproduciblity
+        manualSeed = 0
+        np.random.seed(manualSeed)
+        torch.manual_seed(manualSeed)
+        if params.gpu:
+            torch.cuda.manual_seed(manualSeed)
+            torch.cuda.manual_seed_all(manualSeed)
 
         numPins = 0
         initLocX = 0
@@ -319,10 +334,15 @@ class BasicPlaceFPGA(nn.Module):
         self.op_collections.hpwl_op = self.build_hpwl(params, placedb, self.data_collections, self.op_collections.pin_pos_op, self.device)
         # WL preconditioner
         self.op_collections.precondwl_op = self.build_precondwl(params, placedb, self.data_collections, self.device)
+        # Sorting node2pin map
+        self.op_collections.sort_node2pin_op = self.build_sortNode2Pin(params, placedb, self.data_collections, self.device)
         # rectilinear minimum steiner tree wirelength from flute
         # can only be called once
         self.op_collections.density_overflow_op = self.build_electric_overflow(params, placedb, self.data_collections, self.device)
 
+        #Legalization
+        self.op_collections.lut_ff_legalization_op = self.build_lut_ff_legalization(params, placedb, self.data_collections, self.device)
+ 
         # draw placement
         self.op_collections.draw_place_op = self.build_draw_placement(params, placedb)
 
@@ -453,9 +473,24 @@ class BasicPlaceFPGA(nn.Module):
             flat_node2pin=data_collections.flat_node2pin_map,
             pin2net_map=data_collections.pin2net_map,
             flat_net2pin=data_collections.flat_net2pin_start_map,
-            #net_weights=data_collections.net_weights,
+            net_weights=data_collections.net_weights,
             num_nodes=placedb.num_nodes,
             num_movable_nodes=placedb.num_physical_nodes,#Compute for fixed nodes as well for Legalization
+            device=device,
+            num_threads=params.num_threads)
+
+    def build_sortNode2Pin(self, params, placedb, data_collections, device):
+        """
+        @brief sort instance node2pin mapping
+        @param params parameters
+        @param placedb placement database
+        @param data_collections a collection of all data and variables required for constructing the ops
+        @param device cpu or cuda
+        """
+        return sortNode2Pin.SortNode2Pin(
+            flat_node2pin_start=data_collections.flat_node2pin_start_map,
+            flat_node2pin=data_collections.flat_node2pin_map,
+            num_nodes=placedb.num_physical_nodes,
             device=device,
             num_threads=params.num_threads)
 
@@ -481,6 +516,74 @@ class BasicPlaceFPGA(nn.Module):
             num_filler_nodes=0,
             deterministic_flag=params.deterministic_flag,
             sorted_node_map=data_collections.sorted_node_map)
+
+
+    def build_lut_ff_legalization(self, params, placedb, data_collections, device):
+        """
+        @brief legalization of LUT/FF Instances
+        @param params parameters
+        @param placedb placement database
+        @param data_collections a collection of all data and variables required for constructing the ops
+        @param device cpu or cuda
+        """
+        # legalize LUT/FF
+        #Avg areas
+        avgLUTArea = data_collections.node_areas[:placedb.num_physical_nodes][data_collections.node2fence_region_map == 0].sum()
+        avgLUTArea /= placedb.node_count[0]
+        avgFFArea = data_collections.node_areas[:placedb.num_physical_nodes][data_collections.node2fence_region_map == 1].sum()
+        avgFFArea /= placedb.node_count[1]
+        #Inst Areas
+        inst_areas = data_collections.node_areas[:placedb.num_physical_nodes].detach().clone()
+        inst_areas[data_collections.node2fence_region_map > 1] = 0.0 #Area of non CLB nodes set to 0.0
+        inst_areas[data_collections.node2fence_region_map == 0] /= avgLUTArea
+        inst_areas[data_collections.node2fence_region_map == 1] /= avgFFArea
+        #Site types
+        site_types = data_collections.site_type_map.detach().clone()
+        site_types[site_types > 1] = 0 #Set non CLB to 0
+
+        if (len(data_collections.net_weights)):
+            net_wts = data_collections.net_weights
+        else:
+            net_wts = torch.ones(placedb.num_nets, dtype=self.pos[0].dtype, device=device)
+
+        return lut_ff_legalization.LegalizeCLB(
+            lutFlopIndices=data_collections.flop_lut_indices,
+            nodeNames=placedb.node_names,
+            flop2ctrlSet=data_collections.flop2ctrlSetId_map,
+            flop_ctrlSet=data_collections.flop_ctrlSets,
+            pin2node=data_collections.pin2node_map,
+            pin2net=data_collections.pin2net_map,
+            flat_net2pin=data_collections.flat_net2pin_map,
+            flat_net2pin_start=data_collections.flat_net2pin_start_map,
+            flat_node2pin=data_collections.flat_node2pin_map,
+            flat_node2pin_start=data_collections.flat_node2pin_start_map,
+            node2fence=data_collections.node2fence_region_map,
+            pin_types=data_collections.pin_typeIds,
+            lut_type=data_collections.lut_type,
+            net_wts=net_wts,
+            avg_lut_area=avgLUTArea,
+            avg_ff_area=avgFFArea,
+            inst_areas=inst_areas,
+            pin_offset_x=data_collections.lg_pin_offset_x,
+            pin_offset_y=data_collections.lg_pin_offset_y,
+            site_types=site_types,
+            site_xy=data_collections.lg_siteXYs,
+            node_size_x=data_collections.node_size_x[:placedb.num_physical_nodes],
+            node_size_y=data_collections.node_size_y[:placedb.num_physical_nodes],
+            node2outpin=data_collections.node2outpinIdx_map[:placedb.num_physical_nodes],
+            net2pincount=data_collections.net2pincount_map,
+            node2pincount=data_collections.node2pincount_map,
+            spiral_accessor=data_collections.spiral_accessor,
+            num_nets=placedb.num_nets,
+            num_movable_nodes=placedb.num_movable_nodes,
+            num_nodes=placedb.num_physical_nodes,
+            num_sites_x=placedb.num_sites_x,
+            num_sites_y=placedb.num_sites_y,
+            xWirelenWt=placedb.xWirelenWt,
+            yWirelenWt=placedb.yWirelenWt,
+            nbrDistEnd=placedb.nbrDistEnd,
+            num_threads=params.num_threads,
+            device=device)
 
     def build_draw_placement(self, params, placedb):
         """

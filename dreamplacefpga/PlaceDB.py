@@ -44,11 +44,15 @@ class PlaceDBFPGA (object):
         self.node_size_y = []# 1D array, cell height
         self.resource_size_x = None# 1D array, resource type-based cell width  
         self.resource_size_y = None# 1D array, resource type-based cell height
+        #Legalization
+        self.spiral_accessor = []
 
         self.pin_names = [] # pin names 
         self.pin_types = [] # pin types 
         self.pin_offset_x = []# 1D array, pin offset x to its node 
         self.pin_offset_y = []# 1D array, pin offset y to its node 
+        self.lg_pin_offset_x = []# 1D array, pin offset x to its node 
+        self.lg_pin_offset_y = []# 1D array, pin offset y to its node 
         self.pin2nodeType_map = [] # 1D array, pin to node type map
         self.node2pin_map = [] # nested array of array to record pins in each instance 
         self.flat_node2pin_map = [] #Flattened array of node2pin_map
@@ -257,12 +261,20 @@ class PlaceDBFPGA (object):
         self.pin_offset_x = np.array(pydb.pin_offset_x, dtype=self.dtype)
         self.pin_offset_y = np.array(pydb.pin_offset_y, dtype=self.dtype)
         self.pin2nodeType_map = np.array(pydb.pin2nodeType_map, dtype=np.int32)
+        self.lg_pin_offset_x = self.pin_offset_x.copy()
+        self.lg_pin_offset_y = self.pin_offset_y.copy()
+        self.lg_pin_offset_x[self.pin2nodeType_map < 2] = 0.0
+        self.lg_pin_offset_x[self.pin2nodeType_map > 3] = 0.0
+        self.lg_pin_offset_y[self.pin2nodeType_map < 2] = 0.0
+        self.lg_pin_offset_y[self.pin2nodeType_map > 3] = 0.0
 
         self.pin_names = np.array(pydb.pin_names, dtype=np.str_)
         self.pin_types = np.array(pydb.pin_types, dtype=np.str_)
         self.pin_typeIds = np.array(pydb.pin_typeIds, dtype=np.int32)
         self.pin2net_map = np.array(pydb.pin2net_map, dtype=np.int32)
         self.pin2node_map = np.array(pydb.pin2node_map, dtype=np.int32)
+        self.spiral_accessor = np.array(pydb.spiral_accessor, dtype=np.int32)
+        self.spiral_maxVal = pydb.spiral_maxVal
 
         self.net_names = np.array(pydb.net_names, dtype=np.str_)
         self.net2pin_map = pydb.net2pin_map
@@ -277,7 +289,7 @@ class PlaceDBFPGA (object):
         self.site_type_map = pydb.site_type_map
         self.site_type_map = np.array(self.site_type_map)
         self.lg_siteXYs = pydb.lg_siteXYs
-        self.lg_siteXYs = np.array(self.lg_siteXYs)
+        self.lg_siteXYs = np.array(self.lg_siteXYs, dtype=self.dtype)
 
         self.dspSiteXYs = np.array(pydb.dspSiteXYs, dtype=self.dtype)
         self.ramSiteXYs = np.array(pydb.ramSiteXYs, dtype=self.dtype)
@@ -562,6 +574,31 @@ class PlaceDBFPGA (object):
         with open(pl_file, "w") as f:
             f.write(content)
         logging.info("write placement solution to %s took %.3f seconds" % (pl_file, time.time()-tt))
+
+    def writeFinalSolution(self, params, pl_file):
+        """
+        @brief write placement solution as .pl file
+        @param pl_file .pl file 
+        """
+        tt = time.time()
+        logging.info("writing to %s" % (pl_file))
+
+        node_x = self.node_x
+        node_y = self.node_y
+        node_z = self.node_z
+
+        content = ""
+        str_node_names = self.node_names
+        for i in range(self.num_physical_nodes):
+            content += "%s %d %d %g\n" % (
+                    str_node_names[i],
+                    node_x[i], 
+                    node_y[i], 
+                    node_z[i]
+                    )
+        with open(pl_file, "w") as f:
+            f.write(content)
+        logging.info("write placement solution takes %.3f seconds" % (time.time()-tt))
 
     def read_pl(self, params, pl_file):
         """

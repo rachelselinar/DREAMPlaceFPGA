@@ -81,12 +81,14 @@ struct PyPlaceDB
     //pybind11::list regionsLimits; ///< array of 1D array, each region contains rectangles 
     pybind11::list flat_region_boxes; ///< flatten version of regions 
     pybind11::list flat_region_boxes_start; ///< starting index of each region in flat_region_boxes
+    pybind11::list spiral_accessor; ///< spiral accessor
 
     pybind11::list ctrlSets; ///< 1D array, FF ctrl set (FPGA)
     pybind11::list flat_ctrlSets; ///< 1D array, FF ctrl set (FPGA)
     //unsigned int num_nodes; ///< number of nodes, including terminals and terminal_NIs 
     //unsigned int width; ///< number of nodes, including terminals and terminal_NIs 
     //unsigned int height; ///< number of nodes, including terminals and terminal_NIs 
+    unsigned int spiral_maxVal; ///< maxVal in spiral_accessor
     unsigned int num_routing_grids_x; ///< number of routing grids in x 
     unsigned int num_routing_grids_y; ///< number of routing grids in y 
     int routing_grid_xl; ///< routing grid region may be different from placement region 

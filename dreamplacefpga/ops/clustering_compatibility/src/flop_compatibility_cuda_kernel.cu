@@ -6,7 +6,7 @@
  */
 
 #include "utility/src/utils.cuh"
-#include "utility/src/limits.cuh"
+#include "utility/src/limits.h"
 // local dependency
 #include "clustering_compatibility/src/functions.h"
 
@@ -196,7 +196,7 @@ int fillDemandMapFFCuda(const T *pos_x, const T *pos_y,
                         T *demMap)
 {
     int thread_count = 512;
-    int block_count = CPUCeilDiv(num_nodes, thread_count);
+    int block_count = ceilDiv(num_nodes, thread_count);
     fillDemandMapFF<<<block_count, thread_count>>>(
                                                     pos_x,
                                                     pos_y,
@@ -223,7 +223,7 @@ int computeInstanceAreaFFCuda(const T *demMap,
                               T bin_area, T half_slice, T *areaMap)
 {
     int thread_count = 512;
-    int block_count = CPUCeilDiv(num_bins_x*num_bins_y, thread_count);
+    int block_count = ceilDiv(num_bins_x*num_bins_y, thread_count);
     computeInstanceAreaFF<<<block_count, thread_count>>>(
                                                           demMap,
                                                           num_bins_x, num_bins_y,
@@ -252,7 +252,7 @@ int collectInstanceAreasFFCuda(const T *pos_x,
                                T *instAreas)
 {
     int thread_count = 512;
-    int block_count = CPUCeilDiv(num_nodes, thread_count);
+    int block_count = ceilDiv(num_nodes, thread_count);
     collectInstanceAreasFF<<<block_count, thread_count>>>(
                                                            pos_x, pos_y,
                                                            indices, ctrlSets, 
@@ -267,37 +267,23 @@ int collectInstanceAreasFFCuda(const T *pos_x,
 }
 
 #define REGISTER_KERNEL_LAUNCHER(T)                                                     \
-    int instantiatefillDemandMapFFCuda(                                                 \
+    template int fillDemandMapFFCuda<T>(                                                \
         const T *pos_x, const T *pos_y, const int *indices, const int *ctrlSets,        \
         const T *node_size_x, const T *node_size_y, const int num_bins_x,               \
         const int num_bins_y, const int num_bins_ck, const int num_bins_ce,             \
         int num_nodes, T stddev_x, T stddev_y, T inv_stddev_x, T inv_stddev_y,          \
-        int ext_bin, T inv_sqrt, T *demMap) {                                           \
-    return fillDemandMapFFCuda(                                                         \
-        pos_x, pos_y, indices, ctrlSets, node_size_x, node_size_y, num_bins_x,          \
-        num_bins_y, num_bins_ck, num_bins_ce, num_nodes, stddev_x, stddev_y,            \
-        inv_stddev_x, inv_stddev_y, ext_bin, inv_sqrt, demMap);                         \
-        }                                                                               \
+        int ext_bin, T inv_sqrt, T *demMap);                                            \
                                                                                         \
-    int instantiatecomputeInstanceAreaFFCuda(                                           \
+    template int computeInstanceAreaFFCuda<T>(                                          \
         const T *demMap, const int num_bins_x, const int num_bins_y,                    \
         const int num_bins_ck, const int num_bins_ce, T stddev_x, T stddev_y,           \
-        int ext_bin, T bin_area, T half_slice, T *areaMap) {                            \
-    return computeInstanceAreaFFCuda(                                                   \
-        demMap, num_bins_x, num_bins_y, num_bins_ck, num_bins_ce, stddev_x, stddev_y,   \
-        ext_bin, bin_area, half_slice, areaMap);                                        \
-        }                                                                               \
+        int ext_bin, T bin_area, T half_slice, T *areaMap);                             \
                                                                                         \
-    int instantiatecollectInstanceAreasFFCuda(                                          \
+    template int collectInstanceAreasFFCuda<T>(                                         \
         const T *pos_x, const T *pos_y, const int *indices, const int *ctrlSets,        \
         const T *node_size_x, const T *node_size_y, const int num_bins_y,               \
         const int num_bins_ck, const int num_bins_ce, const T *areaMap, int num_nodes,  \
-        T inv_stddev_x, T inv_stddev_y, T *instAreas) {                                 \
-    return collectInstanceAreasFFCuda(                                                  \
-        pos_x, pos_y, indices, ctrlSets, node_size_x, node_size_y, num_bins_y,          \
-        num_bins_ck, num_bins_ce, areaMap, num_nodes, inv_stddev_x, inv_stddev_y,       \
-        instAreas);                                                                     \
-        }                                                                               \
+        T inv_stddev_x, T inv_stddev_y, T *instAreas);
 
 REGISTER_KERNEL_LAUNCHER(float);
 REGISTER_KERNEL_LAUNCHER(double);

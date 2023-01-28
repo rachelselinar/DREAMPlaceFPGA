@@ -7,15 +7,14 @@
 #ifndef DREAMPLACE_DCT_LEE_CUDA_H
 #define DREAMPLACE_DCT_LEE_CUDA_H
 
-#include "utility/src/Msg.h"
+#include "utility/src/utils.h"
 
 DREAMPLACE_BEGIN_NAMESPACE
 
-namespace lee
-{
+namespace lee {
 
 template <typename TValue>
-void precompute_dct_cos(TValue *cos, int N); 
+void precompute_dct_cos(TValue *cos, int N);
 
 template <typename TValue>
 void precompute_idct_cos(TValue *cos, int N);

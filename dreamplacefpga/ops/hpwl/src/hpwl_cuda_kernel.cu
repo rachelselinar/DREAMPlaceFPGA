@@ -2,56 +2,20 @@
 #include <math.h>
 #include <float.h>
 #include "cuda_runtime.h"
-#include "utility/src/Msg.h"
+#include "utility/src/utils.cuh"
 
 DREAMPLACE_BEGIN_NAMESPACE
 
-template <typename T>
-void printArray(const T* x, const int n, const char* str)
-{
-    printf("%s[%d] = ", str, n);
-    T* host_x = (T*)malloc(n*sizeof(T));
-    if (host_x == NULL)
-    {
-        printf("failed to allocate memory on CPU\n");
-        return;
-    }
-    cudaMemcpy(host_x, x, n*sizeof(T), cudaMemcpyDeviceToHost);
-    for (int i = 0; i < n; ++i)
-    {
-        printf("%g ", double(host_x[i]));
-    }
-    printf("\n");
-
-    free(host_x);
-}
-
-template <typename T>
-void printScalar(const T& x, const char* str)
-{
-    printf("%s = ", str);
-    T* host_x = (T*)malloc(sizeof(T));
-    if (host_x == NULL)
-    {
-        printf("failed to allocate memory on CPU\n");
-        return;
-    }
-    cudaMemcpy(host_x, &x, sizeof(T), cudaMemcpyDeviceToHost);
-    printf("%g\n", double(*host_x));
-
-    free(host_x);
-}
-
-template <typename T>
-__global__ void fillArray(T* x, const int n, const T v)
-{
-    //for (int i = blockIdx.x * blockDim.x + threadIdx.x; i < n; i += blockDim.x * gridDim.x)
-    int i  = blockIdx.x * blockDim.x + threadIdx.x;
-    if (i < n)
-    {
-        x[i] = v;
-    }
-}
+//template <typename T>
+//__global__ void fillArray(T* x, const int n, const T v)
+//{
+//    //for (int i = blockIdx.x * blockDim.x + threadIdx.x; i < n; i += blockDim.x * gridDim.x)
+//    int i  = blockIdx.x * blockDim.x + threadIdx.x;
+//    if (i < n)
+//    {
+//        x[i] = v;
+//    }
+//}
 
 template <typename T>
 __global__ void computeHPWL(
@@ -249,24 +213,15 @@ int computeHPWLCudaLauncherFPGA(
 
 // manually instantiate the template function
 #define REGISTER_KERNEL_LAUNCHER(type) \
-    int instantiateComputeHPWLLauncher(\
+    template int computeHPWLCudaLauncher<type>(\
         const type* x, const type* y, \
         const int* flat_netpin, \
         const int* netpin_start, \
         const unsigned char* net_mask, \
         int num_nets, \
         type* partial_hpwl \
-        ) \
-    { \
-        return computeHPWLCudaLauncher(x, y, \
-                flat_netpin, \
-                netpin_start, \
-                net_mask, \
-                num_nets, \
-                partial_hpwl \
-                ); \
-    } \
-    int instantiateComputeHPWLLauncherFPGA(\
+        ); \ 
+    template int computeHPWLCudaLauncherFPGA<type>( \
         const type* x, const type* y, \
         const int* flat_netpin, \
         const int* netpin_start, \
@@ -275,18 +230,7 @@ int computeHPWLCudaLauncherFPGA(
         type* bbox_min_x, type* bbox_min_y, \
         type* bbox_max_x, type* bbox_max_y, \
         type* partial_hpwl \
-        ) \
-    { \
-        return computeHPWLCudaLauncherFPGA(x, y, \
-                flat_netpin, \
-                netpin_start, \
-                net_mask, \
-                num_nets, \
-                bbox_min_x, bbox_min_y, \
-                bbox_max_x, bbox_max_y, \
-                partial_hpwl \
-                ); \
-    } \
+        );
 
 REGISTER_KERNEL_LAUNCHER(float);
 REGISTER_KERNEL_LAUNCHER(double);

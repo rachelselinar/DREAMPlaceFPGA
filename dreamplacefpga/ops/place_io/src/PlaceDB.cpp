@@ -12,7 +12,8 @@
 #include <cmath>
 #include "BookshelfWriter.h"
 #include "Iterators.h"
-#include "utility/src/utils.h"
+#include "utility/src/Msg.h"
+//#include "utility/src/utils.h"
 
 DREAMPLACE_BEGIN_NAMESPACE
 

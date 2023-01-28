@@ -6,7 +6,6 @@
  */
 #include "utility/src/torch.h"
 #include "utility/src/utils.h"
-#include "utility/src/Msg.h"
 // local dependency
 #include "electric_potential/src/density_function.h"
 

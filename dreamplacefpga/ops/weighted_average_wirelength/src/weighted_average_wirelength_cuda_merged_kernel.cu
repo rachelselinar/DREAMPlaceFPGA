@@ -8,8 +8,7 @@
 #include <stdio.h>
 #include "assert.h"
 #include "cuda_runtime.h"
-#include "utility/src/print.h"
-#include "utility/src/Msg.h"
+#include "utility/src/utils.cuh"
 
 DREAMPLACE_BEGIN_NAMESPACE
 
@@ -228,7 +227,7 @@ int computeWeightedAverageWirelengthCudaMergedLauncherFPGA(
 }
 
 #define REGISTER_KERNEL_LAUNCHER(T)                                         \
-    int instantiateComputeWeightedAverageWirelengthCudaMergedLauncher(      \
+    template int computeWeightedAverageWirelengthCudaMergedLauncher<T>(     \
         const T *x, const T *y,                                             \
         const int *flat_netpin,                                             \
         const int *netpin_start,                                            \
@@ -236,19 +235,9 @@ int computeWeightedAverageWirelengthCudaMergedLauncherFPGA(
         int num_nets,                                                       \
         const T *inv_gamma,                                                 \
         T *partial_wl,                                                      \
-        T *grad_intermediate_x, T *grad_intermediate_y)                     \
-    {                                                                       \
-        return computeWeightedAverageWirelengthCudaMergedLauncher(          \
-            x, y,                                                           \
-            flat_netpin,                                                    \
-            netpin_start,                                                   \
-            net_mask,                                                       \
-            num_nets,                                                       \
-            inv_gamma,                                                      \
-            partial_wl,                                                     \
-            grad_intermediate_x, grad_intermediate_y);                      \
-    }                                                                       \
-    int instantiateComputeWeightedAverageWirelengthCudaMergedLauncherFPGA(  \
+        T *grad_intermediate_x, T *grad_intermediate_y);                    \
+                                                                            \
+    template int computeWeightedAverageWirelengthCudaMergedLauncherFPGA<T>( \
         const T *x, const T *y,                                             \
         const int *flat_netpin,                                             \
         const int *netpin_start,                                            \
@@ -258,21 +247,7 @@ int computeWeightedAverageWirelengthCudaMergedLauncherFPGA(
         const T *bbox_min_x, const T *bbox_min_y,                           \
         const T *bbox_max_x, const T *bbox_max_y,                           \
         T *partial_wl,                                                      \
-        T *grad_intermediate_x, T *grad_intermediate_y)                     \
-    {                                                                       \
-        return computeWeightedAverageWirelengthCudaMergedLauncherFPGA(      \
-            x, y,                                                           \
-            flat_netpin,                                                    \
-            netpin_start,                                                   \
-            net_mask,                                                       \
-            num_nets,                                                       \
-            inv_gamma,                                                      \
-            bbox_min_x, bbox_min_y,                                         \
-            bbox_max_x, bbox_max_y,                                         \
-            partial_wl,                                                     \
-            grad_intermediate_x, grad_intermediate_y);                      \
-    }
-
+        T *grad_intermediate_x, T *grad_intermediate_y);
 
 REGISTER_KERNEL_LAUNCHER(float);
 REGISTER_KERNEL_LAUNCHER(double);

@@ -6,7 +6,7 @@
  */
 
 #include "utility/src/utils.cuh"
-#include "utility/src/limits.cuh"
+#include "utility/src/limits.h"
 // local dependency
 #include "clustering_compatibility/src/functions.h"
 
@@ -166,7 +166,7 @@ int fillDemandMapLUTCuda(const T *pos_x, const T *pos_y,
                          T *demMap)
 {
     int thread_count = 512;
-    int block_count = CPUCeilDiv(num_nodes, thread_count);
+    int block_count = ceilDiv(num_nodes, thread_count);
     fillDemandMapLUT<<<block_count, thread_count>>>(
                                                     pos_x,
                                                     pos_y,
@@ -195,7 +195,7 @@ int computeInstanceAreaLUTCuda(const T *demMap,
                                T *areaMap)
 {
     int thread_count = 512;
-    int block_count = CPUCeilDiv(num_bins_x*num_bins_y, thread_count);
+    int block_count = ceilDiv(num_bins_x*num_bins_y, thread_count);
     computeInstanceAreaLUT<<<block_count, thread_count>>>(
                                                           demMap,
                                                           num_bins_x, num_bins_y,
@@ -223,7 +223,7 @@ int collectInstanceAreasLUTCuda(const T *pos_x,
                                 T *instAreas)
 {
     int thread_count = 512;
-    int block_count = CPUCeilDiv(num_nodes, thread_count);
+    int block_count = ceilDiv(num_nodes, thread_count);
     collectInstanceAreasLUT<<<block_count, thread_count>>>(
                                                            pos_x, pos_y,
                                                            indices, type, 
@@ -237,38 +237,23 @@ int collectInstanceAreasLUTCuda(const T *pos_x,
 }
 
 #define REGISTER_KERNEL_LAUNCHER(T)                                            \
-    int instantiatefillDemandMapLUTCuda(                                       \
+    template int fillDemandMapLUTCuda<T>(                                      \
         const T *pos_x, const T *pos_y, const int *indices, const int *type,   \
         const T *node_size_x, const T *node_size_y, int num_bins_x,            \
         int num_bins_y, int num_bins_l, int num_nodes, T stddev_x, T stddev_y, \
         T inv_stddev_x, T inv_stddev_y, int ext_bin, T inv_sqrt,               \
-        T *demMap) {                                                           \
-    return fillDemandMapLUTCuda(                                               \
-        pos_x, pos_y, indices, type, node_size_x, node_size_y, num_bins_x,     \
-        num_bins_y, num_bins_l, num_nodes, stddev_x, stddev_y, inv_stddev_x,   \
-        inv_stddev_y, ext_bin, inv_sqrt, demMap);                              \
-        }                                                                      \
+        T *demMap);                                                            \
                                                                                \
-    int instantiatecomputeInstanceAreaLUTCuda(                                 \
+    template int computeInstanceAreaLUTCuda<T>(                                \
         const T *demMap, const int num_bins_x, const int num_bins_y,           \
         const int num_bins_l, T stddev_x, T stddev_y,                          \
-        int ext_bin, T bin_area, T *areaMap) {                                 \
-    return computeInstanceAreaLUTCuda(                                         \
-        demMap, num_bins_x, num_bins_y, num_bins_l,                            \
-        stddev_x, stddev_y, ext_bin, bin_area, areaMap);                       \
-        }                                                                      \
+        int ext_bin, T bin_area, T *areaMap);                                  \
                                                                                \
-    int instantiatecollectInstanceAreasLUTCuda(                                \
+    template int collectInstanceAreasLUTCuda<T>(                               \
         const T *pos_x, const T *pos_y, const int *indices, const int *type,   \
         const T *node_size_x, const T *node_size_y, int num_bins_y,            \
         int num_bins_l, const T *areaMap, int num_nodes, T inv_stddev_x,       \
-        T inv_stddev_y, T *instAreas) {                                        \
-    return collectInstanceAreasLUTCuda(                                        \
-        pos_x, pos_y, indices, type, node_size_x, node_size_y, num_bins_y,     \
-        num_bins_l, areaMap, num_nodes, inv_stddev_x, inv_stddev_y,            \
-        instAreas);                                                            \
-        }                                                                      \
-
+        T inv_stddev_y, T *instAreas);
 
 REGISTER_KERNEL_LAUNCHER(float);
 REGISTER_KERNEL_LAUNCHER(double);

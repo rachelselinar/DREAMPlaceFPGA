@@ -23,7 +23,7 @@
 #include<cstdlib>
 #include <limbo/parsers/gdsii/stream/GdsWriter.h>
 
-#include "utility/src/Msg.h"
+#include "utility/src/utils.h"
 
 typedef struct _cairo_surface cairo_surface_t;
 

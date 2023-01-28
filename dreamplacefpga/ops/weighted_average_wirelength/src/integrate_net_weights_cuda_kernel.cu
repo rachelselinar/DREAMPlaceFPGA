@@ -8,10 +8,8 @@
 #include <stdio.h>
 #include "assert.h"
 #include "cuda_runtime.h"
-#include "utility/src/print.h"
-#include "weighted_average_wirelength/src/functional_cuda.h"
-#include "utility/src/Msg.h"
 #include "utility/src/utils.cuh"
+#include "weighted_average_wirelength/src/functional_cuda.h"
 
 DREAMPLACE_BEGIN_NAMESPACE
 
@@ -46,28 +44,18 @@ void integrateNetWeightsCudaLauncher(
         int num_pins
         )
 {
-    integrateNetWeights<<<CPUCeilDiv(num_pins, 256), 256>>>(pin2net_map, net_mask, net_weights, grad_x_tensor, grad_y_tensor, num_pins); 
+    integrateNetWeights<<<ceilDiv(num_pins, 256), 256>>>(pin2net_map, net_mask, net_weights, grad_x_tensor, grad_y_tensor, num_pins); 
 }
 
 #define REGISTER_KERNEL_LAUNCHER(T) \
-    void instantiateIntegrateNetWeightsCudaLauncher(\
+    template void integrateNetWeightsCudaLauncher<T>(\
             const int* pin2net_map, \
             const unsigned char* net_mask, \
             const T* net_weights, \
-            T* partial_wl, \
             T* grad_x_tensor, T* grad_y_tensor, \
             int num_pins\
-            )\
-    {\
-        integrateNetWeightsCudaLauncher(\
-                pin2net_map, \
-                net_mask, \
-                net_weights, \
-                grad_x_tensor, \
-                grad_y_tensor, \
-                num_pins \
-                );\
-    }
+            );
+
 REGISTER_KERNEL_LAUNCHER(float);
 REGISTER_KERNEL_LAUNCHER(double);
 

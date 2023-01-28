@@ -5,9 +5,8 @@
  * @brief  Compute binCapMap
  */
 #include "utility/src/torch.h"
-#include "utility/src/Msg.h"
+#include "utility/src/utils.h"
 // local dependency
-#include "demandMap/src/atomic_ops.h"
 #include "demandMap/src/demand_function.h"
 
 DREAMPLACE_BEGIN_NAMESPACE
@@ -44,8 +43,7 @@ int computeDemandMapLauncher(
       num_threads, atomic_add_op, map_ptr0, map_ptr2, map_ptr3)
 
 /// @brief Compute wirelength preconditioner
-
-void forward(
+int forward(
         at::Tensor site_type_map,
         int num_bins_x,
         int num_bins_y,
@@ -72,6 +70,7 @@ void forward(
             AtomicAdd<scalar_t> atomic_add_op;
             CALL_FPGA_LAUNCHER(atomic_add_op, buf0, buf2, buf3);
             });
+    return 0; 
 }
 
 template <typename T, typename AtomicOp>

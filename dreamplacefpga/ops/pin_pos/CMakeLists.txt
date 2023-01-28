@@ -1,37 +1,43 @@
-cmake_minimum_required(VERSION 3.0.2)
+set(OP_NAME pin_pos)
 
-project(pin_pos)
+set(TARGET_NAME ${OP_NAME})
 
-if (PYTHON)
-    set(SETUP_PY_IN "${CMAKE_CURRENT_SOURCE_DIR}/setup.py.in")
-    set(SETUP_PY    "${CMAKE_CURRENT_BINARY_DIR}/setup.py")
-    file(GLOB SOURCES 
-        "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
-        "${CMAKE_CURRENT_SOURCE_DIR}/src/*.c"
-        "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cu"
-        )
-    set(OUTPUT      "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}.stamp")
+set(INCLUDE_DIRS 
+  ${CMAKE_CURRENT_SOURCE_DIR}/..
+  ${CUB_DIR}
+  )
 
-    configure_file(${SETUP_PY_IN} ${SETUP_PY})
+set(LINK_LIBS utility_cxx
+  OpenMP::OpenMP_CXX
+  )
 
-    add_custom_command(OUTPUT ${OUTPUT}
-        COMMAND ${PYTHON} ${SETUP_PY} build --build-temp=${CMAKE_CURRENT_BINARY_DIR}/build --build-lib=${CMAKE_CURRENT_BINARY_DIR}/lib
-        COMMAND ${CMAKE_COMMAND} -E touch ${OUTPUT}
-        DEPENDS ${SOURCES}
-        )
+add_pytorch_extension(${TARGET_NAME}_cpp 
+  src/pin_pos.cpp
+  EXTRA_INCLUDE_DIRS ${INCLUDE_DIRS}
+  EXTRA_LINK_LIBRARIES ${LINK_LIBS})
 
-    add_custom_target(clean_${PROJECT_NAME}
-        COMMAND rm -rf ${OUTPUT} ${CMAKE_CURRENT_BINARY_DIR}/build ${CMAKE_CURRENT_BINARY_DIR}/lib
-        )
+install(TARGETS 
+  ${TARGET_NAME}_cpp 
+  DESTINATION dreamplacefpga/ops/${OP_NAME})
 
-    add_custom_target(${PROJECT_NAME} ALL DEPENDS ${OUTPUT})
+if(TORCH_ENABLE_CUDA)
+add_pytorch_extension(${TARGET_NAME}_cuda 
+  src/pin_pos_cuda.cpp
+  src/pin_pos_cuda_kernel.cu
+  EXTRA_INCLUDE_DIRS ${INCLUDE_DIRS}
+  EXTRA_LINK_LIBRARIES ${LINK_LIBS})
 
-    install(
-        DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/lib/ DESTINATION dreamplacefpga/ops/${PROJECT_NAME}
-        )
-    file(GLOB INSTALL_SRCS "${CMAKE_CURRENT_SOURCE_DIR}/*.py")
-    list(FILTER INSTALL_SRCS EXCLUDE REGEX ".*setup.py$")
-    install(
-        FILES ${INSTALL_SRCS} DESTINATION dreamplacefpga/ops/${PROJECT_NAME}
-        )
-endif()
+add_pytorch_extension(${TARGET_NAME}_cuda_segment
+  src/pin_pos_cuda_segment.cpp
+  src/pin_pos_cuda_segment_kernel.cu
+  EXTRA_INCLUDE_DIRS ${INCLUDE_DIRS}
+  EXTRA_LINK_LIBRARIES ${LINK_LIBS})
+
+install(TARGETS 
+  ${TARGET_NAME}_cuda 
+  ${TARGET_NAME}_cuda_segment
+  DESTINATION dreamplacefpga/ops/${OP_NAME})
+endif(TORCH_ENABLE_CUDA)
+
+file(GLOB INSTALL_SRCS ${CMAKE_CURRENT_SOURCE_DIR}/*.py)
+install(FILES ${INSTALL_SRCS} DESTINATION dreamplacefpga/ops/${OP_NAME})

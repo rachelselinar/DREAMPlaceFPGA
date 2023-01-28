@@ -5,7 +5,7 @@
  * @brief  Compute binCapMap
  */
 #include "utility/src/torch.h"
-#include "utility/src/Msg.h"
+#include "utility/src/utils.h"
 using namespace torch::indexing;
 
 DREAMPLACE_BEGIN_NAMESPACE

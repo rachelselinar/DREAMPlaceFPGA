@@ -711,9 +711,139 @@ class NonLinearPlaceFPGA (BasicPlaceFPGA):
         if params.dump_global_place_solution_flag: 
             self.dump(params, placedb, self.pos[0].cpu(), "%s.lg.pklz" %(params.design_name()))
 
+        # legalization 
+        if params.legalize_flag:
+            if params.global_place_flag == 0:
+                #TODO: Load from GP results
+                # global placement may run in multiple stages according to user specification 
+                for global_place_params in params.global_place_stages:
+
+                    if params.gpu: 
+                        torch.cuda.synchronize()
+                    tt = time.time()
+                    # construct model and optimizer 
+                    density_weight = 0.0
+                    # construct placement model 
+                    model = PlaceObjFPGA(density_weight, params, placedb, self.data_collections, self.op_collections, global_place_params).to(self.data_collections.pos[0].device)
+                    print("Model constructed in %g ms"%((time.time()-tt)*1000))
+
+                #place_file='/home/local/eda08/rsraj20/project/Ongoing/FPGA/elfPlace_Mohd/bin/gp.pl'
+                place_file=params.global_place_sol
+                #logging.info("Reading %s" % (place_file))
+                with open (place_file,  "r") as f:
+                    for line in f:
+                        tokens = line.split()
+                        if len(tokens) > 0:
+                            nodeId = placedb.node_name2id_map[tokens[0]]
+                            self.data_collections.node_x[nodeId].data.fill_(float(tokens[1]))
+                            self.data_collections.node_y[nodeId].data.fill_(float(tokens[2]))
+                            self.data_collections.node_z[nodeId].data.fill_(int(tokens[3]))
+                self.pos[0][:placedb.num_physical_nodes].data.copy_(self.data_collections.node_x)
+                self.pos[0][placedb.num_nodes:placedb.num_nodes+placedb.num_physical_nodes].data.copy_(self.data_collections.node_y)
+                logging.info("Read Global Placement solution from %s" % (place_file))
+
+            #Perform sorting of pin, net, node
+            _, sortedNetIdx = torch.sort(self.data_collections.net2pincount_map)
+            sortedNetIdx = sortedNetIdx.to(torch.int32)
+            _, sortedNetMap = torch.sort(sortedNetIdx)
+            sortedNetMap = sortedNetMap.to(torch.int32)
+
+            _, sortedPinIdx = torch.sort(sortedNetMap[self.data_collections.pin2net_map.to(torch.long)])
+            sortedPinIdx = sortedPinIdx.to(torch.int32)
+            _, sortedPinMap = torch.sort(sortedPinIdx)
+            sortedPinMap = sortedPinMap.to(torch.int32)
+
+            node2pinId0 = self.op_collections.sort_node2pin_op(sortedPinMap)
+            #node2pinId0 = torch.zeros(placedb.num_physical_nodes, dtype=torch.int32)
+            #for el in range(placedb.num_physical_nodes):
+            #    startId = data_collections.flat_node2pin_start_map[el]
+            #    endId = data_collections.flat_node2pin_start_map[el+1]
+            #    _, sorted_node2pin_idx = torch.sort(sorted_pin_map[data_collections.flat_node2pin_map.to(torch.long)[startId:endId]]) 
+            #    data_collections.flat_node2pin_map[startId:endId].data.copy_(data_collections.flat_node2pin_map[startId:endId][sorted_node2pin_idx].data)
+            #    node2pinId0[el] = sorted_pin_map[data_collections.flat_node2pin_map[startId]]
+
+            _, sortedNodeIdx = torch.sort(node2pinId0)
+            sortedNodeIdx = sortedNodeIdx.to(torch.int32)
+
+            _, sortedNodeMap = torch.sort(sortedNodeIdx)
+            sortedNodeMap = sortedNodeMap.to(torch.int32)
+
+            tt = time.time()
+            
+            self.op_collections.lut_ff_legalization_op.initialize(self.pos[0], model.precondWL[:placedb.num_physical_nodes], sortedNodeMap, sortedNodeIdx, sortedNetMap, sortedNetIdx, sortedPinMap)
+
+            DLStatus = 1
+            dlIter = 0
+        
+            ##DBG
+            #pdb.set_trace()
+            temp_pos = self.pos[0].detach().clone()
+
+            #For runDLIter stopping criteria
+            activeStatus = torch.zeros(placedb.num_sites_x*placedb.num_sites_y, dtype=torch.int, device=self.device)
+            illegalStatus = torch.zeros(placedb.num_nodes, dtype=torch.int, device=self.device)
+
+            iter_stable = 0
+            prevAct = 0
+
+            while (DLStatus == 1):
+                self.op_collections.lut_ff_legalization_op.runDLIter(self.pos[0], model.precondWL[:placedb.num_physical_nodes], sortedNodeMap, sortedNodeIdx, sortedNetMap, sortedNetIdx, sortedPinMap, activeStatus, illegalStatus, dlIter)
+
+                #######DBG - Print HPWL
+                #temp_pos.data.copy_(self.op_collections.lut_ff_legalization_op.cacheSol_dbg(temp_pos))
+                #cur_metric = EvalMetricsFPGA(iteration)
+                #all_metrics.append(cur_metric)
+                #cur_metric.evaluate(placedb, {"hpwl" : self.op_collections.hpwl_op}, temp_pos)
+                #logging.info(cur_metric)
+                ####DBG
+
+                if prevAct == illegalStatus.sum().item() + activeStatus.sum().item():
+                    iter_stable = iter_stable + 1
+                else:
+                    iter_stable = 0
+
+                dlIter = dlIter+1
+                if activeStatus.sum().item() > 0:
+                    DLStatus = 1
+                elif illegalStatus.sum().item() > 0:
+                    DLStatus = -1
+                else:
+                    DLStatus = 0
+
+                prevAct=illegalStatus.sum().item() + activeStatus.sum().item()
+                #DBG
+                #pdb.set_trace()
+                if dlIter > 100 or iter_stable > 5:
+                    DLStatus = 0
+
+    
+            #pdb.set_trace()
+            self.pos[0].data.copy_(self.op_collections.lut_ff_legalization_op.ripUP_Greedy_slotAssign(self.pos[0], model.precondWL[:placedb.num_physical_nodes], self.data_collections.node_z[:placedb.num_movable_nodes], sortedNodeMap, sortedNodeIdx, sortedNetMap, sortedNetIdx, sortedPinMap))
+            logging.info("legalization takes %.3f seconds" % (time.time()-tt))
+            cur_metric = EvalMetricsFPGA(iteration)
+            all_metrics.append(cur_metric)
+            cur_metric.evaluate(placedb, {"hpwl" : self.op_collections.hpwl_op}, self.pos[0])
+            logging.info(cur_metric)
+            iteration += 1
+
         # plot placement 
         #if params.plot_flag: 
         #    self.plot(params, placedb, iteration, self.pos[0].data.clone().cpu().numpy())
+
+        # dump legalization solution for detailed placement 
+        if params.dump_legalize_solution_flag: 
+            self.dump(params, placedb, self.pos[0].cpu(), "%s.dp.pklz" %(params.design_name()))
+
+        # detailed placement 
+        if params.detailed_place_flag: 
+            tt = time.time()
+            self.pos[0].data.copy_(self.op_collections.detailed_place_op(self.pos[0]))
+            logging.info("detailed placement takes %.3f seconds" % (time.time()-tt))
+            cur_metric = EvalMetricsFPGA(iteration)
+            all_metrics.append(cur_metric)
+            cur_metric.evaluate(placedb, {"hpwl" : self.op_collections.hpwl_op}, self.pos[0])
+            logging.info(cur_metric)
+            iteration += 1
 
         # save results 
         cur_pos = self.pos[0].data.clone().cpu().numpy()

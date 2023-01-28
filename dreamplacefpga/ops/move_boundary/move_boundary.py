@@ -88,3 +88,6 @@ class MoveBoundary(object):
                 num_filler_nodes=self.num_filler_nodes, 
                 num_threads=self.num_threads
                 )
+
+    def __call__(self, pos):
+        return self.forward(pos)

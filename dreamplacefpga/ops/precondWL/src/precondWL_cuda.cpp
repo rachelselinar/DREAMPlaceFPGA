@@ -16,6 +16,7 @@ int computePrecondWLCudaLauncher(
         const int *flat_node2pin_map, 
         const int *pin2net_map, 
         const int *flat_net2pin, 
+        const T *net_weights, 
         int num_nodes, 
         T *out 
         );
@@ -35,6 +36,7 @@ void forward(
         at::Tensor flat_node2pin_map,
         at::Tensor pin2net_map,
         at::Tensor flat_net2pin,
+        at::Tensor net_weights,
         int num_nodes,
         at::Tensor out
         ) 
@@ -48,12 +50,16 @@ void forward(
     CHECK_FLAT(flat_net2pin);
     CHECK_CONTIGUOUS(flat_net2pin);
 
+    CHECK_FLAT(net_weights);
+    CHECK_CONTIGUOUS(net_weights);
+
     DREAMPLACE_DISPATCH_FLOATING_TYPES(out, "computePrecondWLCudaLauncher", [&] {
             computePrecondWLCudaLauncher<scalar_t>(
                     DREAMPLACE_TENSOR_DATA_PTR(flat_node2pin_start_map, int),
                     DREAMPLACE_TENSOR_DATA_PTR(flat_node2pin_map, int), 
                     DREAMPLACE_TENSOR_DATA_PTR(pin2net_map, int), 
                     DREAMPLACE_TENSOR_DATA_PTR(flat_net2pin, int), 
+                    DREAMPLACE_TENSOR_DATA_PTR(net_weights, scalar_t), 
                     num_nodes, 
                     DREAMPLACE_TENSOR_DATA_PTR(out, scalar_t)
                     );

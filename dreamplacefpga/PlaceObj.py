@@ -470,9 +470,9 @@ class PlaceObjFPGA(nn.Module):
         """
         #Updated to elfPlace
         ### params for hpwl mode from RePlAce
-        ref_hpwl = 350000 #params.RePlAce_ref_hpwl
-        LOWER_PCOF = 0.95 #params.RePlAce_LOWER_PCOF
-        UPPER_PCOF = 1.05 #params.RePlAce_UPPER_PCOF
+        ref_hpwl = params.RePlAce_ref_hpwl
+        LOWER_PCOF = params.RePlAce_LOWER_PCOF
+        UPPER_PCOF = params.RePlAce_UPPER_PCOF
         ### params for overflow mode from elfPlace
         # alpha_h = 1.06
         # alpha_l = 1.05

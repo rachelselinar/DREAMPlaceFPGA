@@ -523,6 +523,36 @@ void PyPlaceDB::set(PlaceDB const& db)
     routing_grid_yl = yl; 
     routing_grid_xh = xh; 
     routing_grid_yh = yh; 
+
+    ////Spiral Accessor
+    unsigned int rad = std::max(num_sites_x, num_sites_y);
+    spiral_maxVal = (2 * rad * (1+rad)) +1; 
+    spiral_accessor.append(std::make_tuple(0, 0));
+
+    for(int r = 1; r <= rad; ++r)
+    {
+        // The 1st quadrant
+        for (int x = r, y = 0; y < r; --x, ++y)
+        {
+            spiral_accessor.append(std::make_tuple(x, y));
+        }
+        // The 2nd quadrant
+        for (int x = 0, y = r; y > 0; --x, --y)
+        {
+            spiral_accessor.append(std::make_tuple(x, y));
+        }
+        // The 3rd quadrant
+        for (int x = -r, y = 0; y > -r; ++x, --y)
+        {
+            spiral_accessor.append(std::make_tuple(x, y));
+        }
+        // The 4th quadrant
+        for (int x = 0, y = -r; y < 0; ++x, ++y)
+        {
+            spiral_accessor.append(std::make_tuple(x, y));
+        }
+    }
+    
 }
 
 DREAMPLACE_END_NAMESPACE

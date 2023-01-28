@@ -5,7 +5,7 @@
  * @brief  Compute density potential on CUDA according to NTUPlace3 (https://doi.org/10.1109/TCAD.2008.923063)
  */
 #include "utility/src/torch.h"
-#include "utility/src/Msg.h"
+#include "utility/src/utils.h"
 
 DREAMPLACE_BEGIN_NAMESPACE
 

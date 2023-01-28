@@ -35,15 +35,15 @@ class LogSumExpWirelengthAtomicFunction(Function):
             output = logsumexp_wirelength_cuda_atomic.forward(pos.view(pos.numel()), pin2net_map, net_weights, net_mask, gamma)
         else:
             assert 0, "CPU version NOT IMPLEMENTED"
-        ctx.pin2net_map = pin2net_map 
-        ctx.net_weights = net_weights 
-        ctx.net_mask = net_mask 
+        ctx.pin2net_map = pin2net_map
+        ctx.net_weights = net_weights
+        ctx.net_mask = net_mask
         ctx.gamma = gamma
         ctx.exp_xy = output[1]
         ctx.exp_nxy = output[2]
-        ctx.exp_xy_sum = output[3];
-        ctx.exp_nxy_sum = output[4];
-        ctx.pos = pos 
+        ctx.exp_xy_sum = output[3]
+        ctx.exp_nxy_sum = output[4]
+        ctx.pos = pos
         return output[0]
 
     @staticmethod
@@ -157,17 +157,17 @@ class LogSumExpWirelength(nn.Module):
             assert flat_netpin is not None and netpin_start is not None and pin2net_map is not None, "flat_netpin, netpin_start, pin2net_map are requried parameters for algorithm %s" % (algorithm)
         elif algorithm == 'atomic':
             assert pin2net_map is not None, "pin2net_map is required for algorithm atomic"
-        self.flat_netpin = flat_netpin 
+        self.flat_netpin = flat_netpin
         self.netpin_start = netpin_start
-        self.netpin_values = None 
-        self.pin2net_map = pin2net_map 
+        self.netpin_values = None
+        self.pin2net_map = pin2net_map
         self.net_weights = net_weights
-        self.net_mask = net_mask 
+        self.net_mask = net_mask
         self.pin_mask = pin_mask
         self.gamma = gamma
         self.algorithm = algorithm
         self.num_threads = num_threads
-    def forward(self, pos): 
+    def forward(self, pos):
         if pos.is_cuda:
             if self.algorithm == 'atomic':
                 return LogSumExpWirelengthAtomicFunction.apply(pos, 

@@ -6,7 +6,6 @@
  */
 
 #include "utility/src/torch.h"
-#include "utility/src/Msg.h"
 #include "utility/src/utils.h"
 // local dependency
 #include "clustering_compatibility/src/functions.h"

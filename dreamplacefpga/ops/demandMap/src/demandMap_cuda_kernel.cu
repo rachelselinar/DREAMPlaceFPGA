@@ -1,7 +1,6 @@
 #include "utility/src/utils.cuh"
-#include "utility/src/limits.cuh"
+#include "utility/src/limits.h"
 // local dependency
-#include "demandMap/src/atomic_ops.cuh"
 #include "demandMap/src/demand_function.h"
 
 DREAMPLACE_BEGIN_NAMESPACE
@@ -131,7 +130,7 @@ int computeDemandMapCudaLauncher(
         T *binCapMap3
         )
 {
-    AtomicAdd<T> atomicAddOp;
+    AtomicAddCUDA<T> atomicAddOp;
 
     computeDemandMapCallKernel<T, decltype(atomicAddOp)>(
             site_type_map, num_bins_x, num_bins_y,
@@ -143,17 +142,12 @@ int computeDemandMapCudaLauncher(
 
 // manually instantiate the template function
 #define REGISTER_KERNEL_LAUNCHER(T)                         \
-    int instantiatecomputeDemandMapLauncher(                \
+    template int computeDemandMapCudaLauncher<T>(           \
         const int *site_type_map, const int num_bins_x,     \
         const int num_bins_y, const int width,              \
         const int height, const T *node_size_x,             \
         const T *node_size_y, T *binCapMap0, T *binCapMap2, \
-        T *binCapMap3) {                                    \
-        return computeDemandMapCudaLauncher(                \
-                site_type_map, num_bins_x, num_bins_y,      \
-                width, height, node_size_x, node_size_y,    \
-                binCapMap0, binCapMap2, binCapMap3);        \
-    }
+        T *binCapMap3);
 
 REGISTER_KERNEL_LAUNCHER(float);
 REGISTER_KERNEL_LAUNCHER(double);

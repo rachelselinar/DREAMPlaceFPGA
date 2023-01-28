@@ -1,5 +1,5 @@
 #include "utility/src/utils.cuh"
-#include "utility/src/limits.cuh"
+#include "utility/src/limits.h"
 
 DREAMPLACE_BEGIN_NAMESPACE
 
@@ -9,6 +9,7 @@ __global__ void computePrecondWL(
         const int *flat_node2pin_map, 
         const int *pin2net_map, 
         const int *flat_net2pin, 
+        const T *net_weights, 
         int num_nodes, 
         T *out 
         )
@@ -23,7 +24,11 @@ __global__ void computePrecondWL(
         {
             int netId = pin2net_map[flat_node2pin_map[p]];
             int numPins = flat_net2pin[netId+1] - flat_net2pin[netId];
-            out[i] += T(1.0/(numPins-1));
+            //Ignore single pin nets
+            if (numPins > 1)
+            {
+                out[i] += net_weights[netId]/(numPins-1.0);
+            }
         }
     }
 }
@@ -34,18 +39,20 @@ int computePrecondWLCudaLauncher(
         const int *flat_node2pin_map, 
         const int *pin2net_map, 
         const int *flat_net2pin, 
+        const T *net_weights, 
         int num_nodes, 
         T *out 
         )
 {
     int thread_count = 512;
-    int block_count = CPUCeilDiv(num_nodes, thread_count);
+    int block_count = ceilDiv(num_nodes, thread_count);
 
     computePrecondWL<<<block_count, thread_count>>>(
             flat_node2pin_start_map,
             flat_node2pin_map,
             pin2net_map,
             flat_net2pin,
+            net_weights,
             num_nodes,
             out 
             );
@@ -55,24 +62,15 @@ int computePrecondWLCudaLauncher(
 
 // manually instantiate the template function
 #define REGISTER_KERNEL_LAUNCHER(T) \
-    int instantiatecomputePrecondWLCudaLauncher( \
+    template int computePrecondWLCudaLauncher<T>( \
         const int *flat_node2pin_start_map, \
         const int *flat_node2pin_map, \
         const int *pin2net_map, \
         const int *flat_net2pin, \
+        const T *net_weights, \
         int num_nodes, \
         T *out \
-        ) \
-    { \
-        return computePrecondWLCudaLauncher( \
-                flat_node2pin_start_map, \
-                flat_node2pin_map, \
-                pin2net_map, \
-                flat_net2pin, \
-                num_nodes, \
-                out \
-                ); \
-    } \
+        );
 
 REGISTER_KERNEL_LAUNCHER(float);
 REGISTER_KERNEL_LAUNCHER(double);

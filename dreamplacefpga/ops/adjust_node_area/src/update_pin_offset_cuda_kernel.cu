@@ -41,7 +41,7 @@ void updatePinOffsetCudaLauncher(
     )
 {
     int thread_count = 512;
-    int block_count = CPUCeilDiv(num_nodes, thread_count);
+    int block_count = ceilDiv(num_nodes, thread_count);
     updatePinOffset<<<block_count, thread_count>>>(
         node_size_x, node_size_y, 
         flat_node2pin_start_map,
@@ -59,7 +59,7 @@ void updatePinOffsetCudaLauncher(
         const int *flat_node2pin_map,             \
         const T *node_ratios,             \
         const int num_nodes,                      \
-        T *pin_offset_x, T *pin_offset_y)
+        T *pin_offset_x, T *pin_offset_y);
 
 REGISTER_KERNEL_LAUNCHER(float);
 REGISTER_KERNEL_LAUNCHER(double);

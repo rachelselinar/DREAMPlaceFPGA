@@ -75,7 +75,7 @@ int computeInstanceRoutabilityOptimizationMapCudaLauncher(
     T *instance_route_area)
 {
     int thread_count = 512;
-    int block_count = CPUCeilDiv(num_movable_nodes, thread_count);
+    int block_count = ceilDiv(num_movable_nodes, thread_count);
     computeInstanceRoutabilityOptimizationMap<<<block_count, thread_count>>>(
         pos_x, pos_y, indices,
         node_size_x, node_size_y,
@@ -97,7 +97,7 @@ int computeInstanceRoutabilityOptimizationMapCudaLauncher(
         T bin_size_x, T bin_size_y,                                        \
         int num_bins_x, int num_bins_y,                                    \
         int num_movable_nodes,                                             \
-        T *instance_route_area)
+        T *instance_route_area);
 
 REGISTER_KERNEL_LAUNCHER(float);
 REGISTER_KERNEL_LAUNCHER(double);

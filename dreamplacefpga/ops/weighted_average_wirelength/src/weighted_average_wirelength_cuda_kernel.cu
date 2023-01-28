@@ -2,8 +2,7 @@
 #include <stdio.h>
 #include "assert.h"
 #include "cuda_runtime.h"
-#include "utility/src/print.h"
-#include "utility/src/Msg.h"
+#include "utility/src/utils.cuh"
 #include "weighted_average_wirelength/src/functional_cuda.h"
 
 DREAMPLACE_BEGIN_NAMESPACE
@@ -83,41 +82,24 @@ int computeWeightedAverageWirelengthCudaLauncher(
     return 0;
 }
 
-#define REGISTER_KERNEL_LAUNCHER(T, V)                       \
-    int instantiateComputeWeightedAverageWirelengthLauncher( \
-        const T *x, const T *y,                              \
-        const int *pin2net_map,                              \
-        const int *flat_netpin,                              \
-        const int *netpin_start,                             \
-        const unsigned char *net_mask,                       \
-        int num_nets,                                        \
-        int num_pins,                                        \
-        const T *inv_gamma,                                  \
-        T *exp_xy, T *exp_nxy,                               \
-        T *exp_xy_sum, T *exp_nxy_sum,                       \
-        T *xyexp_xy_sum, T *xyexp_nxy_sum,                   \
-        V *xy_max, V *xy_min,                                \
-        T *partial_wl,                                       \
-        const T *grad_tensor,                                \
-        T *grad_x_tensor, T *grad_y_tensor)                  \
-    {                                                        \
-        return computeWeightedAverageWirelengthCudaLauncher( \
-            x, y,                                            \
-            pin2net_map,                                     \
-            flat_netpin,                                     \
-            netpin_start,                                    \
-            net_mask,                                        \
-            num_nets,                                        \
-            num_pins,                                        \
-            inv_gamma,                                       \
-            exp_xy, exp_nxy,                                 \
-            exp_xy_sum, exp_nxy_sum,                         \
-            xyexp_xy_sum, xyexp_nxy_sum,                     \
-            xy_max, xy_min,                                  \
-            partial_wl,                                      \
-            grad_tensor,                                     \
-            grad_x_tensor, grad_y_tensor);                   \
-    }
+#define REGISTER_KERNEL_LAUNCHER(T, V)                                \
+    template int computeWeightedAverageWirelengthCudaLauncher<T, V>(  \
+        const T *x, const T *y,                                       \
+        const int *pin2net_map,                                       \
+        const int *flat_netpin,                                       \
+        const int *netpin_start,                                      \
+        const unsigned char *net_mask,                                \
+        int num_nets,                                                 \
+        int num_pins,                                                 \
+        const T *inv_gamma,                                           \
+        T *exp_xy, T *exp_nxy,                                        \
+        T *exp_xy_sum, T *exp_nxy_sum,                                \
+        T *xyexp_xy_sum, T *xyexp_nxy_sum,                            \
+        V *xy_max, V *xy_min,                                         \
+        T *partial_wl,                                                \
+        const T *grad_tensor,                                         \
+        T *grad_x_tensor, T *grad_y_tensor);
+
 REGISTER_KERNEL_LAUNCHER(float, int);
 REGISTER_KERNEL_LAUNCHER(double, int);
 

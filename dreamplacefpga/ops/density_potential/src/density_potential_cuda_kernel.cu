@@ -7,9 +7,9 @@
  */
 #include <stdio.h>
 #include <float.h>
+#include <cstdint>
 #include "cuda_runtime.h"
-#include "utility/src/print.h"
-#include "utility/src/Msg.h"
+#include "utility/src/utils.cuh"
 
 DREAMPLACE_BEGIN_NAMESPACE
 
@@ -47,9 +47,10 @@ __global__ void computeDensityMap(
         const int num_impacted_bins_x, const int num_impacted_bins_y,
         T* density_map_tensor)
 {
-    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    int64_t i = blockIdx.x * blockDim.x + threadIdx.x;
+    int64_t bound = int64_t(num_nodes)*num_impacted_bins_x*num_impacted_bins_y;
     // rank-one update density map
-    if (i < num_nodes*num_impacted_bins_x*num_impacted_bins_y)
+    if (i < bound)
     {
         // density potential function
         auto computeDensityPotentialFunc = [](T x, T node_size, T bin_center, T bin_size, T a, T b, T c){
@@ -235,8 +236,8 @@ int computeDensityPotentialMapCudaLauncher(
         T* grad_x_tensor, T* grad_y_tensor
         )
 {
-    int block_count;
-    int thread_count = 512;
+    int64_t block_count;
+    int64_t thread_count = 512;
 
     // compute gradient
     if (grad_tensor)
@@ -265,7 +266,7 @@ int computeDensityPotentialMapCudaLauncher(
     }
     else
     {
-        block_count = (num_nodes*num_impacted_bins_x*num_impacted_bins_y - 1 + thread_count) / thread_count;
+        block_count = (int64_t(num_nodes)*num_impacted_bins_x*num_impacted_bins_y - 1 + thread_count) / thread_count;
 
         computeDensityMap<<<block_count, thread_count>>>(
                 x_tensor, y_tensor,
@@ -292,7 +293,7 @@ int computeDensityPotentialMapCudaLauncher(
 }
 
 #define REGISTER_KERNEL_LAUNCHER(T) \
-    int instantiateComputeDensityPotentialMapLauncher(\
+    template int computeDensityPotentialMapCudaLauncher<T>(\
             const T* x_tensor, const T* y_tensor, \
             const T* node_size_x_tensor, const T* node_size_y_tensor, \
             const T* ax_tensor, const T* bx_tensor, const T* cx_tensor, \
@@ -308,26 +309,7 @@ int computeDensityPotentialMapCudaLauncher(
             T* density_map_tensor, \
             const T* grad_tensor, \
             T* grad_x_tensor, T* grad_y_tensor \
-            )\
-    { \
-        return computeDensityPotentialMapCudaLauncher(\
-                x_tensor, y_tensor, \
-                node_size_x_tensor, node_size_y_tensor, \
-                ax_tensor, bx_tensor, cx_tensor, \
-                ay_tensor, by_tensor, cy_tensor, \
-                bin_center_x_tensor, bin_center_y_tensor, \
-                num_impacted_bins_x, num_impacted_bins_y, \
-                mat_size_x, mat_size_y, \
-                num_nodes, \
-                num_bins_x, num_bins_y, padding, \
-                xl, yl, xh, yh, \
-                bin_size_x, bin_size_y, \
-                target_area, \
-                density_map_tensor, \
-                grad_tensor, \
-                grad_x_tensor, grad_y_tensor \
-                );\
-    }
+            );
 
 REGISTER_KERNEL_LAUNCHER(float);
 REGISTER_KERNEL_LAUNCHER(double);

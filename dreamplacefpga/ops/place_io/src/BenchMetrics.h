@@ -38,6 +38,7 @@ struct BenchMetrics
     std::size_t numDuplicateNet; 
 
     bool initPlaceDBFlag; ///< a flag indicates whether it is initialized, must set to true after initialization, from PlaceDB
+    //bool initAlgoDBFlag;
 
     BenchMetrics();
 

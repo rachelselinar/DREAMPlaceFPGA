@@ -8,7 +8,6 @@
 #include "utility/src/torch.h"
 #include "utility/src/utils.h"
 // local dependency
-#include "electric_potential/src/atomic_ops.h"
 #include "electric_potential/src/density_function.h"
 
 DREAMPLACE_BEGIN_NAMESPACE
@@ -29,15 +28,6 @@ int computeFPGADensityMapLauncher(
     const int num_threads, AtomicOp atomic_add_op,
     typename AtomicOp::type* buf_map);
 
-
-/// @brief Perform a += b * scale_factor
-template <typename T, typename V, typename W>
-void scaleAdd(T* dst, const V* src, W scale_factor, int n, int num_threads) {
-#pragma omp parallel for num_threads(num_threads)
-  for (int i = 0; i < n; ++i) {
-    dst[i] += src[i] * scale_factor;
-  }
-}
 
 #define CHECK_FLAT_CPU(x) AT_ASSERTM(!x.is_cuda() && x.ndimension() == 1, #x "must be a flat tensor on CPU")
 #define CHECK_EVEN(x) AT_ASSERTM((x.numel()&1) == 0, #x "must have even number of elements")

@@ -10,168 +10,132 @@
 
 DREAMPLACE_BEGIN_NAMESPACE
 
-void dct2_fft2_forward(
-    at::Tensor x,
-    at::Tensor expkM,
-    at::Tensor expkN,
-    at::Tensor out,
-    at::Tensor buf)
-{
-    CHECK_GPU(x);
-    CHECK_GPU(expkM);
-    CHECK_GPU(expkN);
-    CHECK_GPU(out);
-    CHECK_GPU(buf);
+void dct2_fft2_forward(at::Tensor x, at::Tensor expkM, at::Tensor expkN,
+                       at::Tensor out, at::Tensor buf) {
+  CHECK_CUDA(x);
+  CHECK_CUDA(expkM);
+  CHECK_CUDA(expkN);
+  CHECK_CUDA(out);
+  CHECK_CUDA(buf);
 
-    CHECK_CONTIGUOUS(x);
-    CHECK_CONTIGUOUS(expkM);
-    CHECK_CONTIGUOUS(expkN);
-    CHECK_CONTIGUOUS(out);
-    CHECK_CONTIGUOUS(buf);
+  CHECK_CONTIGUOUS(x);
+  CHECK_CONTIGUOUS(expkM);
+  CHECK_CONTIGUOUS(expkN);
+  CHECK_CONTIGUOUS(out);
+  CHECK_CONTIGUOUS(buf);
 
-    auto N = x.size(-1);
-    auto M = x.numel() / N;
+  auto N = x.size(-1);
+  auto M = x.numel() / N;
 
-    DREAMPLACE_DISPATCH_FLOATING_TYPES(x, "dct2_fft2_forward", [&] {
-        dct2dPreprocessCudaLauncher<scalar_t>(
-            DREAMPLACE_TENSOR_DATA_PTR(x, scalar_t),
-            DREAMPLACE_TENSOR_DATA_PTR(out, scalar_t),
-            M,
-            N);
+  DREAMPLACE_DISPATCH_FLOATING_TYPES(x, "dct2_fft2_forward", [&] {
+    dct2dPreprocessCudaLauncher<scalar_t>(
+        DREAMPLACE_TENSOR_DATA_PTR(x, scalar_t),
+        DREAMPLACE_TENSOR_DATA_PTR(out, scalar_t), M, N);
 
-        buf = at::rfft(out, 2, false, true);
+    buf = at::rfft(out, 2, false, true);
 
-        dct2dPostprocessCudaLauncher<scalar_t>(
-            DREAMPLACE_TENSOR_DATA_PTR(buf, scalar_t),
-            DREAMPLACE_TENSOR_DATA_PTR(out, scalar_t),
-            M,
-            N,
-            DREAMPLACE_TENSOR_DATA_PTR(expkM, scalar_t),
-            DREAMPLACE_TENSOR_DATA_PTR(expkN, scalar_t));
-    });
+    dct2dPostprocessCudaLauncher<scalar_t>(
+        DREAMPLACE_TENSOR_DATA_PTR(buf, scalar_t),
+        DREAMPLACE_TENSOR_DATA_PTR(out, scalar_t), M, N,
+        DREAMPLACE_TENSOR_DATA_PTR(expkM, scalar_t),
+        DREAMPLACE_TENSOR_DATA_PTR(expkN, scalar_t));
+  });
 }
 
-void idct2_fft2_forward(
-    at::Tensor x,
-    at::Tensor expkM,
-    at::Tensor expkN,
-    at::Tensor out,
-    at::Tensor buf)
-{
-    CHECK_GPU(x);
-    CHECK_GPU(expkM);
-    CHECK_GPU(expkN);
-    CHECK_GPU(out);
-    CHECK_GPU(buf);
+void idct2_fft2_forward(at::Tensor x, at::Tensor expkM, at::Tensor expkN,
+                        at::Tensor out, at::Tensor buf) {
+  CHECK_CUDA(x);
+  CHECK_CUDA(expkM);
+  CHECK_CUDA(expkN);
+  CHECK_CUDA(out);
+  CHECK_CUDA(buf);
 
-    CHECK_CONTIGUOUS(x);
-    CHECK_CONTIGUOUS(expkM);
-    CHECK_CONTIGUOUS(expkN);
-    CHECK_CONTIGUOUS(out);
-    CHECK_CONTIGUOUS(buf);
+  CHECK_CONTIGUOUS(x);
+  CHECK_CONTIGUOUS(expkM);
+  CHECK_CONTIGUOUS(expkN);
+  CHECK_CONTIGUOUS(out);
+  CHECK_CONTIGUOUS(buf);
 
-    auto N = x.size(-1);
-    auto M = x.numel() / N;
+  auto N = x.size(-1);
+  auto M = x.numel() / N;
 
-    DREAMPLACE_DISPATCH_FLOATING_TYPES(x, "idct2_fft2_forward", [&] {
-        idct2_fft2PreprocessCudaLauncher<scalar_t>(
-            DREAMPLACE_TENSOR_DATA_PTR(x, scalar_t),
-            DREAMPLACE_TENSOR_DATA_PTR(buf, scalar_t),
-            M,
-            N,
-            DREAMPLACE_TENSOR_DATA_PTR(expkM, scalar_t),
-            DREAMPLACE_TENSOR_DATA_PTR(expkN, scalar_t));
+  DREAMPLACE_DISPATCH_FLOATING_TYPES(x, "idct2_fft2_forward", [&] {
+    idct2_fft2PreprocessCudaLauncher<scalar_t>(
+        DREAMPLACE_TENSOR_DATA_PTR(x, scalar_t),
+        DREAMPLACE_TENSOR_DATA_PTR(buf, scalar_t), M, N,
+        DREAMPLACE_TENSOR_DATA_PTR(expkM, scalar_t),
+        DREAMPLACE_TENSOR_DATA_PTR(expkN, scalar_t));
 
-        auto y = at::irfft(buf, 2, false, true, {{M, N}});
+    auto y = at::irfft(buf, 2, false, true, {{M, N}});
 
-        idct2_fft2PostprocessCudaLauncher<scalar_t>(
-            DREAMPLACE_TENSOR_DATA_PTR(y, scalar_t),
-            DREAMPLACE_TENSOR_DATA_PTR(out, scalar_t),
-            M,
-            N);
-    });
+    idct2_fft2PostprocessCudaLauncher<scalar_t>(
+        DREAMPLACE_TENSOR_DATA_PTR(y, scalar_t),
+        DREAMPLACE_TENSOR_DATA_PTR(out, scalar_t), M, N);
+  });
 }
 
-void idct_idxst_forward(
-    at::Tensor x,
-    at::Tensor expkM,
-    at::Tensor expkN,
-    at::Tensor out,
-    at::Tensor buf)
-{
-    CHECK_GPU(x);
-    CHECK_GPU(expkM);
-    CHECK_GPU(expkN);
-    CHECK_GPU(out);
-    CHECK_GPU(buf);
+void idct_idxst_forward(at::Tensor x, at::Tensor expkM, at::Tensor expkN,
+                        at::Tensor out, at::Tensor buf) {
+  CHECK_CUDA(x);
+  CHECK_CUDA(expkM);
+  CHECK_CUDA(expkN);
+  CHECK_CUDA(out);
+  CHECK_CUDA(buf);
 
-    CHECK_CONTIGUOUS(x);
-    CHECK_CONTIGUOUS(expkM);
-    CHECK_CONTIGUOUS(expkN);
-    CHECK_CONTIGUOUS(out);
-    CHECK_CONTIGUOUS(buf);
+  CHECK_CONTIGUOUS(x);
+  CHECK_CONTIGUOUS(expkM);
+  CHECK_CONTIGUOUS(expkN);
+  CHECK_CONTIGUOUS(out);
+  CHECK_CONTIGUOUS(buf);
 
-    auto N = x.size(-1);
-    auto M = x.numel() / N;
+  auto N = x.size(-1);
+  auto M = x.numel() / N;
 
-    DREAMPLACE_DISPATCH_FLOATING_TYPES(x, "idct_idxst_forward", [&] {
-        idct_idxstPreprocessCudaLauncher<scalar_t>(
-            DREAMPLACE_TENSOR_DATA_PTR(x, scalar_t),
-            DREAMPLACE_TENSOR_DATA_PTR(buf, scalar_t),
-            M,
-            N,
-            DREAMPLACE_TENSOR_DATA_PTR(expkM, scalar_t),
-            DREAMPLACE_TENSOR_DATA_PTR(expkN, scalar_t));
+  DREAMPLACE_DISPATCH_FLOATING_TYPES(x, "idct_idxst_forward", [&] {
+    idct_idxstPreprocessCudaLauncher<scalar_t>(
+        DREAMPLACE_TENSOR_DATA_PTR(x, scalar_t),
+        DREAMPLACE_TENSOR_DATA_PTR(buf, scalar_t), M, N,
+        DREAMPLACE_TENSOR_DATA_PTR(expkM, scalar_t),
+        DREAMPLACE_TENSOR_DATA_PTR(expkN, scalar_t));
 
-        auto y = at::irfft(buf, 2, false, true, {{M, N}});
+    auto y = at::irfft(buf, 2, false, true, {{M, N}});
 
-        idct_idxstPostprocessCudaLauncher<scalar_t>(
-            DREAMPLACE_TENSOR_DATA_PTR(y, scalar_t),
-            DREAMPLACE_TENSOR_DATA_PTR(out, scalar_t),
-            M,
-            N);
-    });
+    idct_idxstPostprocessCudaLauncher<scalar_t>(
+        DREAMPLACE_TENSOR_DATA_PTR(y, scalar_t),
+        DREAMPLACE_TENSOR_DATA_PTR(out, scalar_t), M, N);
+  });
 }
 
-void idxst_idct_forward(
-    at::Tensor x,
-    at::Tensor expkM,
-    at::Tensor expkN,
-    at::Tensor out,
-    at::Tensor buf)
-{
-    CHECK_GPU(x);
-    CHECK_GPU(expkM);
-    CHECK_GPU(expkN);
-    CHECK_GPU(out);
-    CHECK_GPU(buf);
+void idxst_idct_forward(at::Tensor x, at::Tensor expkM, at::Tensor expkN,
+                        at::Tensor out, at::Tensor buf) {
+  CHECK_CUDA(x);
+  CHECK_CUDA(expkM);
+  CHECK_CUDA(expkN);
+  CHECK_CUDA(out);
+  CHECK_CUDA(buf);
 
-    CHECK_CONTIGUOUS(x);
-    CHECK_CONTIGUOUS(expkM);
-    CHECK_CONTIGUOUS(expkN);
-    CHECK_CONTIGUOUS(out);
-    CHECK_CONTIGUOUS(buf);
+  CHECK_CONTIGUOUS(x);
+  CHECK_CONTIGUOUS(expkM);
+  CHECK_CONTIGUOUS(expkN);
+  CHECK_CONTIGUOUS(out);
+  CHECK_CONTIGUOUS(buf);
 
-    auto N = x.size(-1);
-    auto M = x.numel() / N;
+  auto N = x.size(-1);
+  auto M = x.numel() / N;
 
-    DREAMPLACE_DISPATCH_FLOATING_TYPES(x, "idxst_idct_forward", [&] {
-        idxst_idctPreprocessCudaLauncher<scalar_t>(
-            DREAMPLACE_TENSOR_DATA_PTR(x, scalar_t),
-            DREAMPLACE_TENSOR_DATA_PTR(buf, scalar_t),
-            M,
-            N,
-            DREAMPLACE_TENSOR_DATA_PTR(expkM, scalar_t),
-            DREAMPLACE_TENSOR_DATA_PTR(expkN, scalar_t));
+  DREAMPLACE_DISPATCH_FLOATING_TYPES(x, "idxst_idct_forward", [&] {
+    idxst_idctPreprocessCudaLauncher<scalar_t>(
+        DREAMPLACE_TENSOR_DATA_PTR(x, scalar_t),
+        DREAMPLACE_TENSOR_DATA_PTR(buf, scalar_t), M, N,
+        DREAMPLACE_TENSOR_DATA_PTR(expkM, scalar_t),
+        DREAMPLACE_TENSOR_DATA_PTR(expkN, scalar_t));
 
-        auto y = at::irfft(buf, 2, false, true, {{M, N}});
+    auto y = at::irfft(buf, 2, false, true, {{M, N}});
 
-        idxst_idctPostprocessCudaLauncher<scalar_t>(
-            DREAMPLACE_TENSOR_DATA_PTR(y, scalar_t),
-            DREAMPLACE_TENSOR_DATA_PTR(out, scalar_t),
-            M,
-            N);
-    });
+    idxst_idctPostprocessCudaLauncher<scalar_t>(
+        DREAMPLACE_TENSOR_DATA_PTR(y, scalar_t),
+        DREAMPLACE_TENSOR_DATA_PTR(out, scalar_t), M, N);
+  });
 }
 
 DREAMPLACE_END_NAMESPACE
