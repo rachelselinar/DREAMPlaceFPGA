@@ -239,5 +239,9 @@
 "deterministic_flag" : {
     "descripton" : "Ensures reproducible run-to-run results (May increase runtime)", 
     "default" : 0
+    },
+"enable_if" : {
+    "descripton" : "Enable IF Writer", 
+    "default" : 0
     }
 }

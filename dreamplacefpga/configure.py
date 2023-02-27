@@ -6,7 +6,7 @@
 #
 
 compile_configurations = {
-        "CMAKE_CXX_COMPILER" : "/usr/bin/g++-9", 
+        "CMAKE_CXX_COMPILER" : "/usr/bin/c++", 
         "CMAKE_CC_COMPILER" : "", 
         "CMAKE_BUILD_TYPE" : "RELEASE", 
         "CMAKE_CXX_ABI" : "0", 
@@ -20,7 +20,7 @@ compile_configurations = {
         "CUDA_TOOLKIT_ROOT_DIR" : "/usr/local/cuda", 
         "CMAKE_CUDA_FLAGS" : "", 
         "CAIRO_FOUND" : "TRUE", 
-        "CAIRO_INCLUDE_DIRS" : "/home/polaris/wuxili/common/libs/cairo/include/cairo", 
-        "CAIRO_LIBRARIES" : "/home/polaris/wuxili/common/libs/cairo/lib/libcairo.so", 
+        "CAIRO_INCLUDE_DIRS" : "/usr/include/cairo", 
+        "CAIRO_LIBRARIES" : "/usr/lib/x86_64-linux-gnu/libcairo.so", 
         }
 

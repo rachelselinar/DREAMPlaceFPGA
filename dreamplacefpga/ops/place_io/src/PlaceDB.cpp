@@ -49,6 +49,36 @@ void PlaceDB::add_bookshelf_node(std::string& name, std::string& type)
       m_numFF += 1;
       ++num_movable_nodes;
     }
+    else if (limbo::iequals(type, "LUT0"))
+    {
+      node_name2id_map.insert(std::make_pair(name, mov_node_names.size()));
+      mov_node_names.emplace_back(name);
+      mov_node_types.emplace_back(type);
+      node2fence_region_map.emplace_back(0);
+      mov_node_size_x.push_back(sqrt0p0625);
+      mov_node_size_y.push_back(sqrt0p0625);
+      mov_node_x.emplace_back(0.0);
+      mov_node_y.emplace_back(0.0);
+      mov_node_z.emplace_back(0);
+      lut_type.emplace_back(0);
+      m_numLUT += 1;
+      ++num_movable_nodes;
+    }
+    else if (limbo::iequals(type, "LUT1"))
+    {
+      node_name2id_map.insert(std::make_pair(name, mov_node_names.size()));
+      mov_node_names.emplace_back(name);
+      mov_node_types.emplace_back(type);
+      node2fence_region_map.emplace_back(0);
+      mov_node_size_x.push_back(sqrt0p0625);
+      mov_node_size_y.push_back(sqrt0p0625);
+      mov_node_x.emplace_back(0.0);
+      mov_node_y.emplace_back(0.0);
+      mov_node_z.emplace_back(0);
+      lut_type.emplace_back(0);
+      m_numLUT += 1;
+      ++num_movable_nodes;
+    }
     else if (limbo::iequals(type, "LUT2"))
     {
       node_name2id_map.insert(std::make_pair(name, mov_node_names.size()));
@@ -121,6 +151,21 @@ void PlaceDB::add_bookshelf_node(std::string& name, std::string& type)
       mov_node_y.emplace_back(0.0);
       mov_node_z.emplace_back(0);
       lut_type.emplace_back(5);
+      m_numLUT += 1;
+      ++num_movable_nodes;
+    }
+    else if (limbo::iequals(type, "LUT6_2"))
+    {
+      node_name2id_map.insert(std::make_pair(name, mov_node_names.size()));
+      mov_node_names.emplace_back(name);
+      mov_node_types.emplace_back(type);
+      node2fence_region_map.emplace_back(0);
+      mov_node_size_x.push_back(sqrt0p125);
+      mov_node_size_y.push_back(sqrt0p125);
+      mov_node_x.emplace_back(0.0);
+      mov_node_y.emplace_back(0.0);
+      mov_node_z.emplace_back(0);
+      lut_type.emplace_back(5); //Treating same as LUT6
       m_numLUT += 1;
       ++num_movable_nodes;
     }

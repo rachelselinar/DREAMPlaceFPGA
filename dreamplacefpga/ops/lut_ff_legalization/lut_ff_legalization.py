@@ -33,9 +33,9 @@ class LegalizeCLB(nn.Module):
         self.num_lutflops=self.lut_flop_indices.shape[0]
 
         #Use nodeNames for debug purpose - Convert string to int by removing 'inst_'
-        nodeNames=[s.replace("inst_","") for s in nodeNames]
-        nodeNames = list(map(int, nodeNames))
-        self.nodeNames=torch.IntTensor(nodeNames)
+        # nodeNames=[s.replace("inst_","") for s in nodeNames]
+        # nodeNames = list(map(int, nodeNames))
+        self.nodeNames=torch.arange(num_nodes, dtype=torch.int, device=device)
 
         self.flop2ctrlSetId_map=flop2ctrlSet
         self.flop_ctrlSets=flop_ctrlSet
@@ -110,18 +110,18 @@ class LegalizeCLB(nn.Module):
 
         #Instance Candidates
         self.inst_curr_detSite = torch.zeros_like(self.flat_node2prclstrCount) #num_nodes
-        self.inst_curr_detSite[node2fence < 2] = -1;
+        self.inst_curr_detSite[node2fence < 2] = -1
         self.inst_curr_bestSite = torch.zeros_like(self.inst_curr_detSite) #num_nodes
-        self.inst_curr_bestSite[node2fence < 2] = -1;
+        self.inst_curr_bestSite[node2fence < 2] = -1
         self.inst_curr_bestScoreImprov = torch.zeros(num_nodes, dtype=node_size_x.dtype, device=device)
-        self.inst_curr_bestScoreImprov[node2fence < 2] = -10000.0;
+        self.inst_curr_bestScoreImprov[node2fence < 2] = -10000.0
 
         self.inst_next_detSite = torch.zeros_like(self.inst_curr_detSite) #num_nodes
-        self.inst_next_detSite[node2fence < 2] = -1;
+        self.inst_next_detSite[node2fence < 2] = -1
         self.inst_next_bestSite = torch.zeros_like(self.inst_next_detSite) #num_nodes
-        self.inst_next_bestSite[node2fence < 2] = -1;
+        self.inst_next_bestSite[node2fence < 2] = -1
         self.inst_next_bestScoreImprov = torch.zeros_like(self.inst_curr_bestScoreImprov) #num_nodes
-        self.inst_next_bestScoreImprov[node2fence < 2] = -10000.0;
+        self.inst_next_bestScoreImprov[node2fence < 2] = -10000.0
 
         self.num_clb_sites = torch.bincount(self.site_types.flatten())[1].item()
         #Map from mem addr to CLB site
@@ -371,9 +371,9 @@ class LegalizeCLB(nn.Module):
                 self.inst_next_bestScoreImprov, self.inst_next_bestSite, activeStatus, illegalStatus)
 
             ####DBG
-            print(dlIter,": ", (self.inst_curr_detSite[self.node2fence_region_map<2] > -1).sum().item(), "/", self.num_nodes)
-            print("\tactive Status : ", activeStatus.sum().item())
-            print("\tillegal Status : ", illegalStatus.sum().item())
+            # print(dlIter,": ", (self.inst_curr_detSite[self.node2fence_region_map<2] > -1).sum().item(), "/", self.num_nodes)
+            # print("\tactive Status : ", activeStatus.sum().item())
+            # print("\tillegal Status : ", illegalStatus.sum().item())
             #DBG
 
     def ripUP_Greedy_slotAssign(self, pos, wlPrecond, node_z, sorted_node_map, sorted_node_idx, sorted_net_map, sorted_net_idx, sorted_pin_map):

@@ -710,6 +710,8 @@ class NonLinearPlaceFPGA (BasicPlaceFPGA):
         # dump global placement solution for legalization 
         if params.dump_global_place_solution_flag: 
             self.dump(params, placedb, self.pos[0].cpu(), "%s.lg.pklz" %(params.design_name()))
+        
+        # self.plot(params, placedb, iteration, self.pos[0].data.clone().cpu().numpy())
 
         # legalization 
         if params.legalize_flag:
@@ -827,8 +829,8 @@ class NonLinearPlaceFPGA (BasicPlaceFPGA):
             iteration += 1
 
         # plot placement 
-        #if params.plot_flag: 
-        #    self.plot(params, placedb, iteration, self.pos[0].data.clone().cpu().numpy())
+        # if params.plot_flag: 
+        # self.plot(params, placedb, iteration, self.pos[0].data.clone().cpu().numpy())
 
         # dump legalization solution for detailed placement 
         if params.dump_legalize_solution_flag: 

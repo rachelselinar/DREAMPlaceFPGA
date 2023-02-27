@@ -44,7 +44,8 @@ class PrecondWL(nn.Module):
 
     def forward(self): 
         out = torch.zeros(self.num_nodes, dtype=torch.float32, device=self.device)
-        net_weights = torch.clamp(self.net_weights, min=1.0)
+        ##TODO - Temporary fix expecting net_weights to be empty
+        net_weights = torch.ones(self.num_nodes, dtype=torch.float32, device=self.device)
         
         if out.is_cuda:
             precondWL_cuda.forward(
