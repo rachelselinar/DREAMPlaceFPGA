@@ -26,7 +26,8 @@ std::string InstBlk::enum2Str(InstBlk::enum_type const& e) const
     static bool init = true;
 
     if (init)
-    {
+    {   
+        ENUM2STR(mEnum2Str, LUT0); 
         ENUM2STR(mEnum2Str, LUT1); 
         ENUM2STR(mEnum2Str, LUT2); 
         ENUM2STR(mEnum2Str, LUT3); 
@@ -53,7 +54,8 @@ InstBlk::enum_type InstBlk::str2Enum(std::string const& s) const
     static bool init = true;
 
     if (init)
-    {
+    {   
+        STR2ENUM(mStr2Enum, LUT0);
         STR2ENUM(mStr2Enum, LUT1); 
         STR2ENUM(mStr2Enum, LUT2); 
         STR2ENUM(mStr2Enum, LUT3); 

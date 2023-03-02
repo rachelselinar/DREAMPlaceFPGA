@@ -19,7 +19,8 @@ if root_dir not in sys.path:
 import dreamplacefpga.configure as configure 
 from Params import *
 from PlaceDB import *
-from NonLinearPlace import * 
+from NonLinearPlace import *
+from IFWriter import * 
 import pdb 
 
 def placeFPGA(params):
@@ -32,17 +33,16 @@ def placeFPGA(params):
 
     np.random.seed(params.random_seed)
     # Read Database
-    tt = time.time()
+    start = time.time()
     placedb = PlaceDBFPGA()
     placedb(params) #Call function
-    #logging.info("Reading database takes %.2f seconds" % (time.time()-tt))
+    #logging.info("Reading database takes %.2f seconds" % (time.time()-start))
 
     # Random Initial Placement 
-    tt = time.time()
     placer = NonLinearPlaceFPGA(params, placedb)
     #logging.info("non-linear placement initialization takes %.2f seconds" % (time.time()-tt))
     metrics = placer(params, placedb)
-    logging.info("Placement completed in %.2f seconds" % (time.time()-tt))
+    logging.info("Placement completed in %.2f seconds" % (time.time()-start))
 
     # write placement solution 
     path = "%s/%s" % (params.result_dir, params.design_name())
@@ -70,6 +70,23 @@ def placeFPGA(params):
         final_out_file = os.path.join(path, "%s.final.%s" % (params.design_name(), params.solution_file_suffix()))
         placedb.writeFinalSolution(params, final_out_file)
         logging.info("Detailed Placement not run")
+    
+    logging.info("Completed Placement in %.3f seconds" % (time.time()-start))
+
+    if params.enable_if == 1:
+        tt = time.time()
+        logging.info("Start writing solution to Interchange Format(IF)")
+        part_name = params.part_name
+        schema_dir = os.path.join(os.path.dirname(__file__), '../thirdparty/RapidWright/interchange/fpga-interchange-schema/interchange')
+        db2phys = db_to_physicalnetlist(placedb, schema_dir, part_name)  
+        phys_netlist = db2phys.build_physicalnetlist(placedb, final_out_file)
+        # tcl_generator().write_tcl(phys_netlist)
+        if_writer = IFWriter(schema_dir)
+        physical_netlist = if_writer.build_IF(phys_netlist)
+        if_file = os.path.join(path, "%s.phys" % (params.design_name()))
+        if_writer.write_IF(physical_netlist, if_file)
+        logging.info("Interchange Format(IF) Writer completed in %.3f seconds" % (time.time()-tt))
+               
 
 if __name__ == "__main__":
     """
@@ -98,8 +115,8 @@ if __name__ == "__main__":
         torch.cuda.manual_seed_all(params.random_seed)
         torch.cuda.manual_seed(params.random_seed)
 
-    tt = time.time()
+    # tt = time.time()
     for params in paramsArray: 
         placeFPGA(params)
-    logging.info("Completed Placement in %.3f seconds" % (time.time()-tt))
+    # logging.info("Completed Placement in %.3f seconds" % (time.time()-tt))
 
