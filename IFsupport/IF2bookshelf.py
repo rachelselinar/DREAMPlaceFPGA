@@ -34,7 +34,7 @@ class IF2bookshelf():
     def __init__(self, bookshelf_dir, netlist_file):
         """ LogicalNetlist and  DeviceResources"""
         self.bookshelf_dir = bookshelf_dir
-        schema_dir = os.path.join(os.path.dirname(__file__), '../thirdparty/RapidWright/interchange/fpga-interchange-schema/interchange')
+        schema_dir = os.path.join(os.path.dirname(__file__), '../thirdparty/fpga-interchange-schema/interchange')
         self.netlist_obj = LogicalNetlist(schema_dir, netlist_file)
         self.device_obj = DeviceResources(schema_dir, 'xcvu3p-ffvc1517-2-e')
 
