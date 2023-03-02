@@ -77,7 +77,7 @@ def placeFPGA(params):
         tt = time.time()
         logging.info("Start writing solution to Interchange Format(IF)")
         part_name = params.part_name
-        schema_dir = os.path.join(os.path.dirname(__file__), '../thirdparty/RapidWright/interchange/fpga-interchange-schema/interchange')
+        schema_dir = os.path.join(os.path.dirname(__file__), '../thirdparty/fpga-interchange-schema/interchange')
         db2phys = db_to_physicalnetlist(placedb, schema_dir, part_name)  
         phys_netlist = db2phys.build_physicalnetlist(placedb, final_out_file)
         # tcl_generator().write_tcl(phys_netlist)
