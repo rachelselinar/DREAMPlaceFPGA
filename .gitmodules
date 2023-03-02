@@ -13,3 +13,6 @@
 [submodule "thirdparty/thirdparty/cub"]
 	path = thirdparty/thirdparty/cub
 	url = https://github.com/NVIDIA/cub.git
+[submodule "thirdparty/fpga-interchange-schema"]
+    path = thirdparty/fpga-interchange-schema
+    url = https://github.com/chipsalliance/fpga-interchange-schema.git
