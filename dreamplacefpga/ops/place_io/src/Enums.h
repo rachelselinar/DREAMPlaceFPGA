@@ -79,6 +79,7 @@ struct InstBlkEnum
 {
     enum InstBlkType 
     {
+		LUT0 = 0, 
         LUT1 = 0, 
         LUT2 = 1, 
         LUT3 = 2, 

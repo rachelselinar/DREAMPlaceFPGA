@@ -241,14 +241,19 @@ class BasicPlaceFPGA(nn.Module):
         initLocX = 0
         initLocY = 0
 
-        ##Use the average fixed pin location (weighted by pin count) as the initial location
-        for nodeID in range(placedb.num_movable_nodes,placedb.num_physical_nodes):
-            for pID in placedb.node2pin_map[nodeID]:
-                initLocX += placedb.node_x[nodeID] + placedb.pin_offset_x[pID]
-                initLocY += placedb.node_y[nodeID] + placedb.pin_offset_y[pID]
-            numPins += len(placedb.node2pin_map[nodeID])
-        initLocX /= numPins
-        initLocY /= numPins
+        if placedb.num_terminals > 0:
+            numPins = 0
+            ##Use the average fixed pin location (weighted by pin count) as the initial location
+            for nodeID in range(placedb.num_movable_nodes,placedb.num_physical_nodes):
+                for pID in placedb.node2pin_map[nodeID]:
+                    initLocX += placedb.node_x[nodeID] + placedb.pin_offset_x[pID]
+                    initLocY += placedb.node_y[nodeID] + placedb.pin_offset_y[pID]
+                numPins += len(placedb.node2pin_map[nodeID])
+            initLocX /= numPins
+            initLocY /= numPins
+        else: ##Design does not have IO pins - place in center
+            initLocX = 0.5 * (placedb.xh - placedb.xl)
+            initLocY = 0.5 * (placedb.yh - placedb.yl)
 
         # x position
         self.init_pos[0:placedb.num_physical_nodes] = placedb.node_x
