@@ -41,7 +41,8 @@ class IFWriter():
     def __init__(self, schema_dir):
         """ initialize and compile PhysicalNetlist.capnp """
         import_path = [os.path.dirname(os.path.dirname(capnp.__file__))]
-        import_path.append(os.path.join(schema_dir, '../../schema'))
+        # import_path.append(os.path.join(schema_dir, '../../schema'))
+        import_path.append('IFsupport')
         self.physical_netlist_capnp = capnp.load(os.path.join(schema_dir, 'PhysicalNetlist.capnp'), imports=import_path)
         self.strList = []
         self.str2idx = {}
@@ -1132,7 +1133,8 @@ class LogicalNetlist:
         """
         import_path = [os.path.dirname(os.path.dirname(capnp.__file__))]
         # add import path from the rapidwright java.capnp
-        import_path.append(os.path.join(schema_dir, '../../schema'))
+        # import_path.append(os.path.join(schema_dir, '../../schema'))
+        import_path.append('IFsupport')
         self.logical_netlist_capnp = capnp.load(os.path.join(schema_dir, 'LogicalNetlist.capnp'), imports=import_path)
 
         with open('FPGA02_rapidwright.netlist', 'rb') as in_f:
@@ -1192,7 +1194,8 @@ class DeviceResources:
         """
         import_path = [os.path.dirname(os.path.dirname(capnp.__file__))]
         # add import path from the rapidwright java.capnp
-        import_path.append(os.path.join(schema_dir, '../../schema'))
+        # import_path.append(os.path.join(schema_dir, '../../schema'))
+        import_path.append('IFsupport')
         self.device_resources_capnp = capnp.load(os.path.join(schema_dir, 'DeviceResources.capnp'), imports=import_path)
         
         device_file = os.path.join('IFsupport', part_name)

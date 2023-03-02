@@ -425,7 +425,8 @@ class LogicalNetlist:
         
         """
         import_path = [os.path.dirname(os.path.dirname(capnp.__file__))]
-        import_path.append(os.path.join(schema_dir, '../../schema'))
+        # import_path.append(os.path.join(schema_dir, '../../schema'))
+        import_path.append('IFsupport')
         self.logical_netlist_capnp = capnp.load(os.path.join(schema_dir, 'LogicalNetlist.capnp'), imports=import_path)
 
         with open(netlist_file, 'rb') as in_f:
@@ -512,7 +513,8 @@ class DeviceResources:
         
         """
         import_path = [os.path.dirname(os.path.dirname(capnp.__file__))]
-        import_path.append(os.path.join(schema_dir, '../../schema'))
+        # import_path.append(os.path.join(schema_dir, '../../schema'))
+        import_path.append('IFsupport')
         self.device_resources_capnp = capnp.load(os.path.join(schema_dir, 'DeviceResources.capnp'), imports=import_path)
 
         device_file = os.path.join('IFsupport', part_name)

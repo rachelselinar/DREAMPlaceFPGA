@@ -13,3 +13,6 @@
 [submodule "thirdparty/thirdparty/cub"]
 	path = thirdparty/thirdparty/cub
 	url = https://github.com/NVIDIA/cub.git
+[submodule "thirdparty/RapidWright"]
+	path = thirdparty/RapidWright
+	url = https://github.com/Xilinx/RapidWright.git
