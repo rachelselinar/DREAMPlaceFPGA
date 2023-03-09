@@ -12,8 +12,6 @@ import matplotlib.pyplot as plt
 import pdb 
 import time
 import logging
-#Parallel processing in python
-from numba import jit
 
 import dreamplacefpga.ops.lut_ff_legalization.lut_ff_legalization_cpp as lut_ff_legalization_cpp
 import dreamplacefpga.configure as configure

@@ -55,7 +55,7 @@ The packing-legalization flow in ``DREAMPlaceFPGA``:
 
 ### <a name="performance"></a>Performance
 ``DREAMPlaceFPGA`` outperforms [elfPlace (GPU)](https://ieeexplore.ieee.org/document/9330804) by `19%` for global placementruntime.
-On the [ISPD'2016 benchmark suite](http://www.ispd.cc/contests/16/FAQ.html), ``DREAMPlaceFPGA`` is `5.3Ã—` faster for global placement, `2.2Ã—` faster for packing-legalization and `2.4Ã—` faster for overall placement than 16-thread [elfPlace (CPU)](https://ieeexplore.ieee.org/document/8942075), with a slight increase in (+0.6%) placement HPWL and (+0.9%) routed wirelength. For more details, please refer to the ['publications'](#publications).
+On the [ISPD'2016 benchmark suite](http://www.ispd.cc/contests/16/FAQ.html), ``DREAMPlaceFPGA`` is `5.3×` faster for global placement, `2.2×` faster for packing-legalization and `2.4×` faster for overall placement than 16-thread [elfPlace (CPU)](https://ieeexplore.ieee.org/document/8942075), with a slight increase in (+0.6%) placement HPWL and (+0.9%) routed wirelength. For more details, please refer to the ['publications'](#publications).
 > The runtime results vary based on the hardware used. The above mentioned results are based on a Linux machine with an Intel i9-7900 CPU (running at 3.30 GHz) and an NVIDIA Titan Xp (Pascal) GPU.
 
 ### <a name="target_arch"></a>Target Architecture
@@ -159,28 +159,37 @@ At the root directory:
 ```
 pip install -r requirements.txt 
 ```
-
+> For example, if the repository was cloned in directory ***~/Downloads***, then the root directory is ***~/Downloads/DREAMPlaceFPGA***
+> You can also use a [python virtual environment](https://docs.python.org/3/library/venv.html) to install all the required packages to run ``DREAMPlaceFPGA``
 ### <a name="build_dreamplacefpga"></a>To Build 
 
 At the root directory, 
 ```
 mkdir build 
 cd build 
-cmake .. -DCMAKE_INSTALL_PREFIX=your_install_path
-make 
+cmake .. -DCMAKE_INSTALL_PREFIX=path_to_root_dir
+make
 make install
 ```
 Third party submodules are automatically built except for [Boost](https://www.boost.org).
 
-To clean, go to the root directory. 
+> For example,
+> ***~/Downloads/DREAMPlaceFPGA:*** *mkdir build; cd build*
+> ***~/Downloads/DREAMPlaceFPGA/build:***  *cmake . . -DCMAKE_INSTALL_PREFIX=~/Downloads/DREAMPlaceFPGA*
+> ***~/Downloads/DREAMPlaceFPGA/build:*** *make; make install*
+
+When there are changes to packages or parser code, it is necessary to delete contents of ***build*** directory for a clean build and proper operation.
 ```
 rm -r build
 ```
+> For example,
+> ***~/Downloads/DREAMPlaceFPGA:*** *rm -r build*
+
 ### <a name="cmake"></a>Cmake Options 
 
 Here are the available options for CMake. 
-- CMAKE_INSTALL_PREFIX: installation directory
-    - Example ```cmake -DCMAKE_INSTALL_PREFIX=path/to/your/directory```
+- CMAKE_INSTALL_PREFIX: installation or root directory
+    - Example ```cmake -DCMAKE_INSTALL_PREFIX=path/to/root/directory```
 - CMAKE_CUDA_FLAGS: custom string for NVCC (default -gencode=arch=compute_60,code=sm_60)
     - Example ```cmake -DCMAKE_CUDA_FLAGS=-gencode=arch=compute_60,code=sm_60```
 - CMAKE_CXX_ABI: 0|1 for the value of _GLIBCXX_USE_CXX11_ABI for C++ compiler, default is 0. 
@@ -200,20 +209,23 @@ The sample designs can be found in the [benchmarks](./benchmarks)  directory.
 ## <a name="running"></a>Running DREAMPlaceFPGA
 
 Before running, ensure that all python dependent packages have been installed. 
-Go to the **install directory** and run with JSON configuration file.  
+Go to the ***root directory*** and run with JSON configuration file.  
 ```
 python dreamplacefpga/Placer.py <benchmark>.json
 ```
+> Run from ***~/Downloads/DREAMPlaceFPGA*** directory
 
 For example:
 ```
 python dreamplacefpga/Placer.py test/FPGA-example1.json
 ```
+> ***~/Downloads/DREAMPlaceFPGA:*** *python dreamplacefpga/Placer.py test/FPGA-example1.json*
 
 Unit tests for some of the pytorch operators are provided. For instance, to run unit test for hpwl, use the below command:
 ```
 python unitest/ops/hpwl_unitest.py
 ```
+> Note: If your machine does not have an NVIDIA GPU, set the '***gpu***' flag in  to '***0***' to run on CPU.
 
 ### <a name="json"></a>JSON Configurations
 
@@ -245,3 +257,4 @@ Please report bugs to [rachelselina dot r at utexas dot edu](mailto:rachelselina
 ## <a name="copyright"></a>Copyright
 
 This software is released under *BSD 3-Clause "New" or "Revised" License*. Please refer to [LICENSE](./LICENSE) for details.
+
