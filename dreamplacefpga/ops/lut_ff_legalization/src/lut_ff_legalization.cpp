@@ -3189,7 +3189,8 @@ int ripUp_Greedy_LG(
                         }
                     }
                 }
-                if (ripupSiteLegalizeInst == INVALID)
+                //Ensure instance is legalized to a site for ripup LG to be successful
+                if (ripupSiteLegalizeInst == INVALID && inst_curr_detSite[instId] != INVALID)
                 {
                     ripupLegalizeInst = 1;
                 }
