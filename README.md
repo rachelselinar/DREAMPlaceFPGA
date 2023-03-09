@@ -55,7 +55,7 @@ The packing-legalization flow in ``DREAMPlaceFPGA``:
 
 ### <a name="performance"></a>Performance
 ``DREAMPlaceFPGA`` outperforms [elfPlace (GPU)](https://ieeexplore.ieee.org/document/9330804) by `19%` for global placementruntime.
-On the [ISPD'2016 benchmark suite](http://www.ispd.cc/contests/16/FAQ.html), ``DREAMPlaceFPGA`` is `5.3×` faster for global placement, `2.2×` faster for packing-legalization and `2.4×` faster for overall placement than 16-thread [elfPlace (CPU)](https://ieeexplore.ieee.org/document/8942075), with a slight increase in (+0.6%) placement HPWL and (+0.9%) routed wirelength. For more details, please refer to the ['publications'](#publications).
+On the [ISPD'2016 benchmark suite](http://www.ispd.cc/contests/16/FAQ.html), ``DREAMPlaceFPGA`` is `5.3Ã—` faster for global placement, `2.2Ã—` faster for packing-legalization and `2.4Ã—` faster for overall placement than 16-thread [elfPlace (CPU)](https://ieeexplore.ieee.org/document/8942075), with a slight increase in (+0.6%) placement HPWL and (+0.9%) routed wirelength. For more details, please refer to the ['publications'](#publications).
 > The runtime results vary based on the hardware used. The above mentioned results are based on a Linux machine with an Intel i9-7900 CPU (running at 3.30 GHz) and an NVIDIA Titan Xp (Pascal) GPU.
 
 ### <a name="target_arch"></a>Target Architecture
@@ -160,7 +160,9 @@ At the root directory:
 pip install -r requirements.txt 
 ```
 > For example, if the repository was cloned in directory ***~/Downloads***, then the root directory is ***~/Downloads/DREAMPlaceFPGA***
+
 > You can also use a [python virtual environment](https://docs.python.org/3/library/venv.html) to install all the required packages to run ``DREAMPlaceFPGA``
+
 ### <a name="build_dreamplacefpga"></a>To Build 
 
 At the root directory, 
@@ -174,8 +176,11 @@ make install
 Third party submodules are automatically built except for [Boost](https://www.boost.org).
 
 > For example,
+
 > ***~/Downloads/DREAMPlaceFPGA:*** *mkdir build; cd build*
+
 > ***~/Downloads/DREAMPlaceFPGA/build:***  *cmake . . -DCMAKE_INSTALL_PREFIX=~/Downloads/DREAMPlaceFPGA*
+
 > ***~/Downloads/DREAMPlaceFPGA/build:*** *make; make install*
 
 When there are changes to packages or parser code, it is necessary to delete contents of ***build*** directory for a clean build and proper operation.
@@ -183,6 +188,7 @@ When there are changes to packages or parser code, it is necessary to delete con
 rm -r build
 ```
 > For example,
+
 > ***~/Downloads/DREAMPlaceFPGA:*** *rm -r build*
 
 ### <a name="cmake"></a>Cmake Options 
@@ -257,4 +263,3 @@ Please report bugs to [rachelselina dot r at utexas dot edu](mailto:rachelselina
 ## <a name="copyright"></a>Copyright
 
 This software is released under *BSD 3-Clause "New" or "Revised" License*. Please refer to [LICENSE](./LICENSE) for details.
-
