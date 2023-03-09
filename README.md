@@ -231,7 +231,7 @@ Unit tests for some of the pytorch operators are provided. For instance, to run 
 ```
 python unitest/ops/hpwl_unitest.py
 ```
-> Note: If your machine does not have an NVIDIA GPU, set the '***gpu***' flag in  to '***0***' to run on CPU.
+> Note: If your machine does not have an NVIDIA GPU, set the '***gpu***' flag in JSON configuration file to '***0***' to run on CPU.
 
 ### <a name="json"></a>JSON Configurations
 
