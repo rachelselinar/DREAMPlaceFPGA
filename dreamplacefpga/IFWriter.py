@@ -607,6 +607,9 @@ class SiteInst():
                     child2 = routing_graph[child]
                     site_routing[child2] = []
                     net_roots[child2] = constant_nets[0]
+                    if self.name == 'SLICE_X67Y156':
+                        print('** FIXME **', self.name + ':', 'rst_in='+str(rst_in), 'connects to', constant_nets[1], 'child='+str(child), 'child2='+str(child2), 'connect to', constant_nets[0])
+
             
             net_roots[gnd_tup] = constant_nets[0]
             site_routing[gnd_tup] = []
