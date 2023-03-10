@@ -2037,6 +2037,9 @@ class db_to_physicalnetlist():
                             bel_name = self.Map_bel(z, node_type)
                         else:
                             bel_name = cell_type
+
+                        if cell_name.startswith('LUT6_2_0/'):
+                            print('** FIXME **', cell_name, 'of node_type=' +  node_type, 'inst=' + inst, 'mapped onto', site_name + '/' + bel_name)
                             
                         self.node_site_map[node_name] = site_name
 
