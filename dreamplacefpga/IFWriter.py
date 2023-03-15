@@ -470,7 +470,7 @@ class SiteInst():
                     self.lut_map[cell.bel_name[0]].append(cell)
 
         for key, cells in self.lut_map.items():
-            if len(self.lut_map[key]) == 2:
+            if len(self.lut_map[key]) == 2 and '/' not in self.lut_map[key][0].cell_name:
                 vcc_tup.append(A6_sitein[key])
 
         return vcc_tup
@@ -598,15 +598,15 @@ class SiteInst():
                         break
 
         if self.name[:5] == 'SLICE':
-            for rst_in in rst_tup:
-                if rst_in not in site_routing and rst_in in site_in:
-                    net_roots[rst_in] = constant_nets[1]
-                    child = routing_graph[rst_in][0]
-                    site_routing[rst_in] = []
-                    site_routing[rst_in].append(child)
-                    child2 = routing_graph[child]
-                    site_routing[child2] = []
-                    net_roots[child2] = constant_nets[0]
+            # for rst_in in rst_tup:
+            #     if rst_in not in site_routing and rst_in in site_in:
+            #         net_roots[rst_in] = constant_nets[1]
+            #         child = routing_graph[rst_in][0]
+            #         site_routing[rst_in] = []
+            #         site_routing[rst_in].append(child)
+            #         child2 = routing_graph[child]
+            #         site_routing[child2] = []
+            #         net_roots[child2] = constant_nets[0]
             
             net_roots[gnd_tup] = constant_nets[0]
             site_routing[gnd_tup] = []
@@ -1910,7 +1910,9 @@ class db_to_physicalnetlist():
                             if pin[0] == pin_name:
                                 bel_pin = pin[2]
                                 belpin_tup = 'bel_pin', bel_name, bel_pin
-                                break                           
+                                break 
+                            elif bel_name.endswith('LUT') and pin_name.startswith('O'):
+                                belpin_tup = 'bel_pin', bel_name, pin_name
 
                         if bel_name == 'INBUF':
                             ctrl_tup = 'bel_pin', 'IBUFCTRL', 'I'
@@ -1923,35 +1925,32 @@ class db_to_physicalnetlist():
                             io_nets[net_name] = o_net
                             site_obj.add_belpins(o_net, belpin_tup)
 
+
                         elif belpin_tup != None:                                               
                             site_obj.add_belpins(net_name, belpin_tup)
 
 
         # site router
         for site_name, site_obj in self.site_instances.items():    
+            site_type = phys_netlist.siteInsts[site_name]  
+            site_nets, site_net_source = site_obj.site_router(self.routing_graphs[site_type], self.site_in[site_type], self.site_out[site_type])
+
+            for net_name, root_list in site_nets.items():      
+                if net_name in io_nets:
+                    net_name = io_nets[net_name]
+                if net_name not in nets:
+                    nets[net_name] = root_list
+                else:
+                    for root in root_list:
+                        nets[net_name].append(root)
+
+            for net_name, source in site_net_source.items():
+                if net_name not in net_source:
+                    net_source[net_name] = source
+
         
-                site_type = phys_netlist.siteInsts[site_name]
-                
-                site_nets, site_net_source = site_obj.site_router(self.routing_graphs[site_type], self.site_in[site_type], self.site_out[site_type])
-
-                for net_name, root_list in site_nets.items():
-                    
-                    if net_name in io_nets:
-                        net_name = io_nets[net_name]
-
-                    if net_name not in nets:
-                        nets[net_name] = root_list
-                    else:
-                        for root in root_list:
-                            nets[net_name].append(root)
-
-                for net_name, source in site_net_source.items():
-                    if net_name not in net_source:
-                        net_source[net_name] = source
-
         vcc_stubs = []
         gnd_stubs = []
-
         # Build physical nets for normal nets
         # Extend the stub lists for vcc and gnd nets
         for net_name, root_list in nets.items():
@@ -2011,7 +2010,6 @@ class db_to_physicalnetlist():
             pinmap[cell] = mapping.common_pins
             parameter_pinmap[cell] = mapping.parameter_pins
 
-
         with open(out_file, 'r') as fin:
             for line in fin:
                 node_name, x, y, z = line.split()
@@ -2028,19 +2026,20 @@ class db_to_physicalnetlist():
                 self.node_placement[node_name] = [] 
 
                 if node_type in macro_inst:
+                    LUT6_2_flag = False
                     for inst in macro_inst[node_type]:
                         cell_type = macro_inst[node_type][inst]
                         cell_name = node_name + "/" + inst
                         site_name = self.sitemap[x, y, z]
-                        
-                        if site_type_map[site_name][:5] == 'SLICE':
+                            
+                        if site_type_map[site_name][:5] == 'SLICE' and LUT6_2_flag == False:
+                            bel_name = self.Map_bel(z-1, node_type)
+                            LUT6_2_flag = True
+                        elif LUT6_2_flag == True:
                             bel_name = self.Map_bel(z, node_type)
                         else:
                             bel_name = cell_type
 
-                        if cell_name.startswith('LUT6_2_0/'):
-                            print('** FIXME **', cell_name, 'of node_type=' +  node_type, 'inst=' + inst, 'mapped onto', site_name + '/' + bel_name)
-                            
                         self.node_site_map[node_name] = site_name
 
                         # build siteinst obj
@@ -2062,7 +2061,6 @@ class db_to_physicalnetlist():
                         # add cell instance
                         cellplacement = Cellplacement(cell_name, cell_type, site_name, bel_name)
                         self.node_placement[node_name].append(cellplacement)
-
 
                         # add pins for cell instance
                         for key, value in pinmap[cell_type][site_type, bel_name].items():
@@ -2161,8 +2159,6 @@ class db_to_physicalnetlist():
         self.prevent_pin_overlap(placedb, phys_netlist)
 
         self.stitch_routing(placedb, phys_netlist)
-         
-        #  self.intra_site_route(placedb, self.device_resource, phys_netlist)
 
         return phys_netlist
 
