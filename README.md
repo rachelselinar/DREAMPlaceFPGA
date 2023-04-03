@@ -77,12 +77,10 @@ Support for the following architectures are available
 
 ## <a name="publications"></a>Publications 
 
-* Rachel Selina Rajarathnam, Mohamed Baker Alawieh, Zixuan Jiang, Mahesh A. Iyer, and [David Z. Pan](http://users.ece.utexas.edu/~dpan), 
-  "**[``DREAMPlaceFPGA``: An Open-Source Analytical Placer for Large Scale Heterogeneous FPGAs using Deep-Learning Toolkit](https://ieeexplore.ieee.org/document/9712562)**", 
-  *27th IEEE/ACM Asian and South Pacific Design Automation Conference (ASP-DAC)*, pp. 300-306, 2022.
+* Rachel Selina Rajarathnam, Mohamed Baker Alawieh, Zixuan Jiang, Mahesh A. Iyer, and [David Z. Pan](http://users.ece.utexas.edu/~dpan),  "**[``DREAMPlaceFPGA``: An Open-Source Analytical Placer for Large Scale Heterogeneous FPGAs using Deep-Learning Toolkit](https://ieeexplore.ieee.org/document/9712562)**", 
+  *27th IEEE/ACM Asian and South Pacific Design Automation Conference (ASP-DAC)*, 2022.
 * Rachel Selina Rajarathnam, Zixuan Jiang, Mahesh A. Iyer, and [David Z. Pan](http://users.ece.utexas.edu/~dpan), 
-  "**``DREAMPlaceFPGA-PL``: An Open-Source GPU-Accelerated Packer-Leglaizer for Heterogeneous FPGAs**", 
-  *International Symposium on Physical Design (ISPD)*, 2023. (accepted)
+  "**[``DREAMPlaceFPGA-PL``: An Open-Source GPU-Accelerated Packer-Leglaizer for Heterogeneous FPGAs](https://dl.acm.org/doi/abs/10.1145/3569052.3571881)**",  *ACM International Symposium on Physical Design (ISPD)*, 2023.
 
 ## <a name="dependencies"></a>External Dependencies
 
@@ -183,6 +181,8 @@ Third party submodules are automatically built except for [Boost](https://www.bo
 
 > ***~/Downloads/DREAMPlaceFPGA/build:*** *make; make install*
 
+> The directory ***~/Downloads/DREAMPlaceFPGA/build*** is the install dir
+
 When there are changes to packages or parser code, it is necessary to delete contents of ***build*** directory for a clean build and proper operation.
 ```
 rm -r build
@@ -206,11 +206,11 @@ Here are the available options for CMake.
 
 ## <a name="sample"></a>Sample Benchmarks
 
-``DREAMPlaceFPGA`` requires IO instances to be fixed.
+``DREAMPlaceFPGA`` requires IO instances to be fixed and only accepts inputs in [Bookshelf](./benchmarks/sample_ispd2016_benchmarks/README) format.
 - 4 sample benchmarks for *Xilinx Ultrascale Architecture* in bookshelf format with fixed IOs are provided. Refer to [ISPD'2016 contest](http://www.ispd.cc/contests/16/FAQ.html) for more information.
 - 10 GNL designs based on *Xilinx Ultrascale+ Architecture* are provided. These benchmarks need to be converted from Interchange Format (IF) to bookshelf format before running ``DREAMPlaceFPGA``. Refer to [IF_README](./IFsupport/README.md) for more details.
 
-The sample designs can be found in the [benchmarks](./benchmarks)  directory.
+The sample benchmarks and designs can be found in the [benchmarks](./benchmarks)  directory.
 
 ## <a name="running"></a>Running DREAMPlaceFPGA
 
@@ -244,8 +244,8 @@ The most frequently used options in the JSON file are listed below. For the comp
 | num_threads                      | 8                       | number of CPU threads                                                                                                                                             |
 | num_bins_x                       | 512                     | number of bins in horizontal direction                                                                                                                            |
 | num_bins_y                       | 512                     | number of bins in vertical direction                                                                                                                              |
-| global_place_stages              | required                | global placement configuration of each stage, a dictionary of {"num_bins_x", "num_bins_y", "iteration", "learning_rate"}, learning_rate is relative to bin size   |
-| density_weight                   | 1.0                     | initial weight of density cost                                                                                                                                    |
+| global_place_stages              | required                | global placement configuration of each stage, a dictionary of {"num_bins_x", "num_bins_y", "iteration", "learning_rate"}, learning_rate is relative to bin size. *Note: The maximum number of iterations can be set using "iteration" and default value is 2000.*  |
+| routability_opt_flag                   | 0                     | Set to enable routability optimization. *Note: If this flag is not set for large designs, it makes legalization very difficult.*                                                                                                                                    |
 | gamma                            | 5.0                     | initial coefficient for log-sum-exp and weighted-average wirelength                                                                                               |
 | random_seed                      | 1000                    | random seed                                                                                                                                                       |
 | scale_factor                     | 0.0                     | scale factor to avoid numerical overflow; 0.0 means not set                                                                                                       |
