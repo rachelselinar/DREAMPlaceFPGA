@@ -80,7 +80,7 @@ Support for the following architectures are available
 * Rachel Selina Rajarathnam, Mohamed Baker Alawieh, Zixuan Jiang, Mahesh A. Iyer, and [David Z. Pan](http://users.ece.utexas.edu/~dpan),  "**[``DREAMPlaceFPGA``: An Open-Source Analytical Placer for Large Scale Heterogeneous FPGAs using Deep-Learning Toolkit](https://ieeexplore.ieee.org/document/9712562)**", 
   *27th IEEE/ACM Asian and South Pacific Design Automation Conference (ASP-DAC)*, 2022.
 * Rachel Selina Rajarathnam, Zixuan Jiang, Mahesh A. Iyer, and [David Z. Pan](http://users.ece.utexas.edu/~dpan), 
-  "**[``DREAMPlaceFPGA-PL``: An Open-Source GPU-Accelerated Packer-Leglaizer for Heterogeneous FPGAs](https://dl.acm.org/doi/abs/10.1145/3569052.3571881)**",  *ACM International Symposium on Physical Design (ISPD)*, 2023.
+  "**[``DREAMPlaceFPGA-PL``: An Open-Source GPU-Accelerated Packer-Legalizer for Heterogeneous FPGAs](https://dl.acm.org/doi/abs/10.1145/3569052.3571881)**",  *ACM International Symposium on Physical Design (ISPD)*, 2023.
 
 ## <a name="dependencies"></a>External Dependencies
 
