@@ -18,18 +18,24 @@ DREAMPLACE_BEGIN_NAMESPACE
 #define CHECK_CONTIGUOUS(x) AT_ASSERTM(x.is_contiguous(), #x "must be contiguous")
 
 // fill the demand map pin by pin
-template <typename T>
-int pinDemandMapLauncher(const T *node_x, const T *node_y,
-                          const T *node_size_x, const T *node_size_y,
-                          const T *half_node_size_stretch_x, const T *half_node_size_stretch_y,
-                          const T *pin_weights,
-                          T xl, T yl, T xh, T yh,
-                          T bin_size_x, T bin_size_y,
-                          int num_bins_x, int num_bins_y,
-                          int num_nodes,
-                          int num_threads,
-                          T *pin_utilization_map
-                          )
+template <typename T, typename AtomicOp>
+int pinDemandMapLauncher(
+        const T *node_x, const T *node_y,
+        const T *node_size_x, const T *node_size_y,
+        const T *half_node_size_stretch_x,
+        const T *half_node_size_stretch_y,
+        const T *pin_weights,
+        const T xl, const T yl,
+        const T xh, const T yh,
+        const T bin_size_x,
+        const T bin_size_y,
+        const int num_bins_x,
+        const int num_bins_y,
+        const int num_nodes,
+        const int num_threads,
+        AtomicOp atomic_add_op,
+        typename AtomicOp::type *pin_utilization_map
+        )
 {
     const T inv_bin_size_x = 1.0 / bin_size_x;
     const T inv_bin_size_y = 1.0 / bin_size_y;
@@ -67,8 +73,7 @@ int pinDemandMapLauncher(const T *node_x, const T *node_y,
                 T overlap = DREAMPLACE_STD_NAMESPACE::max(DREAMPLACE_STD_NAMESPACE::min(x_max, bin_xh) - DREAMPLACE_STD_NAMESPACE::max(x_min, bin_xl), (T)0) *
                             DREAMPLACE_STD_NAMESPACE::max(DREAMPLACE_STD_NAMESPACE::min(y_max, bin_yh) - DREAMPLACE_STD_NAMESPACE::max(y_min, bin_yl), (T)0);
                 int index = x * num_bins_y + y;
-                #pragma omp atomic update 
-                pin_utilization_map[index] += overlap * density;
+                atomic_add_op(&pin_utilization_map[index], overlap * density);
             }
         }
     }
@@ -76,23 +81,13 @@ int pinDemandMapLauncher(const T *node_x, const T *node_y,
 }
 
 at::Tensor pin_utilization_map_forward(
-    at::Tensor pos,
-    at::Tensor node_size_x,
-    at::Tensor node_size_y,
-    at::Tensor half_node_size_stretch_x,
-    at::Tensor half_node_size_stretch_y,
-    at::Tensor pin_weights,
-    double xl,
-    double yl,
-    double xh,
-    double yh,
-    double bin_size_x,
-    double bin_size_y,
-    int num_physical_nodes,
-    int num_bins_x,
-    int num_bins_y,
-    int num_threads
-)
+        at::Tensor pos, at::Tensor node_size_x, at::Tensor node_size_y,
+        at::Tensor half_node_size_stretch_x, at::Tensor half_node_size_stretch_y,
+        at::Tensor pin_weights, double xl, double yl, double xh, double yh,
+        double bin_size_x, double bin_size_y, int num_physical_nodes,
+        int num_bins_x, int num_bins_y,
+        int num_threads, int deterministic_flag
+        )
 {
     CHECK_FLAT(pos);
     CHECK_EVEN(pos);
@@ -122,18 +117,46 @@ at::Tensor pin_utilization_map_forward(
     auto num_nodes = pos.numel()/2;
 
     DREAMPLACE_DISPATCH_FLOATING_TYPES(pos, "pinDemandMapLauncher", [&] {
-        pinDemandMapLauncher<scalar_t>(
-                DREAMPLACE_TENSOR_DATA_PTR(pos, scalar_t), DREAMPLACE_TENSOR_DATA_PTR(pos, scalar_t) + num_nodes, 
-                DREAMPLACE_TENSOR_DATA_PTR(node_size_x, scalar_t), DREAMPLACE_TENSOR_DATA_PTR(node_size_y, scalar_t), 
-                DREAMPLACE_TENSOR_DATA_PTR(half_node_size_stretch_x, scalar_t), DREAMPLACE_TENSOR_DATA_PTR(half_node_size_stretch_y, scalar_t),
-                DREAMPLACE_TENSOR_DATA_PTR(pin_weights, scalar_t),
-                xl, yl, xh, yh,
-                bin_size_x, bin_size_y,
-                num_bins_x, num_bins_y,
-                num_physical_nodes,
-                num_threads,
-                DREAMPLACE_TENSOR_DATA_PTR(pin_utilization_map, scalar_t)
-                );
+            if (deterministic_flag == 1) {
+            double diearea = (xh - xl) * (yh - yl);
+            int integer_bits = DREAMPLACE_STD_NAMESPACE::max((int)ceil(log2(diearea)) + 1, 32);
+            int fraction_bits = DREAMPLACE_STD_NAMESPACE::max(64 - integer_bits, 0);
+            long scale_factor = (1L << fraction_bits);
+            int num_bins = num_bins_x * num_bins_y;
+
+            std::vector<long> buf_map(num_bins, 0);
+            AtomicAdd<long> atomic_add_op(scale_factor);
+
+            pinDemandMapLauncher<scalar_t, decltype(atomic_add_op)>(
+                    DREAMPLACE_TENSOR_DATA_PTR(pos, scalar_t),
+                    DREAMPLACE_TENSOR_DATA_PTR(pos, scalar_t) + num_nodes,
+                    DREAMPLACE_TENSOR_DATA_PTR(node_size_x, scalar_t),
+                    DREAMPLACE_TENSOR_DATA_PTR(node_size_y, scalar_t),
+                    DREAMPLACE_TENSOR_DATA_PTR(half_node_size_stretch_x, scalar_t),
+                    DREAMPLACE_TENSOR_DATA_PTR(half_node_size_stretch_y, scalar_t),
+                    DREAMPLACE_TENSOR_DATA_PTR(pin_weights, scalar_t),
+                    xl, yl, xh, yh, bin_size_x, bin_size_y,
+                    num_bins_x, num_bins_y, num_physical_nodes,
+                    num_threads, atomic_add_op, buf_map.data());
+
+            scaleAdd(DREAMPLACE_TENSOR_DATA_PTR(pin_utilization_map, scalar_t),
+                    buf_map.data(), 1.0 / scale_factor, num_bins,
+                    num_threads);
+            } else {
+                AtomicAdd<scalar_t> atomic_add_op;
+                pinDemandMapLauncher<scalar_t, decltype(atomic_add_op)>(
+                        DREAMPLACE_TENSOR_DATA_PTR(pos, scalar_t),
+                        DREAMPLACE_TENSOR_DATA_PTR(pos, scalar_t) + num_nodes,
+                        DREAMPLACE_TENSOR_DATA_PTR(node_size_x, scalar_t),
+                        DREAMPLACE_TENSOR_DATA_PTR(node_size_y, scalar_t),
+                        DREAMPLACE_TENSOR_DATA_PTR(half_node_size_stretch_x, scalar_t),
+                        DREAMPLACE_TENSOR_DATA_PTR(half_node_size_stretch_y, scalar_t),
+                        DREAMPLACE_TENSOR_DATA_PTR(pin_weights, scalar_t),
+                        xl, yl, xh, yh, bin_size_x, bin_size_y,
+                        num_bins_x, num_bins_y, num_physical_nodes,
+                        num_threads, atomic_add_op, 
+                        DREAMPLACE_TENSOR_DATA_PTR(pin_utilization_map, scalar_t));
+            }
     });
 
     return pin_utilization_map; 

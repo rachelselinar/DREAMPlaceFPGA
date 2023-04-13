@@ -74,16 +74,17 @@ class DemandMap(nn.Module):
         else:
             demandMap_cpp.forward(
                                    self.site_type_map.flatten(), 
+                                   self.node_size_x, 
+                                   self.node_size_y, 
                                    self.num_bins_x,
                                    self.num_bins_y,
                                    self.width, 
                                    self.height, 
-                                   self.node_size_x, 
-                                   self.node_size_y, 
                                    binCapMap0,
                                    binCapMap2,
                                    binCapMap3,
-                                   self.num_threads)
+                                   self.num_threads,
+                                   self.deterministic_flag)
 
         binCapMap1 = binCapMap0
         # Generate fixed demand maps from the bin capacity maps

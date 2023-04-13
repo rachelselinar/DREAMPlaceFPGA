@@ -89,6 +89,7 @@ class Rudy(nn.Module):
                     self.num_bins_x,
                     self.num_bins_y,
                     self.num_threads, 
+                    self.deterministic_flag,
                     horizontal_utilization_map, 
                     vertical_utilization_map
                     )

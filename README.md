@@ -254,7 +254,7 @@ The most frequently used options in the JSON file are listed below. For the comp
 | legalize_flag                    | 1                       | whether to run legalization on *DREAMPlaceFPGA* else legalization and detailed placement are run using elfPlace                                                   |
 | dtype                            | float32                 | data type, float32 (or) float64                                                                                                                                   |
 | plot_flag                        | 0                       | whether to plot solution or not (Increases runtime)                                                                                                               |
-| deterministic_flag               | 0                       | Ensures reproducible run-to-run results on GPU (May increase runtime)                                                                                             |
+| deterministic_flag               | 1                       | Ensures reproducible run-to-run results (Slightly increases runtime)                                                                                             |
 
 ## <a name="bug"></a>Bug Report
 

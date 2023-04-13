@@ -233,8 +233,8 @@
     "default" : 3.0
     }, 
 "deterministic_flag" : {
-    "descripton" : "Ensures reproducible run-to-run results (May increase runtime)", 
-    "default" : 0
+    "descripton" : "Ensures reproducible run-to-run results (Slightly increases runtime)", 
+    "default" : 1
     },
 "enable_if" : {
     "descripton" : "Enable IF Writer", 

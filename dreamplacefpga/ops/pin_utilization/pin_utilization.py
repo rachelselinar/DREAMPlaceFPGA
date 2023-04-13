@@ -96,7 +96,8 @@ class PinUtilization(nn.Module):
                     self.num_physical_nodes,
                     self.num_bins_x,
                     self.num_bins_y,
-                    self.num_threads
+                    self.num_threads,
+                    self.deterministic_flag
                     )
 
         # convert demand to utilization in each bin
