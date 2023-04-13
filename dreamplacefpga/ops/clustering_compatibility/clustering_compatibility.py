@@ -11,10 +11,9 @@ import matplotlib.pyplot as plt
 import pdb 
 
 import dreamplacefpga.ops.clustering_compatibility.clustering_compatibility_cpp as clustering_compatibility_cpp
-try:
+import dreamplacefpga.configure as configure
+if configure.compile_configurations["CUDA_FOUND"] == "TRUE":
     import dreamplacefpga.ops.clustering_compatibility.clustering_compatibility_cuda as clustering_compatibility_cuda
-except:
-    pass
 
 class LUTCompatibility(nn.Module):
     def __init__(self,

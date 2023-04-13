@@ -11,10 +11,9 @@ from torch import nn
 from torch.autograd import Function
 
 import dreamplacefpga.ops.density_map.density_map_cpp as density_map_cpp
-try: 
+import dreamplacefpga.configure as configure
+if configure.compile_configurations["CUDA_FOUND"] == "TRUE":
     import dreamplacefpga.ops.density_map.density_map_cuda as density_map_cuda
-except:
-    pass 
 
 import numpy as np 
 import matplotlib

@@ -12,10 +12,9 @@ import matplotlib.pyplot as plt
 import pdb 
 
 import dreamplacefpga.ops.rudy.rudy_cpp as rudy_cpp
-try:
+import dreamplacefpga.configure as configure
+if configure.compile_configurations["CUDA_FOUND"] == "TRUE":
     import dreamplacefpga.ops.rudy.rudy_cuda as rudy_cuda
-except:
-    pass
 
 class Rudy(nn.Module):
     def __init__(self,
