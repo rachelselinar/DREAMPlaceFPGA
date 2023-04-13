@@ -25,7 +25,6 @@ else:
 import dreamplacefpga.ops.weighted_average_wirelength.weighted_average_wirelength as weighted_average_wirelength
 #import dreamplacefpga.ops.logsumexp_wirelength.logsumexp_wirelength as logsumexp_wirelength
 import dreamplacefpga.ops.electric_potential.electric_potential as electric_potential
-import dreamplacefpga.ops.density_potential.density_potential as density_potential
 import dreamplacefpga.ops.rudy.rudy as rudy
 import dreamplacefpga.ops.pin_utilization.pin_utilization as pin_utilization
 #FPGA clustering compatibility resource area computation
@@ -674,6 +673,7 @@ class PlaceObjFPGA(nn.Module):
             num_bins_y=placedb.num_routing_grids_y,
             unit_horizontal_capacity=placedb.unit_horizontal_capacity,
             unit_vertical_capacity=placedb.unit_vertical_capacity,
+            deterministic_flag=params.deterministic_flag,
             initial_horizontal_utilization_map=data_collections.
             initial_horizontal_utilization_map,
             initial_vertical_utilization_map=data_collections.
@@ -708,6 +708,7 @@ class PlaceObjFPGA(nn.Module):
             num_bins_y=placedb.num_routing_grids_y,
             unit_pin_capacity=data_collections.unit_pin_capacity,
             pin_stretch_ratio=params.pin_stretch_ratio,
+            deterministic_flag=params.deterministic_flag,
             num_threads=params.num_threads)
 
     #Update for LUT
@@ -728,9 +729,14 @@ class PlaceObjFPGA(nn.Module):
             num_bins_x=bins_x,
             num_bins_y=bins_y,
             num_bins_l=placedb.lut_type.max()+1,
+            xl=placedb.xl,
+            yl=placedb.yl,
+            xh=placedb.xh,
+            yh=placedb.yh,
             inst_stddev_x=placedb.instDemStddevX,
             inst_stddev_y=placedb.instDemStddevY,
             inst_stddev_trunc=placedb.instDemStddevTrunc,
+            deterministic_flag=params.deterministic_flag,
             num_threads=params.num_threads)
 
     #Update for FF
@@ -752,9 +758,14 @@ class PlaceObjFPGA(nn.Module):
             num_bins_y=bins_y,
             num_bins_ck=placedb.ctrlSets[:,1].max()+1,
             num_bins_ce=placedb.ctrlSets[:,2].max()+1,
+            xl=placedb.xl,
+            yl=placedb.yl,
+            xh=placedb.xh,
+            yh=placedb.yh,
             inst_stddev_x=placedb.instDemStddevX,
             inst_stddev_y=placedb.instDemStddevY,
             inst_stddev_trunc=placedb.instDemStddevTrunc,
+            deterministic_flag=params.deterministic_flag,
             num_threads=params.num_threads)
 
     def build_adjust_node_area(self, params, placedb, data_collections):

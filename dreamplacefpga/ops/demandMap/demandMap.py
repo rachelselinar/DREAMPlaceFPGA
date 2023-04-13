@@ -21,7 +21,7 @@ class DemandMap(nn.Module):
     @brief Build binCapMap and fixedDemandMap
     """
     def __init__(self, site_type_map, num_bins_x, num_bins_y, width, height, node_size_x, node_size_y,
-                 xh, xl, yh, yl, device, num_threads):
+                 xh, xl, yh, yl, deterministic_flag, device, num_threads):
         """
         @brief initialization 
         @param site_type_map
@@ -48,6 +48,7 @@ class DemandMap(nn.Module):
         self.xl=xl
         self.yh=yh
         self.yl=yl
+        self.deterministic_flag = deterministic_flag
         self.device=device
         self.num_threads = num_threads
 
@@ -60,12 +61,13 @@ class DemandMap(nn.Module):
         if binCapMap0.is_cuda:
             demandMap_cuda.forward(
                                    self.site_type_map.flatten(), 
+                                   self.node_size_x, 
+                                   self.node_size_y, 
                                    self.num_bins_x,
                                    self.num_bins_y,
                                    self.width, 
                                    self.height, 
-                                   self.node_size_x, 
-                                   self.node_size_y, 
+                                   self.deterministic_flag,
                                    binCapMap0,
                                    binCapMap2,
                                    binCapMap3)

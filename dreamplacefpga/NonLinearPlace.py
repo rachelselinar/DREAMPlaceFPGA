@@ -727,7 +727,6 @@ class NonLinearPlaceFPGA (BasicPlaceFPGA):
                     model = PlaceObjFPGA(density_weight, params, placedb, self.data_collections, self.op_collections, global_place_params).to(self.data_collections.pos[0].device)
                     print("Model constructed in %g ms"%((time.time()-tt)*1000))
 
-                #place_file='/home/local/eda08/rsraj20/project/Ongoing/FPGA/elfPlace_Mohd/bin/gp.pl'
                 place_file=params.global_place_sol
                 #logging.info("Reading %s" % (place_file))
                 with open (place_file,  "r") as f:

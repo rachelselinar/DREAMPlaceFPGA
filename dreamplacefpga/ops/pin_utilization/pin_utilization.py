@@ -5,10 +5,9 @@ from torch.autograd import Function
 import pdb
 
 import dreamplacefpga.ops.pin_utilization.pin_utilization_cpp as pin_utilization_cpp
-try:
+import dreamplacefpga.configure as configure
+if configure.compile_configurations["CUDA_FOUND"] == "TRUE":
     import dreamplacefpga.ops.pin_utilization.pin_utilization_cuda as pin_utilization_cuda
-except:
-    pass
 
 class PinUtilization(nn.Module):
     def __init__(self,
@@ -20,6 +19,7 @@ class PinUtilization(nn.Module):
             num_bins_x, num_bins_y,
             unit_pin_capacity,
             pin_stretch_ratio,
+            deterministic_flag,
             num_threads
             ):
         super(PinUtilization, self).__init__()
@@ -37,6 +37,7 @@ class PinUtilization(nn.Module):
         self.num_bins_y = num_bins_y
         self.bin_size_x = (xh - xl) / num_bins_x
         self.bin_size_y = (yh - yl) / num_bins_y
+        self.deterministic_flag = deterministic_flag
         self.num_threads = num_threads
 
         self.unit_pin_capacity = unit_pin_capacity
@@ -46,7 +47,8 @@ class PinUtilization(nn.Module):
         if pin_weights is not None:
             self.pin_weights = pin_weights
         elif flat_node2pin_start_map is not None:
-            self.pin_weights = (flat_node2pin_start_map[1:self.num_physical_nodes + 1] - flat_node2pin_start_map[:self.num_physical_nodes]).to(self.node_size_x.dtype)
+            self.pin_weights = (flat_node2pin_start_map[1:self.num_physical_nodes + 1] - 
+                                flat_node2pin_start_map[:self.num_physical_nodes]).to(self.node_size_x.dtype)
         else:
             assert "either pin_weights or flat_node2pin_start_map is required"
 
@@ -54,10 +56,8 @@ class PinUtilization(nn.Module):
 
     def reset(self):
         # to make the pin density map smooth, we stretch each pin to a ratio of the pin utilization bin
-        #self.half_node_size_stretch_x = 0.5 * self.node_size_x[:self.num_physical_nodes].clamp(min=self.bin_size_x * self.pin_stretch_ratio)
-        #self.half_node_size_stretch_y = 0.5 * self.node_size_y[:self.num_physical_nodes].clamp(min=self.bin_size_y * self.pin_stretch_ratio)
-        self.half_node_size_stretch_x = 0.5 * self.node_size_x[:self.num_physical_nodes].clamp(min=self.pin_stretch_ratio)
-        self.half_node_size_stretch_y = 0.5 * self.node_size_y[:self.num_physical_nodes].clamp(min=self.pin_stretch_ratio)
+        self.half_node_size_stretch_x = 0.5 * self.node_size_x[:self.num_physical_nodes].clamp(min=self.bin_size_x * self.pin_stretch_ratio)
+        self.half_node_size_stretch_y = 0.5 * self.node_size_y[:self.num_physical_nodes].clamp(min=self.bin_size_y * self.pin_stretch_ratio)
 
     def forward(self, pos):
         if pos.is_cuda:
@@ -76,7 +76,8 @@ class PinUtilization(nn.Module):
                     self.bin_size_y,
                     self.num_physical_nodes,
                     self.num_bins_x,
-                    self.num_bins_y
+                    self.num_bins_y,
+                    self.deterministic_flag
                     )
         else:
             output = pin_utilization_cpp.forward(

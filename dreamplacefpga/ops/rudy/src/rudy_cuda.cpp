@@ -1,7 +1,7 @@
 /**
  * @file   rudy_cuda.cpp
- * @author Zixuan Jiang, Jiaqi Gu, Yibo Lin (DREAMPlace)
- * @date   Dec 2019
+ * @author Zixuan Jiang, Jiaqi Gu, Yibo Lin (DREAMPlace), Rachel Selina (DREAMPlaceFPGA)
+ * @date   Apr 2023
  * @brief  Compute the RUDY/RISA map for routing demand. 
  *         A routing/pin utilization estimator based on the following two papers
  *         "Fast and Accurate Routing Demand Estimation for efficient Routability-driven Placement", by Peter Spindler, DATE'07
@@ -20,17 +20,20 @@ DREAMPLACE_BEGIN_NAMESPACE
 // fill the demand map net by net
 template <typename T>
 int rudyCudaLauncher(const T *pin_pos_x,
-                              const T *pin_pos_y,
-                              const int *netpin_start,
-                              const int *flat_netpin,
-                              const T *net_weights,
-                              T bin_size_x, T bin_size_y,
-                              T xl, T yl, T xh, T yh,
-
-                              int num_bins_x, int num_bins_y,
-                              int num_nets,
-                              T *horizontal_utilization_map,
-                              T *vertical_utilization_map);
+        const T *pin_pos_y,
+        const int *netpin_start,
+        const int *flat_netpin,
+        const T *net_weights,
+        const T bin_size_x,
+        const T bin_size_y,
+        const T xl, const T yl,
+        const T xh, const T yh,
+        const int num_bins_x,
+        const int num_bins_y,
+        const int num_nets,
+        bool deterministic_flag,
+        T *horizontal_utilization_map,
+        T *vertical_utilization_map);
 
 void rudy_forward(
     at::Tensor pin_pos,
@@ -45,6 +48,7 @@ void rudy_forward(
     double yh,
     int num_bins_x,
     int num_bins_y,
+    int deterministic_flag,
     at::Tensor horizontal_utilization_map, 
     at::Tensor vertical_utilization_map 
     )
@@ -74,9 +78,8 @@ void rudy_forward(
             (net_weights.numel())? DREAMPLACE_TENSOR_DATA_PTR(net_weights, scalar_t) : nullptr,
             bin_size_x, bin_size_y,
             xl, yl, xh, yh,
-
-            num_bins_x, num_bins_y,
-            num_nets,
+            num_bins_x, num_bins_y, num_nets,
+            (bool)deterministic_flag,
             DREAMPLACE_TENSOR_DATA_PTR(horizontal_utilization_map, scalar_t),
             DREAMPLACE_TENSOR_DATA_PTR(vertical_utilization_map, scalar_t));
     });
