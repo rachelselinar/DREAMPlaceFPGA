@@ -88,8 +88,9 @@ Support for the following architectures are available
 
 - [CMake](https://cmake.org) version 3.8.2 or later
 
-- [Pytorch](https://pytorch.org/) 1.0.0
-    - Other version around 1.0.0 may also work, but not tested
+- [Pytorch](https://pytorch.org/) 1.6/1.7/1.8
+    - Other 1.0 versions may also work, but not tested.
+    - **Version 2.0 or higher is not compatible!**
 
 - [GCC](https://gcc.gnu.org/)
     - Recommend GCC 5.1 or later. 
