@@ -22,20 +22,21 @@ inline __device__ DEFINE_SMOOTH_CEIL_FUNCTION(T);
 template <typename T>
 inline __device__ DEFINE_FLOP_AGGREGATE_DEMAND_FUNCTION(T);
 
-template <typename T>
+template <typename T, typename AtomicOp>
 __global__ void fillDemandMapFF(const T *pos_x,
-                                const T *pos_y,
-                                const int *indices,
-                                const int *ctrlSets,
-                                const T *node_size_x,
-                                const T *node_size_y,
-                                const int num_bins_x, const int num_bins_y,
-                                const int num_bins_ck, const int num_bins_ce,
-                                int num_nodes,
-                                T stddev_x, T stddev_y,
-                                T inv_stddev_x, T inv_stddev_y, 
-                                int ext_bin, T inv_sqrt,
-                                T *demMap)
+        const T *pos_y,
+        const int *indices,
+        const int *ctrlSets,
+        const T *node_size_x,
+        const T *node_size_y,
+        const int num_bins_x, const int num_bins_y,
+        const int num_bins_ck, const int num_bins_ce,
+        const int num_nodes,
+        const T stddev_x, const T stddev_y,
+        const T inv_stddev_x, const T inv_stddev_y, 
+        const int ext_bin, const T inv_sqrt,
+        AtomicOp atomic_add_op,
+        typename AtomicOp::type* demMap)
 {
     const int i = threadIdx.x + blockDim.x * blockIdx.x;
     int n_o_p = num_bins_y * num_bins_ck * num_bins_ce;
@@ -74,7 +75,7 @@ __global__ void fillDemandMapFF(const T *pos_x,
                 //T dem = sf * demandX[x - bin_index_xl] * demandY[y - bin_index_yl];
                 T dem = sf * dem_xmbin_index_xl * dem_ymbin_index_yl;
                 //demMap[idx] += dem;
-                atomicAdd(demMap + idx, dem);
+                atomic_add_op(&demMap[idx], dem);
             }
         }
     }
@@ -85,8 +86,8 @@ template <typename T>
 __global__ void computeInstanceAreaFF(const T *demMap,
                                       const int num_bins_x, const int num_bins_y,
                                       const int num_bins_ck, const int num_bins_ce,
-                                      T stddev_x, T stddev_y,int ext_bin,
-                                      T bin_area, T half_slice, T *areaMap)
+                                      const T stddev_x, const T stddev_y, const int ext_bin,
+                                      const T bin_area, const T half_slice, T *areaMap)
 {
     const int i = threadIdx.x + blockDim.x * blockIdx.x;
     int total_bins = num_bins_x*num_bins_y;
@@ -158,8 +159,8 @@ __global__ void collectInstanceAreasFF(const T *pos_x,
                                        const int num_bins_y,
                                        const int num_bins_ck, const int num_bins_ce,
                                        const T *areaMap,
-                                       int num_nodes,T inv_stddev_x,
-                                       T inv_stddev_y,
+                                       const int num_nodes, const T inv_stddev_x,
+                                       const T inv_stddev_y,
                                        T *instAreas)
 {
     const int i = threadIdx.x + blockDim.x * blockIdx.x;
@@ -189,28 +190,64 @@ int fillDemandMapFFCuda(const T *pos_x, const T *pos_y,
                         const T *node_size_x, const T *node_size_y,
                         const int num_bins_x, const int num_bins_y,
                         const int num_bins_ck, const int num_bins_ce,
-                        int num_nodes,
-                        T stddev_x, T stddev_y,
-                        T inv_stddev_x, T inv_stddev_y, 
-                        int ext_bin, T inv_sqrt,
+                        const T xl, const T yl, const T xh, const T yh,
+                        const int num_nodes,
+                        const T stddev_x, const T stddev_y,
+                        const T inv_stddev_x, const T inv_stddev_y, 
+                        const int ext_bin, const T inv_sqrt,
+                        const int deterministic_flag,
                         T *demMap)
 {
-    int thread_count = 512;
-    int block_count = ceilDiv(num_nodes, thread_count);
-    fillDemandMapFF<<<block_count, thread_count>>>(
-                                                    pos_x,
-                                                    pos_y,
-                                                    indices,
-                                                    ctrlSets,
-                                                    node_size_x,
-                                                    node_size_y,
-                                                    num_bins_x, num_bins_y,
-                                                    num_bins_ck, num_bins_ce,
-                                                    num_nodes, stddev_x, stddev_y,
-                                                    inv_stddev_x, inv_stddev_y, 
-                                                    ext_bin, inv_sqrt,
-                                                    demMap
-                                                    );
+    if (deterministic_flag == 1)
+    {
+        // total die area
+        double diearea = (xh - xl) * (yh - yl);
+        int integer_bits = max((int)ceil(log2(diearea)) + 1, 32);
+        int fraction_bits = max(64 - integer_bits, 0);
+        unsigned long long int scale_factor = (1UL << fraction_bits);
+        int num_bins = num_bins_x * num_bins_y * num_bins_ck * num_bins_ce;
+        unsigned long long int *buf_map = NULL;
+        allocateCUDA(buf_map, num_bins, unsigned long long int);
+
+        AtomicAddCUDA<unsigned long long int> atomic_add_op(scale_factor);
+
+        int thread_count = 512;
+        int block_count = ceilDiv(num_bins, thread_count);
+        copyScaleArray<<<block_count, thread_count>>>(
+                buf_map, demMap, scale_factor, num_bins);
+
+        block_count = ceilDiv(num_nodes, thread_count);
+        fillDemandMapFF<<<block_count, thread_count>>>(
+                pos_x, pos_y, indices, ctrlSets, node_size_x,
+                node_size_y, num_bins_x, num_bins_y,
+                num_bins_ck, num_bins_ce,
+                num_nodes, stddev_x, stddev_y,
+                inv_stddev_x, inv_stddev_y, 
+                ext_bin, inv_sqrt,
+                atomic_add_op, buf_map
+                );
+
+        block_count = ceilDiv(num_bins, thread_count);
+        copyScaleArray<<<block_count, thread_count>>>(
+                demMap, buf_map, T(1.0 / scale_factor), num_bins);
+
+        destroyCUDA(buf_map);
+
+    } else
+    {
+        AtomicAddCUDA<T> atomic_add_op;
+        int thread_count = 512;
+        int block_count = ceilDiv(num_nodes, thread_count);
+        fillDemandMapFF<<<block_count, thread_count>>>(
+                pos_x, pos_y, indices, ctrlSets, node_size_x,
+                node_size_y, num_bins_x, num_bins_y,
+                num_bins_ck, num_bins_ce,
+                num_nodes, stddev_x, stddev_y,
+                inv_stddev_x, inv_stddev_y, 
+                ext_bin, inv_sqrt,
+                atomic_add_op, demMap
+                );
+    }
     return 0;
 }
 
@@ -219,8 +256,8 @@ template <typename T>
 int computeInstanceAreaFFCuda(const T *demMap,
                               const int num_bins_x, const int num_bins_y,
                               const int num_bins_ck, const int num_bins_ce,
-                              T stddev_x, T stddev_y, int ext_bin,
-                              T bin_area, T half_slice, T *areaMap)
+                              const T stddev_x, const T stddev_y, const int ext_bin,
+                              const T bin_area, const T half_slice, T *areaMap)
 {
     int thread_count = 512;
     int block_count = ceilDiv(num_bins_x*num_bins_y, thread_count);
@@ -247,8 +284,8 @@ int collectInstanceAreasFFCuda(const T *pos_x,
                                const int num_bins_y,
                                const int num_bins_ck, const int num_bins_ce,
                                const T *areaMap,
-                               int num_nodes,
-                               T inv_stddev_x, T inv_stddev_y, 
+                               const int num_nodes,
+                               const T inv_stddev_x, const T inv_stddev_y, 
                                T *instAreas)
 {
     int thread_count = 512;
@@ -271,19 +308,21 @@ int collectInstanceAreasFFCuda(const T *pos_x,
         const T *pos_x, const T *pos_y, const int *indices, const int *ctrlSets,        \
         const T *node_size_x, const T *node_size_y, const int num_bins_x,               \
         const int num_bins_y, const int num_bins_ck, const int num_bins_ce,             \
-        int num_nodes, T stddev_x, T stddev_y, T inv_stddev_x, T inv_stddev_y,          \
-        int ext_bin, T inv_sqrt, T *demMap);                                            \
+        const T xl, const T yl, const T xh, const T yh, const int num_nodes,            \
+        const T stddev_x, const T stddev_y, const T inv_stddev_x, const T inv_stddev_y, \
+        const int ext_bin, const T inv_sqrt, const int deterministic_flag, T *demMap);  \
                                                                                         \
     template int computeInstanceAreaFFCuda<T>(                                          \
         const T *demMap, const int num_bins_x, const int num_bins_y,                    \
-        const int num_bins_ck, const int num_bins_ce, T stddev_x, T stddev_y,           \
-        int ext_bin, T bin_area, T half_slice, T *areaMap);                             \
+        const int num_bins_ck, const int num_bins_ce, const T stddev_x,                 \
+        const T stddev_y, const int ext_bin, const T bin_area, const T half_slice,      \
+        T *areaMap);                             \
                                                                                         \
     template int collectInstanceAreasFFCuda<T>(                                         \
         const T *pos_x, const T *pos_y, const int *indices, const int *ctrlSets,        \
         const T *node_size_x, const T *node_size_y, const int num_bins_y,               \
-        const int num_bins_ck, const int num_bins_ce, const T *areaMap, int num_nodes,  \
-        T inv_stddev_x, T inv_stddev_y, T *instAreas);
+        const int num_bins_ck, const int num_bins_ce, const T *areaMap,                 \
+        const int num_nodes, const T inv_stddev_x, const T inv_stddev_y, T *instAreas);
 
 REGISTER_KERNEL_LAUNCHER(float);
 REGISTER_KERNEL_LAUNCHER(double);

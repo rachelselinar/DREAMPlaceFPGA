@@ -11,17 +11,16 @@ import matplotlib.pyplot as plt
 import pdb 
 
 import dreamplacefpga.ops.clustering_compatibility.clustering_compatibility_cpp as clustering_compatibility_cpp
-try:
+import dreamplacefpga.configure as configure
+if configure.compile_configurations["CUDA_FOUND"] == "TRUE":
     import dreamplacefpga.ops.clustering_compatibility.clustering_compatibility_cuda as clustering_compatibility_cuda
-except:
-    pass
 
 class LUTCompatibility(nn.Module):
     def __init__(self,
                  lut_indices, lut_type, node_size_x, node_size_y,
                  num_bins_x, num_bins_y, num_bins_l,
-                 inst_stddev_x, inst_stddev_y,
-                 inst_stddev_trunc,
+                 xl, yl, xh, yh, inst_stddev_x, inst_stddev_y,
+                 inst_stddev_trunc, deterministic_flag,
                  num_threads
                  ):
         super(LUTCompatibility, self).__init__()
@@ -33,9 +32,14 @@ class LUTCompatibility(nn.Module):
         self.num_bins_x = num_bins_x
         self.num_bins_y = num_bins_y
         self.num_bins_l = num_bins_l
+        self.xl = xl
+        self.yl = yl
+        self.xh = xh
+        self.yh = yh
         self.inst_stddev_x = inst_stddev_x
         self.inst_stddev_y = inst_stddev_y
         self.inst_stddev_trunc = inst_stddev_trunc
+        self.deterministic_flag = deterministic_flag
 
     def forward(self, pos):
         lutType_DemMap = torch.zeros((self.num_bins_x, self.num_bins_y, self.num_bins_l), dtype=pos.dtype, device=pos.device)
@@ -55,6 +59,10 @@ class LUTCompatibility(nn.Module):
                     self.num_bins_x,
                     self.num_bins_y, 
                     self.num_bins_l, 
+                    self.xl,
+                    self.yl,
+                    self.xh,
+                    self.yh,
                     self.inst_stddev_x, 
                     self.inst_stddev_y, 
                     1.0/self.inst_stddev_x,
@@ -62,6 +70,7 @@ class LUTCompatibility(nn.Module):
                     ext_bin,
                     self.inst_stddev_x * self.inst_stddev_y, 
                     1/math.sqrt(2.0),
+                    self.deterministic_flag,
                     lutType_DemMap, 
                     resource_areas
                     )
@@ -99,8 +108,10 @@ class FFCompatibility(nn.Module):
     def __init__(self,
                  flop_indices, flop_ctrlSets, node_size_x, node_size_y,
                  num_bins_x, num_bins_y, num_bins_ck, num_bins_ce,
+                 xl, yl, xh, yh,
                  inst_stddev_x, inst_stddev_y,
                  inst_stddev_trunc,
+                 deterministic_flag,
                  num_threads
                  ):
         super(FFCompatibility, self).__init__()
@@ -113,9 +124,14 @@ class FFCompatibility(nn.Module):
         self.num_bins_y = num_bins_y
         self.num_bins_ck = num_bins_ck
         self.num_bins_ce = num_bins_ce
+        self.xl = xl
+        self.yl = yl
+        self.xh = xh
+        self.yh = yh
         self.inst_stddev_x = inst_stddev_x
         self.inst_stddev_y = inst_stddev_y
         self.inst_stddev_trunc = inst_stddev_trunc
+        self.deterministic_flag = deterministic_flag
 
     def forward(self, pos):
         flopType_DemMap = torch.zeros((self.num_bins_x, self.num_bins_y, self.num_bins_ck, self.num_bins_ce), dtype=pos.dtype, device=pos.device)
@@ -136,6 +152,10 @@ class FFCompatibility(nn.Module):
                     self.num_bins_y, 
                     self.num_bins_ck, 
                     self.num_bins_ce, 
+                    self.xl,
+                    self.yl,
+                    self.xh,
+                    self.yh,
                     self.inst_stddev_x, 
                     self.inst_stddev_y, 
                     1.0/self.inst_stddev_x,
@@ -144,6 +164,7 @@ class FFCompatibility(nn.Module):
                     self.inst_stddev_x * self.inst_stddev_y, 
                     1/math.sqrt(2.0),
                     16, #SLICE_CAPACITY
+                    self.deterministic_flag,
                     flopType_DemMap, 
                     resource_areas
                     )

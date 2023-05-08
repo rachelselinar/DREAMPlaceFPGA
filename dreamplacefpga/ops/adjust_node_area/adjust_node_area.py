@@ -13,14 +13,13 @@ import pdb
 
 import dreamplacefpga.ops.adjust_node_area.adjust_node_area_cpp as adjust_node_area_cpp
 import dreamplacefpga.ops.adjust_node_area.update_pin_offset_cpp as update_pin_offset_cpp
-try:
+
+import dreamplacefpga.configure as configure
+if configure.compile_configurations["CUDA_FOUND"] == "TRUE":
     import dreamplacefpga.ops.adjust_node_area.adjust_node_area_cuda as adjust_node_area_cuda
     import dreamplacefpga.ops.adjust_node_area.update_pin_offset_cuda as update_pin_offset_cuda
-except:
-    pass
 
 logger = logging.getLogger(__name__)
-
 
 class ComputeNodeAreaFromRouteMap(nn.Module):
     def __init__(self, xl, yl, xh, yh, flop_lut_indices, num_movable_nodes, num_bins_x,

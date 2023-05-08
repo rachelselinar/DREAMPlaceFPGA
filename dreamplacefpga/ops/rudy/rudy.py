@@ -1,9 +1,9 @@
 '''
-@Author: Jake Gu (DREAMPlace)
-@Date: 2019-12-27 13:53:47
-@LastEditors  : Jake Gu
-@LastEditTime : 2019-12-27 14:19:16
+@File   rudy.py
+@Author: Jake Gu (DREAMPlace), Rachel Selina (DREAMPlaceFPGA)
+@Date   Apr 2023
 '''
+
 import math
 import torch
 from torch import nn
@@ -12,10 +12,9 @@ import matplotlib.pyplot as plt
 import pdb 
 
 import dreamplacefpga.ops.rudy.rudy_cpp as rudy_cpp
-try:
+import dreamplacefpga.configure as configure
+if configure.compile_configurations["CUDA_FOUND"] == "TRUE":
     import dreamplacefpga.ops.rudy.rudy_cuda as rudy_cuda
-except:
-    pass
 
 class Rudy(nn.Module):
     def __init__(self,
@@ -24,6 +23,7 @@ class Rudy(nn.Module):
                  num_bins_x, num_bins_y,
                  unit_horizontal_capacity, 
                  unit_vertical_capacity, 
+                 deterministic_flag,
                  initial_horizontal_utilization_map=None, 
                  initial_vertical_utilization_map=None, 
                  num_threads=None
@@ -45,6 +45,8 @@ class Rudy(nn.Module):
         # initialize parameters
         self.unit_horizontal_capacity = unit_horizontal_capacity 
         self.unit_vertical_capacity = unit_vertical_capacity 
+
+        self.deterministic_flag = deterministic_flag
 
         self.initial_horizontal_utilization_map = initial_horizontal_utilization_map 
         self.initial_vertical_utilization_map = initial_vertical_utilization_map 
@@ -68,6 +70,7 @@ class Rudy(nn.Module):
                     self.yh,
                     self.num_bins_x,
                     self.num_bins_y, 
+                    self.deterministic_flag,
                     horizontal_utilization_map, 
                     vertical_utilization_map
                     )
@@ -86,6 +89,7 @@ class Rudy(nn.Module):
                     self.num_bins_x,
                     self.num_bins_y,
                     self.num_threads, 
+                    self.deterministic_flag,
                     horizontal_utilization_map, 
                     vertical_utilization_map
                     )

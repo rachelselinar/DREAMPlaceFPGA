@@ -22,11 +22,14 @@ int fillDemandMapLUTCuda(const T *pos_x,
                          const int *type,
                          const T *node_size_x,
                          const T *node_size_y,
-                         int num_bins_x, int num_bins_y,
-                         int num_bins_l, int num_nodes,
-                         T stddev_x, T stddev_y,
-                         T inv_stddev_x, T inv_stddev_y, 
-                         int ext_bin, T inv_sqrt2,
+                         const int num_bins_x, const int num_bins_y,
+                         const int num_bins_l, 
+                         const T xl, const T yl, const T xh, const T yh,
+                         const int num_nodes,
+                         const T stddev_x, const T stddev_y,
+                         const T inv_stddev_x, const T inv_stddev_y, 
+                         const int ext_bin, const T inv_sqrt2,
+                         const int deterministic_flag,
                          T *demMap);
 
 // Given a Gaussian demand map, compute demand of each instance type based on local window demand distribution
@@ -35,8 +38,8 @@ int computeInstanceAreaLUTCuda(const T *demMap,
                                const int num_bins_x, 
                                const int num_bins_y,
                                const int num_bins_l,
-                               T stddev_x, T stddev_y,
-                               int ext_bin, T bin_area, 
+                               const T stddev_x, const T stddev_y,
+                               const int ext_bin, const T bin_area, 
                                T *areaMap);
 
 // Set a set of instance area in a area vector based on the given area map
@@ -50,8 +53,9 @@ int collectInstanceAreasLUTCuda(const T *pos_x,
                                 const int num_bins_y,
                                 const int num_bins_l,
                                 const T *areaMap,
-                                int num_nodes,
-                                T inv_stddev_x, T inv_stddev_y,
+                                const int num_nodes,
+                                const T inv_stddev_x, 
+                                const T inv_stddev_y,
                                 T *instAreas);
 
 at::Tensor lut_compatibility(
@@ -63,6 +67,10 @@ at::Tensor lut_compatibility(
     int num_bins_x,
     int num_bins_y,
     int num_bins_l,
+    double xl,
+    double yl,
+    double xh,
+    double yh,
     double stddev_x,
     double stddev_y,
     double inv_stddev_x,
@@ -70,6 +78,7 @@ at::Tensor lut_compatibility(
     int ext_bin,
     double bin_area,
     double inv_sqrt2,
+    int deterministic_flag,
     at::Tensor demMap, 
     at::Tensor rsrcAreas
     )
@@ -101,9 +110,10 @@ at::Tensor lut_compatibility(
             DREAMPLACE_TENSOR_DATA_PTR(node_size_x, scalar_t),
             DREAMPLACE_TENSOR_DATA_PTR(node_size_y, scalar_t),
             num_bins_x, num_bins_y, num_bins_l,
-            indices.numel(),
+            xl, yl, xh, yh, indices.numel(),
             stddev_x, stddev_y,
             inv_stddev_x, inv_stddev_y, ext_bin, inv_sqrt2,
+            deterministic_flag,
             DREAMPLACE_TENSOR_DATA_PTR(demMap, scalar_t));
     });
 
@@ -137,10 +147,11 @@ at::Tensor flop_compatibility(
     at::Tensor pos, at::Tensor indices, at::Tensor ctrlSets,
     at::Tensor node_size_x, at::Tensor node_size_y,
     int num_bins_x, int num_bins_y, int num_bins_ck,
-    int num_bins_ce, double stddev_x, double stddev_y,
+    int num_bins_ce, double xl, double yl, double xh,
+    double yh, double stddev_x, double stddev_y,
     double inv_stddev_x, double inv_stddev_y, int ext_bin,
     double bin_area, double inv_sqrt, int slice_capacity,
-    at::Tensor demMap, at::Tensor rsrcAreas);
+    int deterministic_flag, at::Tensor demMap, at::Tensor rsrcAreas);
 
 DREAMPLACE_END_NAMESPACE
 

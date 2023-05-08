@@ -727,7 +727,6 @@ class NonLinearPlaceFPGA (BasicPlaceFPGA):
                     model = PlaceObjFPGA(density_weight, params, placedb, self.data_collections, self.op_collections, global_place_params).to(self.data_collections.pos[0].device)
                     print("Model constructed in %g ms"%((time.time()-tt)*1000))
 
-                #place_file='/home/local/eda08/rsraj20/project/Ongoing/FPGA/elfPlace_Mohd/bin/gp.pl'
                 place_file=params.global_place_sol
                 #logging.info("Reading %s" % (place_file))
                 with open (place_file,  "r") as f:
@@ -834,16 +833,16 @@ class NonLinearPlaceFPGA (BasicPlaceFPGA):
         if params.dump_legalize_solution_flag: 
             self.dump(params, placedb, self.pos[0].cpu(), "%s.dp.pklz" %(params.design_name()))
 
-        # detailed placement 
-        if params.detailed_place_flag: 
-            tt = time.time()
-            self.pos[0].data.copy_(self.op_collections.detailed_place_op(self.pos[0]))
-            logging.info("detailed placement takes %.3f seconds" % (time.time()-tt))
-            cur_metric = EvalMetricsFPGA(iteration)
-            all_metrics.append(cur_metric)
-            cur_metric.evaluate(placedb, {"hpwl" : self.op_collections.hpwl_op}, self.pos[0])
-            logging.info(cur_metric)
-            iteration += 1
+        ## detailed placement 
+        #if params.detailed_place_flag: 
+        #    tt = time.time()
+        #    self.pos[0].data.copy_(self.op_collections.detailed_place_op(self.pos[0]))
+        #    logging.info("detailed placement takes %.3f seconds" % (time.time()-tt))
+        #    cur_metric = EvalMetricsFPGA(iteration)
+        #    all_metrics.append(cur_metric)
+        #    cur_metric.evaluate(placedb, {"hpwl" : self.op_collections.hpwl_op}, self.pos[0])
+        #    logging.info(cur_metric)
+        #    iteration += 1
 
         # save results 
         cur_pos = self.pos[0].data.clone().cpu().numpy()

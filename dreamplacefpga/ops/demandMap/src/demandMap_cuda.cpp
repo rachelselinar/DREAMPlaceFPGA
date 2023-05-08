@@ -13,12 +13,13 @@ DREAMPLACE_BEGIN_NAMESPACE
 template <typename T>
 int computeDemandMapCudaLauncher(
         const int *site_type_map,
+        const T *node_size_x, 
+        const T *node_size_y, 
         const int num_bins_x, 
         const int num_bins_y, 
         const int width, 
         const int height, 
-        const T *node_size_x, 
-        const T *node_size_y, 
+        const int deterministic_flag,
         T *binCapMap0,
         T *binCapMap2,
         T *binCapMap3
@@ -31,12 +32,13 @@ int computeDemandMapCudaLauncher(
 /// @brief Compute bin capacity map
 void forward(
         at::Tensor site_type_map, 
+        at::Tensor node_size_x, 
+        at::Tensor node_size_y, 
         int num_bins_x,
         int num_bins_y,
         int width, 
         int height, 
-        at::Tensor node_size_x, 
-        at::Tensor node_size_y, 
+        int deterministic_flag,
         at::Tensor binCapMap0,
         at::Tensor binCapMap2,
         at::Tensor binCapMap3)
@@ -51,10 +53,11 @@ void forward(
     DREAMPLACE_DISPATCH_FLOATING_TYPES(node_size_x, "computeDemandMapCudaLauncher", [&] {
             computeDemandMapCudaLauncher<scalar_t>(
                     DREAMPLACE_TENSOR_DATA_PTR(site_type_map, int),
-                    num_bins_x, num_bins_y,
-                    width, height,
                     DREAMPLACE_TENSOR_DATA_PTR(node_size_x, scalar_t), 
                     DREAMPLACE_TENSOR_DATA_PTR(node_size_y, scalar_t), 
+                    num_bins_x, num_bins_y,
+                    width, height,
+                    deterministic_flag,
                     DREAMPLACE_TENSOR_DATA_PTR(binCapMap0, scalar_t),
                     DREAMPLACE_TENSOR_DATA_PTR(binCapMap2, scalar_t),
                     DREAMPLACE_TENSOR_DATA_PTR(binCapMap3, scalar_t)

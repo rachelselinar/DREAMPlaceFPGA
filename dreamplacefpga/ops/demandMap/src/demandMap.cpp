@@ -18,12 +18,12 @@ DEFINE_COMPUTE_DEMAND_FUNCTION(T);
 template <typename T, typename AtomicOp>
 int computeDemandMapLauncher(
         const int *site_type_map, 
+        const T *node_size_x, 
+        const T *node_size_y, 
         const int num_bins_x, 
         const int num_bins_y, 
         const int width, 
         const int height, 
-        const T *node_size_x, 
-        const T *node_size_y, 
         const int num_threads,
         AtomicOp atomic_add_op,
         typename AtomicOp::type* buf_map0,
@@ -37,24 +37,25 @@ int computeDemandMapLauncher(
 #define CALL_FPGA_LAUNCHER(atomic_add_op, map_ptr0, map_ptr2, map_ptr3)  \
   computeDemandMapLauncher<scalar_t, decltype(atomic_add_op)>(           \
       DREAMPLACE_TENSOR_DATA_PTR(site_type_map, int),                    \
-      num_bins_x, num_bins_y, width, height,                             \
       DREAMPLACE_TENSOR_DATA_PTR(node_size_x, scalar_t),                 \
       DREAMPLACE_TENSOR_DATA_PTR(node_size_y, scalar_t),                 \
+      num_bins_x, num_bins_y, width, height,                             \
       num_threads, atomic_add_op, map_ptr0, map_ptr2, map_ptr3)
 
 /// @brief Compute wirelength preconditioner
 int forward(
         at::Tensor site_type_map,
+        at::Tensor node_size_x,
+        at::Tensor node_size_y,
         int num_bins_x,
         int num_bins_y,
         int width,
         int height,
-        at::Tensor node_size_x,
-        at::Tensor node_size_y,
         at::Tensor binCapMap0,
         at::Tensor binCapMap2,
         at::Tensor binCapMap3,
-        int num_threads)
+        int num_threads,
+        int deterministic_flag)
 {
     CHECK_FLAT(site_type_map); 
     CHECK_CONTIGUOUS(site_type_map);
@@ -64,24 +65,49 @@ int forward(
     CHECK_CONTIGUOUS(node_size_y);
 
     DREAMPLACE_DISPATCH_FLOATING_TYPES(node_size_x, "computeDemandMapLauncher", [&] {
-            auto buf0 = DREAMPLACE_TENSOR_DATA_PTR(binCapMap0, scalar_t);
-            auto buf2 = DREAMPLACE_TENSOR_DATA_PTR(binCapMap2, scalar_t);
-            auto buf3 = DREAMPLACE_TENSOR_DATA_PTR(binCapMap3, scalar_t);
-            AtomicAdd<scalar_t> atomic_add_op;
-            CALL_FPGA_LAUNCHER(atomic_add_op, buf0, buf2, buf3);
-            });
+            if (deterministic_flag == 1)
+            {
+                double diearea = width * height;
+                int integer_bits = DREAMPLACE_STD_NAMESPACE::max((int)ceil(log2(diearea)) + 1, 32);
+                int fraction_bits = DREAMPLACE_STD_NAMESPACE::max(64 - integer_bits, 0);
+                long scale_factor = (1L << fraction_bits);
+                int num_bins = num_bins_x * num_bins_y;
+
+                std::vector<long> buf0(num_bins, 0);
+                std::vector<long> buf2(num_bins, 0);
+                std::vector<long> buf3(num_bins, 0);
+                AtomicAdd<long> atomic_add_op(scale_factor);
+
+                CALL_FPGA_LAUNCHER(atomic_add_op, buf0.data(), buf2.data(), buf3.data());
+
+                scaleAdd(DREAMPLACE_TENSOR_DATA_PTR(binCapMap0, scalar_t),
+                        buf0.data(), 1.0 / scale_factor, num_bins, num_threads);
+                scaleAdd(DREAMPLACE_TENSOR_DATA_PTR(binCapMap2, scalar_t),
+                        buf2.data(), 1.0 / scale_factor, num_bins, num_threads);
+                scaleAdd(DREAMPLACE_TENSOR_DATA_PTR(binCapMap3, scalar_t),
+                        buf3.data(), 1.0 / scale_factor, num_bins, num_threads);
+            } else
+            {
+                auto buf0 = DREAMPLACE_TENSOR_DATA_PTR(binCapMap0, scalar_t);
+                auto buf2 = DREAMPLACE_TENSOR_DATA_PTR(binCapMap2, scalar_t);
+                auto buf3 = DREAMPLACE_TENSOR_DATA_PTR(binCapMap3, scalar_t);
+                AtomicAdd<scalar_t> atomic_add_op;
+                CALL_FPGA_LAUNCHER(atomic_add_op, buf0, buf2, buf3);
+            }
+
+    });
     return 0; 
 }
 
 template <typename T, typename AtomicOp>
 int computeDemandMapLauncher(
         const int *site_type_map, 
+        const T *node_size_x, 
+        const T *node_size_y, 
         const int num_bins_x, 
         const int num_bins_y, 
         const int width, 
         const int height, 
-        const T *node_size_x, 
-        const T *node_size_y, 
         const int num_threads,
         AtomicOp atomic_add_op,
         typename AtomicOp::type* buf_map0,

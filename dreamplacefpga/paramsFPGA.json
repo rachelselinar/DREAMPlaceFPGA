@@ -100,10 +100,6 @@
     "descripton" : "whether use internal legalization", 
     "default" : 1
     },
-"legalize_and_detailed_place_flag" : {
-    "descripton" : "run legalization and detailed placement using elfPlace", 
-    "default" : 1
-    },
 "stop_overflow" : {
     "descripton" : "stopping criteria, consider stop when the overflow reaches to a ratio", 
     "default" : 0.1
@@ -237,8 +233,8 @@
     "default" : 3.0
     }, 
 "deterministic_flag" : {
-    "descripton" : "Ensures reproducible run-to-run results (May increase runtime)", 
-    "default" : 0
+    "descripton" : "Ensures reproducible run-to-run results (Slightly increases runtime)", 
+    "default" : 1
     },
 "enable_if" : {
     "descripton" : "Enable IF Writer", 

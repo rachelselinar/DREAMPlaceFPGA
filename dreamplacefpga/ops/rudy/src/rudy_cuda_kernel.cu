@@ -17,19 +17,23 @@ DREAMPLACE_BEGIN_NAMESPACE
 template <typename T>
 inline __device__ DEFINE_NET_WIRING_DISTRIBUTION_MAP_WEIGHT;
 
-template <typename T>
-__global__ void rudy(const T *pin_pos_x,
-                              const T *pin_pos_y,
-                              const int *netpin_start,
-                              const int *flat_netpin,
-                              const T *net_weights,
-                              T bin_size_x, T bin_size_y,
-                              T xl, T yl, T xh, T yh,
-
-                              int num_bins_x, int num_bins_y,
-                              int num_nets,
-                              T *horizontal_utilization_map,
-                              T *vertical_utilization_map)
+template <typename T, typename AtomicOp>
+__global__ void rudy(
+        const T *pin_pos_x,
+        const T *pin_pos_y,
+        const int *netpin_start,
+        const int *flat_netpin,
+        const T *net_weights,
+        const T bin_size_x,
+        const T bin_size_y,
+        const T xl, const T yl,
+        const T xh, const T yh,
+        const int num_bins_x,
+        const int num_bins_y,
+        const int num_nets,
+        AtomicOp atomic_add_op,
+        typename AtomicOp::type *horizontal_utilization_map,
+        typename AtomicOp::type *vertical_utilization_map)
 {
     const int i = threadIdx.x + blockDim.x * blockIdx.x;
     if (i < num_nets)
@@ -83,8 +87,8 @@ __global__ void rudy(const T *pin_pos_x,
                 overlap *= wt; 
                 int index = x * num_bins_y + y;
                 // Following Wuxi's implementation, a tolerance is added to avoid 0-size bounding box
-                atomicAdd(horizontal_utilization_map + index, overlap / (y_max - y_min + cuda::numeric_limits<T>::epsilon()));
-                atomicAdd(vertical_utilization_map + index, overlap / (x_max - x_min + cuda::numeric_limits<T>::epsilon()));
+                atomic_add_op(&horizontal_utilization_map[index], overlap / (y_max - y_min + cuda::numeric_limits<T>::epsilon()));
+                atomic_add_op(&vertical_utilization_map[index], overlap / (x_max - x_min + cuda::numeric_limits<T>::epsilon()));
             }
         }
     }
@@ -93,49 +97,92 @@ __global__ void rudy(const T *pin_pos_x,
 // fill the demand map net by net
 template <typename T>
 int rudyCudaLauncher(const T *pin_pos_x,
-                              const T *pin_pos_y,
-                              const int *netpin_start,
-                              const int *flat_netpin,
-                              const T *net_weights,
-                              T bin_size_x, T bin_size_y,
-                              T xl, T yl, T xh, T yh,
-
-                              int num_bins_x, int num_bins_y,
-                              int num_nets,
-                              T *horizontal_utilization_map,
-                              T *vertical_utilization_map)
+        const T *pin_pos_y,
+        const int *netpin_start,
+        const int *flat_netpin,
+        const T *net_weights,
+        const T bin_size_x,
+        const T bin_size_y,
+        const T xl, const T yl,
+        const T xh, const T yh,
+        const int num_bins_x,
+        const int num_bins_y,
+        const int num_nets,
+        bool deterministic_flag,
+        T *horizontal_utilization_map,
+        T *vertical_utilization_map)
 {
-    int thread_count = 512;
-    int block_count = ceilDiv(num_nets, thread_count);
-    rudy<<<block_count, thread_count>>>(
-            pin_pos_x,
-            pin_pos_y,
-            netpin_start,
-            flat_netpin,
-            net_weights,
-            bin_size_x, bin_size_y,
-            xl, yl, xh, yh,
-            num_bins_x, num_bins_y,
-            num_nets,
-            horizontal_utilization_map,
-            vertical_utilization_map
-            );
+    if (deterministic_flag)
+    {
+        // total die area
+        double diearea = (xh - xl) * (yh - yl);
+        int integer_bits = max((int)ceil(log2(diearea)) + 1, 32);
+        int fraction_bits = max(64 - integer_bits, 0);
+        unsigned long long int scale_factor = (1UL << fraction_bits);
+        int num_bins = num_bins_x * num_bins_y;
+        unsigned long long int *buf_map = NULL;
+        allocateCUDA(buf_map, num_bins*2, unsigned long long int);
+
+        unsigned long long int *horizontal_buf_map = buf_map;
+        unsigned long long int *vertical_buf_map = buf_map + num_bins;
+
+        AtomicAddCUDA<unsigned long long int> atomic_add_op(scale_factor);
+
+        int thread_count = 512;
+        int block_count = ceilDiv(num_bins, thread_count);
+
+        copyScaleArray<<<block_count, thread_count>>>(
+                horizontal_buf_map, horizontal_utilization_map, scale_factor, num_bins);
+        copyScaleArray<<<block_count, thread_count>>>(
+                vertical_buf_map, vertical_utilization_map, scale_factor, num_bins);
+
+        block_count = ceilDiv(num_nets, thread_count);
+        rudy<<<block_count, thread_count>>>(
+                pin_pos_x, pin_pos_y, netpin_start,
+                flat_netpin, net_weights, bin_size_x,
+                bin_size_y, xl, yl, xh, yh,
+                num_bins_x, num_bins_y, num_nets,
+                atomic_add_op,
+                horizontal_buf_map,
+                vertical_buf_map
+                );
+
+        block_count = ceilDiv(num_bins, thread_count);
+        copyScaleArray<<<block_count, thread_count>>>(
+                horizontal_utilization_map, horizontal_buf_map, T(1.0 / scale_factor), num_bins);
+        copyScaleArray<<<block_count, thread_count>>>(
+                vertical_utilization_map, vertical_buf_map, T(1.0 / scale_factor), num_bins);
+
+        destroyCUDA(buf_map); 
+    } else
+    {
+        AtomicAddCUDA<T> atomic_add_op;
+        int thread_count = 512;
+        int block_count = ceilDiv(num_nets, thread_count);
+        rudy<<<block_count, thread_count>>>(
+                pin_pos_x, pin_pos_y, netpin_start,
+                flat_netpin, net_weights, bin_size_x,
+                bin_size_y, xl, yl, xh, yh,
+                num_bins_x, num_bins_y, num_nets,
+                atomic_add_op,
+                horizontal_utilization_map,
+                vertical_utilization_map
+                );
+    }
     return 0;
 }
 
-#define REGISTER_KERNEL_LAUNCHER(T)                                           \
-    template int rudyCudaLauncher<T>(const T *pin_pos_x,             \
-                                              const T *pin_pos_y,             \
-                                              const int *netpin_start,        \
-                                              const int *flat_netpin,         \
-                                              const T *net_weights,           \
-                                              T bin_size_x, T bin_size_y,     \
-                                              T xl, T yl, T xh, T yh,         \
-                                                                              \
-                                              int num_bins_x, int num_bins_y, \
-                                              int num_nets,                   \
-                                              T *horizontal_utilization_map,   \
-                                              T *vertical_utilization_map);  \
+#define REGISTER_KERNEL_LAUNCHER(T)                             \
+    template int rudyCudaLauncher<T>(                           \
+            const T *pin_pos_x, const T *pin_pos_y,             \
+            const int *netpin_start, const int *flat_netpin,    \
+            const T *net_weights, const T bin_size_x,           \
+            const T bin_size_y, const T xl, const T yl,         \
+            const T xh, const T yh, const int num_bins_x,       \
+            const int num_bins_y, const int num_nets,           \
+            bool deterministic_flag,                            \
+            T *horizontal_utilization_map,                      \
+            T *vertical_utilization_map); 
 
 REGISTER_KERNEL_LAUNCHER(float);
 REGISTER_KERNEL_LAUNCHER(double);

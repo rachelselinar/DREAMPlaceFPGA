@@ -462,6 +462,7 @@ class BasicPlaceFPGA(nn.Module):
             xl=placedb.xl,
             yh=placedb.yh,
             yl=placedb.yl,
+            deterministic_flag=params.deterministic_flag,
             device=device,
             num_threads=params.num_threads)
 
