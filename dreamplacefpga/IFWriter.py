@@ -34,9 +34,7 @@ PhysicalNet = namedtuple('PhysicalNet', 'name type sources stubs stubNodes')
 
 class IFWriter():
     """ IFWirter calss to write out IF file from phys_netlist. 
-
     phys_netlist - object input, contains all the data of each field in PhysicalNetlist.capnp
-
     """
     def __init__(self, schema_dir):
         """ initialize and compile PhysicalNetlist.capnp """
@@ -52,7 +50,6 @@ class IFWriter():
         if string not in self.str2idx:
             self.str2idx[string] = len(self.strList)
             self.strList.append(string)
-            # self.idx = self.idx + 1 
 
         return self.str2idx[string]
  
@@ -60,9 +57,7 @@ class IFWriter():
         """ build IF object from phys_netlist 
         
         phys_netlist - object input, contains all the data of each field in PhysicalNetlist.capnp
-
         struct PhysNetlist {
-
             part         @0 : Text;
             placements   @1 : List(CellPlacement);
             physNets     @2 : List(PhysNet);
@@ -72,7 +67,6 @@ class IFWriter():
             properties   @6 : List(Property);
             nullNet      @7 : PhysNet;
         }
-
         """
         # initialize a new capnp object 
         physical_netlist = self.physical_netlist_capnp.PhysNetlist.new_message()
@@ -180,7 +174,6 @@ class IFWriter():
     def write_IF(self, physical_netlist, if_file):
         """ Write out IF into file 
         The file name is the design_name
-
         """
         # zipped the file into gzip file
         with gzip.open(if_file, 'wb') as f_zip:
@@ -189,7 +182,6 @@ class IFWriter():
 
 class Cellplacement():
     """ Cellplacement class for constructing placement of a single cell.
-
         struct CellPlacement {
             cellName      @0 : StringIdx $stringRef();
             type          @1 : StringIdx $stringRef();
@@ -201,7 +193,6 @@ class Cellplacement():
             isSiteFixed   @7 : Bool;
             altSiteType   @8 : StringIdx $stringRef();
         }
-
     """
     def __init__(self, cell_name, cell_type, site_name, bel_name):
         """ initialize placement information """
@@ -231,7 +222,6 @@ def add_branch(branch_obj, phys_node, string_idx):
     """ Add a branch to continue outputting the interchange to capnp object. 
     
     branch_obj - One RouteBranch capnp object from PhysicalNetlist
-
     phys_node - an object of PhysicalBelpin or PhysicalSitepip
     
     """
@@ -243,13 +233,11 @@ def add_branch(branch_obj, phys_node, string_idx):
 
 class PhysicalBelPin():
     """ PhysicalBelpin class for intra-site routing.
-
     struct PhysBelPin {
         site @0 : StringIdx $stringRef();
         bel  @1 : StringIdx $stringRef();
         pin  @2 : StringIdx $stringRef();
     }
-
     """
 
     def __init__(self, site_name, bel_name, pin_name):
@@ -261,7 +249,6 @@ class PhysicalBelPin():
 
     def output_interchange(self, branch_obj, string_idx):
         """ Add one route segment and all the branches under it.
-
         branch_obj - One RouteBranch capnp object from PhysicalNetlist
         
         struct RouteBranch {
@@ -273,9 +260,7 @@ class PhysicalBelPin():
             }
             branches @4 : List(RouteBranch);
         }
-
         string_idx - function that returns the index of strList in PhysicalNetlist
-
         """
         branch_obj.routeSegment.init('belPin') 
         branch_obj.routeSegment.belPin.site = string_idx(self.site_name)
@@ -299,7 +284,6 @@ class PhysicalBelPin():
 
 class PhysicalSitePip():
     """ PhysicalSitepip class for intra-site routing.
-
     struct PhysSitePIP {
         site    @0 : StringIdx $stringRef();
         bel     @1 : StringIdx $stringRef();
@@ -310,7 +294,6 @@ class PhysicalSitePip():
         inverts     @5 : Void;
         }
     }
-
     """
 
     def __init__(self, site_name, bel_name, pin_name):
@@ -323,7 +306,6 @@ class PhysicalSitePip():
 
     def output_interchange(self, branch_obj, string_idx):
         """ Add one route segment and all the branches under it.
-
         """
         branch_obj.routeSegment.init('sitePIP') 
         branch_obj.routeSegment.sitePIP.site = string_idx(self.site_name)
@@ -355,7 +337,6 @@ def convert_tuple_to_object(site, tup):
     tup (tuple) - Tuple that is either a bel pin or site pip.
     Returns - PhysicalBelPin or PhysicalSitePip based on
               tuple.
-
     """
     if tup[0] == 'bel_pin':
         _, bel, pin = tup
@@ -398,7 +379,6 @@ def create_site_routing(site, net_roots, site_routing):
                           child site routing tuples.
     Returns dict of nets to Physical* objects that represent the site local
     sources for that net.
-
     """
     nets = {}
 
@@ -417,7 +397,6 @@ def create_site_routing(site, net_roots, site_routing):
 class SiteInst():
     """
     This class has the site router and site instances;
-
     """
     def __init__(self, name):
         self.name = name
@@ -674,14 +653,9 @@ class PhysicalNetType(enum.Enum):
 
 class PhysicalNetlist:
     """ Physical Netlist class for adding each field into an object
-
     self.add_cellplacement() 
-
     self.add_site_instance()
-
     self.add_physical_cell()
-
-
     """
     def __init__(self, part):
         self.part = part
@@ -691,18 +665,15 @@ class PhysicalNetlist:
         self.siteInsts = {}
         self.null_nets = []
 
-
     def add_cellplacement(self, cellplacement):
         """ Add cellplacement into a  list 
         cellplacement (object) - object of cellplacement
-
         """
         self.placements.append(cellplacement)
 
     def add_site_instance(self, site_name, site_type):
         """ Add site instance to a  map """
         self.siteInsts[site_name] = site_type
-
     
     def add_physical_cell(self, cell_name, cell_type):
         """ Add physical cell instance
@@ -740,11 +711,8 @@ class PhysicalNetlist:
 
 class CellBel():
     """ Map cell into bel, mainly for the pin mapping.
-
     strs - strList from DeviceResources
-
     mapping - cellBelMap from DeviceResources
-
     """
     def __init__(self, strs, mapping):
         """ Build a pin map from cell pin to bel pin. 
@@ -912,7 +880,6 @@ class Direction(enum.Enum):
 
 class SiteType():
     """ Object for looking up device resources from a site type.
-
     struct SiteType {
         name         @0 : StringIdx $stringRef();
         belPins      @1 : List(BELPin); # All BEL Pins in site type
@@ -923,7 +890,6 @@ class SiteType():
         siteWires    @6 : List(SiteWire);
         altSiteTypes @7 : List(SiteTypeIdx);
     }
-
     """
     def __init__(self, strs, site_type, site_type_index):
         self.site_type = strs[site_type.name]
@@ -1042,19 +1008,15 @@ class SiteType():
 
     def site_routing_graph(self):
         """ Return routing graph for every site type 
-
         routing_graph (dict) - Map of parent site routing tuple to a set of
                           child site routing tuples.
         
         key - tuple of parent belpin
-
         value - tuples of children belpin
-
         3 cases here:
         1. belpin -> belpin, through sitewire
         2. belpin -> sitepip, through sitewire
         3. sitepip -> belpin, through sitepip
-
         """
 
         # from one belpin to another belpins through either sitewire or sitepip
@@ -1119,13 +1081,11 @@ class LogicalNetlist:
     This is for parameter pin mapping in BRAMs.
     However, all the parameter pins have the same properties and value in ISPD16 benchmarks.
     So the parameter pins have been hard-coded.
-
     For example,
     para_map['DOA_REG'] = '1'
     para_map['WRITE_WIDTH_A'] = '1'
     para_map['WRITE_WIDTH_B'] = '72'
     para_map['DOB_REG'] = '1'
-
     """
     def __init__(self, schema_dir):
         """ Read and compile logical netlist for FPGA02-12 benchmarks 
@@ -1176,17 +1136,11 @@ class LogicalNetlist:
 
 class DeviceResources:
     """DeviceResources class to parse the part's placement resources.
-
     yield_cell_bel_mappings(self)
-
     get_library(self)
-
     get_macro_instance(self)
-
     get_site_type(self)
-
     get_packages
-
     """
     def __init__(self, schema_dir, part_name):
         """ Read and compile device resources for part assigned by part_name
@@ -1393,9 +1347,7 @@ class DeviceResources:
 
     def get_library(self):
         """Build library for primitives and macros from device resources
-
         Didn't fully parse the property map.
-
         """
         netlist = self.device_resources.primLibs
  
@@ -1438,11 +1390,8 @@ class DeviceResources:
 
     def get_macro_instance(self):
         """ Get macros from device resources
-
         macro_inst - build a map for macros and their instances.
-
         One macro consists of more than one primitives.
-
         """
         macro_lib = self.get_library()['macros']
         macro_inst = {}
@@ -1636,7 +1585,6 @@ class db_to_physicalnetlist():
 
         This is probably different from how vivado copes with pin mapping!
 
-
         """
 
         bel_pins = ['A5', 'A4', 'A3', 'A2', 'A1']
@@ -1674,11 +1622,29 @@ class db_to_physicalnetlist():
             
             sharedluts_insite = []
 
-
             for key in LUT_map:
                 if len(LUT_map[key]) == 2:
                     self.shared_LUT.append((LUT_map[key][0], LUT_map[key][1]))
                     sharedluts_insite.append((LUT_map[key][0], LUT_map[key][1]))
+                
+                #single 5LUT detection
+                elif len(LUT_map[key]) == 1 and LUT_map[key][0].bel_name.endswith('5LUT'):
+                    LUT_map[key][0].bel_name = LUT_map[key][0].bel_name[:1] + '6LUT'
+                    
+                    # build new pinmap
+                    new_pinmap = []
+                    for pin in LUT_map[key][0].pins:
+                        if pin[0][:1] == 'O':
+                            new_pin = (pin[0], 'O6')
+                        elif pin[0][:1] == 'I':
+                            new_pin = (pin[0], pin[2])
+                        new_pinmap.append(new_pin)
+                    
+                    LUT_map[key][0].pins.clear()
+
+                    for new_pin in new_pinmap:
+                        LUT_map[key][0].add_pins(new_pin[0], new_pin[1])
+       
                 else:
                     continue
             
@@ -1809,14 +1775,12 @@ class db_to_physicalnetlist():
 
                     lut_pair[0].add_pins(output_pin_0[0], output_pin_0[2])
                     lut_pair[1].add_pins(output_pin_1[0], output_pin_1[2])
-
+                
 
     def stitch_routing(self, placedb, phys_netlist):
         """
         Do intra-site routing through site_routing graph.
-
         call function site_router(), this is the clean way to do intra-site routing for each site.
-
         """
 
         nets = {}
@@ -2178,6 +2142,10 @@ class tcl_generator():
         """ write out the tcl script """
         with open(self.file_name, 'w') as tcl_file:
             for placement in phys_netlist.placements:
+                if placement.cell_name.endswith('/LUT5'):
+                    continue
+                elif placement.cell_name.endswith('/LUT6'):
+                    placement.cell_name = placement.cell_name[:-5]
                 line = 'place_cell ' + placement.cell_name + ' ' + placement.site_name + '/' + placement.bel_name
                 tcl_file.write(line + os.linesep)
 
