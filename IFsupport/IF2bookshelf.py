@@ -460,12 +460,14 @@ class LogicalNetlist:
                     if self.port_list[port_idx].which() == 'bus':
                         bus_start = self.port_list[port_idx].bus.busStart
                         bus_end = self.port_list[port_idx].bus.busEnd
-                        port_bus2idx[port_name] = []
-                        for idx in range(bus_start, bus_end - 1, -1):
-                            port_bus2idx[port_name].append(idx)
+                        if bus_start > bus_end:
+                            port_bus2idx[port_name] = [*range(bus_start, bus_end-1, -1)]     
+                        else:  
+                            port_bus2idx[port_name] = [*range(bus_start, bus_end+1, 1)]   
+                        
+                        for idx in port_bus2idx[port_name]:
                             port_name_bus = port_name + '[' + str(idx) + ']'
                             self.cell_ports[cell_type].append((port_name_bus, port_dir))
-           
                     else:
                         self.cell_ports[cell_type].append((port_name, port_dir))
 
@@ -478,7 +480,7 @@ class LogicalNetlist:
             if cell_name not in self.nodes:
                 self.nodes[cell_name] = cell_type
 
-                
+        pdb.set_trace()         
         # database for design.nets
         self.nets = {}
         for cell in self.cell_list:
@@ -497,7 +499,7 @@ class LogicalNetlist:
                         cell = self.strs[self.inst_list[port_inst.inst].name]
                         
                     if port_inst.busIdx.which() == 'idx':
-                        port_idx = port_bus2idx[port_name].index(port_inst.busIdx.idx)
+                        port_idx = port_bus2idx[port_name][port_inst.busIdx.idx]
                         port_name_idx = port_name + '[' + str(port_idx) + ']'
                         self.nets[net_name].append((cell, port_name_idx))
                     else:
