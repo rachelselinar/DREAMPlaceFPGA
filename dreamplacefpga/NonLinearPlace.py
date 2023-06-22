@@ -701,11 +701,11 @@ class NonLinearPlaceFPGA (BasicPlaceFPGA):
                         self.data_collections.original_pin_offset_x)
                     self.data_collections.pin_offset_y.copy_(
                         self.data_collections.original_pin_offset_y)
-        else: 
-            cur_metric = EvalMetricsFPGA(iteration)
-            all_metrics.append(cur_metric)
-            cur_metric.evaluate(placedb, {"hpwl" : self.op_collections.hpwl_op}, self.pos[0])
-            logging.info(cur_metric)
+        #else: 
+        #    cur_metric = EvalMetricsFPGA(iteration)
+        #    all_metrics.append(cur_metric)
+        #    cur_metric.evaluate(placedb, {"hpwl" : self.op_collections.hpwl_op}, self.pos[0])
+        #    logging.info(cur_metric)
 
         # dump global placement solution for legalization 
         if params.dump_global_place_solution_flag: 
@@ -740,6 +740,10 @@ class NonLinearPlaceFPGA (BasicPlaceFPGA):
                 self.pos[0][:placedb.num_physical_nodes].data.copy_(self.data_collections.node_x)
                 self.pos[0][placedb.num_nodes:placedb.num_nodes+placedb.num_physical_nodes].data.copy_(self.data_collections.node_y)
                 logging.info("Read Global Placement solution from %s" % (place_file))
+                cur_metric = EvalMetricsFPGA(iteration)
+                all_metrics.append(cur_metric)
+                cur_metric.evaluate(placedb, {"hpwl" : self.op_collections.hpwl_op}, self.pos[0])
+                logging.info(cur_metric)
 
             #Perform sorting of pin, net, node
             _, sortedNetIdx = torch.sort(self.data_collections.net2pincount_map)
