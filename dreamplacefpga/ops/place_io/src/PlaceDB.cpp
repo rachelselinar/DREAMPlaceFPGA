@@ -222,6 +222,9 @@ void PlaceDB::add_bookshelf_node(std::string& name, std::string& type)
 }
 
 void PlaceDB::add_bookshelf_net(BookshelfParser::Net const& n) {
+    ////DBG
+    //std::cout << "Add net: " << n.net_name << " with " << n.vNetPin.size() << " pins" << std::endl;
+    ////DBG
     // check the validity of nets
     // if a node has multiple pins in the net, only one is kept
     std::vector<BookshelfParser::NetPin> vNetPin = n.vNetPin;
@@ -267,12 +270,22 @@ void PlaceDB::add_bookshelf_net(BookshelfParser::Net const& n) {
                 pin_offset_y.emplace_back(0.5);
                 nodeType = fixed_node_types[nodeId];
                 nodeId += num_movable_nodes;
+            } else
+            {
+                dreamplacePrint(kERROR, "Net %s connects to instance %s pin %s. However instance %s is not specified in .nodes file. FIX\n",
+                        n.net_name.c_str(), netPin.node_name.c_str(), netPin.pin_name.c_str(), netPin.node_name.c_str());
             }
         }
 
         std::string pType("");
         LibCell const& lCell = m_vLibCell.at(m_LibCellName2Index.at(nodeType));
-        index_type pinTypeId(lCell.pinType(netPin.pin_name));
+        int pinTypeId(lCell.pinType(netPin.pin_name));
+
+        if (pinTypeId == -1)
+        {
+            dreamplacePrint(kWARN, "Net %s connects to instance %s pin %s. However pin %s is not listed in .lib as a valid pin for instance type %s. FIX\n",
+                    n.net_name.c_str(), netPin.node_name.c_str(), netPin.pin_name.c_str(), netPin.pin_name.c_str(), nodeType.c_str());
+        }
 
         switch(pinTypeId)
         {
@@ -314,6 +327,9 @@ void PlaceDB::add_bookshelf_net(BookshelfParser::Net const& n) {
     }
     flat_net2pin_start_map.emplace_back(flat_net2pin_map.size());
     net2pin_map.emplace_back(netPins);
+    ////DBG
+    //std::cout << "Successfully added net: " << n.net_name << " with " << n.vNetPin.size() << " pins" << std::endl;
+    ////DBG
 }
 void PlaceDB::resize_sites(int xSize, int ySize)
 {
