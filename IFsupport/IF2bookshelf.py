@@ -84,7 +84,7 @@ class IF2bookshelf():
                     head = 'CELL' + ' ' + cell_type
                     lib_file.write(head + os.linesep)
                     for port_pin in port_list:
-                        port_name, port_dir = port_pin
+                        port_name, port_dir, bus_idx = port_pin
                         line = '  ' + 'PIN' + ' ' + port_name + ' ' + port_dir.name.upper()
                         if port_name in self.ctrl_pins:
                             line = line + ' ' + 'CTRL' 
@@ -134,11 +134,11 @@ class IF2bookshelf():
                     head = 'net' + ' ' + net_name + ' ' + len_pin
                     nets_file.write(head + os.linesep)
                     for pin in pin_list:
-                        cell, port_name = pin
-                        if cell not in self.const_nodes:
-                            line = '\t' + cell + ' ' + port_name
+                        cell_name, port_name = pin
+                        if cell_name not in self.const_nodes:
+                            line = '\t' + cell_name + ' ' + port_name
                         else:
-                            line = '\t' + cell + ' O'
+                            line = '\t' + cell_name + ' O'
                         nets_file.write(line + os.linesep)
                     end = 'endnet'
                     nets_file.write(end + os.linesep)
@@ -448,7 +448,6 @@ class LogicalNetlist:
 
         # database for design.lib
         self.cell_ports = {}
-        port_bus2idx = {}
         for cell in self.cell_decls:
             cell_type = self.strs[cell.name]
             if cell_type not in self.cell_ports:
@@ -460,17 +459,19 @@ class LogicalNetlist:
                     if self.port_list[port_idx].which() == 'bus':
                         bus_start = self.port_list[port_idx].bus.busStart
                         bus_end = self.port_list[port_idx].bus.busEnd
+                        bus_indices = []
                         if bus_start > bus_end:
-                            port_bus2idx[port_name] = [*range(bus_start, bus_end-1, -1)]     
+                            bus_indices = [*range(bus_start, bus_end-1, -1)]     
                         else:  
-                            port_bus2idx[port_name] = [*range(bus_start, bus_end+1, 1)]   
+                            bus_indices = [*range(bus_start, bus_end+1, 1)]   
                         
-                        for idx in port_bus2idx[port_name]:
-                            port_name_bus = port_name + '[' + str(idx) + ']'
-                            self.cell_ports[cell_type].append((port_name_bus, port_dir))
+                        for bus_idx in bus_indices:
+                            bus_name = port_name + '[' + str(bus_idx) + ']'
+                            self.cell_ports[cell_type].append((bus_name, port_dir, bus_idx))
+                           
                     else:
-                        self.cell_ports[cell_type].append((port_name, port_dir))
-
+                        self.cell_ports[cell_type].append((port_name, port_dir, -1))
+                    
 
         # database for design.nodes
         self.nodes = {}
@@ -479,8 +480,7 @@ class LogicalNetlist:
             cell_type = self.strs[self.cell_decls[cell_inst.cell].name]
             if cell_name not in self.nodes:
                 self.nodes[cell_name] = cell_type
-
-        pdb.set_trace()         
+        
         # database for design.nets
         self.nets = {}
         for cell in self.cell_list:
@@ -494,16 +494,25 @@ class LogicalNetlist:
                     self.nets[net_name] = []
                 for port_inst in net.portInsts:
                     port_name = self.strs[self.port_list[port_inst.port].name]
+                    is_external = False
             
                     if port_inst.which() == 'inst':
-                        cell = self.strs[self.inst_list[port_inst.inst].name]
+                        cell_name = self.strs[self.inst_list[port_inst.inst].name]
+                        cell_type = self.nodes[cell_name]
+    
+                    elif port_inst.which() == 'extPort':
+                        is_external = True
                         
                     if port_inst.busIdx.which() == 'idx':
-                        port_idx = port_bus2idx[port_name][port_inst.busIdx.idx]
-                        port_name_idx = port_name + '[' + str(port_idx) + ']'
-                        self.nets[net_name].append((cell, port_name_idx))
+                        if is_external == False:
+                            port_idx = self.cell_ports[cell_type][port_inst.busIdx.idx][2]
+                            port_name = port_name + '[' + str(port_idx) + ']'
+                            self.nets[net_name].append((cell_name, port_name))
+                        # if a port is external, the port name is set to the net name
+                        else:
+                            self.nets[net_name].append((cell_name, net_name))
                     else:
-                        self.nets[net_name].append((cell, port_name))
+                        self.nets[net_name].append((cell_name, port_name))
 
                         
 class DeviceResources:
