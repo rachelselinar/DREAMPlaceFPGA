@@ -144,9 +144,9 @@ class PlaceDBFPGA (object):
         self.flop_mask = None
         self.lut_mask = None
         self.lut_type = None
+        self.cluster_lut_type = None
         self.ram_mask = None
         self.dsp_mask = None
-
 
     """
     @return number of nodes
@@ -234,6 +234,7 @@ class PlaceDBFPGA (object):
         pydb = place_io.PlaceIOFunction.pydb(self.rawdb)
 
         self.node_names = np.array(pydb.node_names, dtype=np.str_)
+        self.node_name2id_map = pydb.node_name2id_map
         self.node_size_x = np.array(pydb.node_size_x, dtype=self.dtype)
         self.node_size_y = np.array(pydb.node_size_y, dtype=self.dtype)
         self.node_types = np.array(pydb.node_types, dtype=np.str_)
@@ -251,7 +252,8 @@ class PlaceDBFPGA (object):
         self.net2pincount_map = np.array(pydb.net2pincount_map, dtype=np.int32)
         self.node2outpinIdx_map = np.array(pydb.node2outpinIdx_map, dtype=np.int32)
         self.lut_type = np.array(pydb.lut_type, dtype=np.int32)
-        self.node_name2id_map = pydb.node_name2id_map
+        #Use for clustering aware instance area update. LUT0 is ignored
+        self.cluster_lut_type = np.array(pydb.cluster_lut_type, dtype=np.int32)
 
         self.num_terminals = pydb.num_terminals
         self.num_movable_nodes = pydb.num_movable_nodes

@@ -105,6 +105,7 @@ class PlaceDataCollectionFPGA(object):
 
             #LUT type list
             self.lut_type = torch.from_numpy(placedb.lut_type).to(dtype=torch.int32,device=device)
+            self.cluster_lut_type = torch.from_numpy(placedb.cluster_lut_type).to(dtype=torch.int32,device=device)
             self.pin_typeIds = torch.from_numpy(placedb.pin_typeIds).to(dtype=torch.int32,device=device)
 
             #FF control sets

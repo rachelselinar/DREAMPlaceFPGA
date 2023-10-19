@@ -12,6 +12,7 @@
 * [Cloning the Repository](#cloning)
 * [Build Instructions](#build)
     - [To install Python dependency](#python_dependency)
+    - [To install with Docker](#Docker)
     - [To Build](#build_dreamplacefpga)
     - [Cmake Options](#cmake)
 * [Sample Benchmarks](#sample)
@@ -154,6 +155,8 @@ git clone --recursive https://github.com/rachelselinar/DREAMPlaceFPGA.git
 
 ### <a name="python_dependency"></a>To install Python dependency 
 
+There is an aternative way to install DREAMPlaceFPGA using docker, if you want to use the docker, skip this step and goes to the next step, "To install with Docker"
+
 At the root directory:
 ```
 pip install -r requirements.txt 
@@ -161,6 +164,40 @@ pip install -r requirements.txt
 > For example, if the repository was cloned in directory ***~/Downloads***, then the root directory is ***~/Downloads/DREAMPlaceFPGA***
 
 > You can also use a [python virtual environment](https://docs.python.org/3/library/venv.html) to install all the required packages to run ``DREAMPlaceFPGA``
+
+### <a name="Docker"></a>To install with Docker
+
+You can use the Docker container to avoid building all the dependencies yourself.
+
+1.  Install Docker on [Linux](https://docs.docker.com/install/).(Win and Mac are not tested)
+2.  To enable the GPU features, install [NVIDIA-docker](https://github.com/NVIDIA/nvidia-docker); otherwise, skip this step.
+3.  Get the docker image using one of the options
+    Build the image locally
+    ```
+    docker build . --file Dockerfile --tag <username>/dreamplacefpga:1.0
+    ```
+    replace `<username>` with a username, for instance 'utda_placer'.
+4.  Enter bash environment of the container.
+    Mount the repo and all the Designs into the Docker, which allows the Docker container to directly access and modify these files
+
+    To run on a Linux machine without GPU:
+    ```
+    docker run -it -v $(pwd):/DREAMPlaceFPGA <username>/dreamplacefpga:1.0 bash
+    ```
+    To run on a Linux machine with GPU: (Docker verified on NVIDIA GPUs with compute capability 6.1, 7.5, and 8.0)
+    ```
+    docker run --gpus 1 -it -v $(pwd):/DREAMPlaceFPGA <username>/dreamplacefpga:1.0 bash
+    ```
+
+    For example to run on a Linux machine without GPU:
+    ```
+    docker run -it -v $(pwd):/DREAMPlaceFPGA utda_placer/dreamplacefpga:1.0 bash
+    ```
+5.  Go to the `DREAMPlaceFPGA` directory in the Docker, which is the root directory of the project
+    ```
+    cd /DREAMPlaceFPGA
+    ```
+
 
 ### <a name="build_dreamplacefpga"></a>To Build 
 
@@ -172,6 +209,17 @@ cmake .. -DCMAKE_INSTALL_PREFIX=path_to_root_dir
 make
 make install
 ```
+
+if you are using the docker, using the following at the root directory,
+ ```
+rm -rf build
+mkdir build 
+cd build 
+cmake .. -DCMAKE_INSTALL_PREFIX=/DREAMPlaceFPGA -DPYTHON_EXECUTABLE=$(which python)
+make
+make install
+```
+
 Third party submodules are automatically built except for [Boost](https://www.boost.org).
 
 > For example,
@@ -227,6 +275,8 @@ For example:
 python dreamplacefpga/Placer.py test/FPGA-example1.json
 ```
 > ***~/Downloads/DREAMPlaceFPGA:*** *python dreamplacefpga/Placer.py test/FPGA-example1.json*
+
+> If you are not using the GPU, change the gpu flag in the *.json file to 0.
 
 Unit tests for some of the pytorch operators are provided. For instance, to run unit test for hpwl, use the below command:
 ```

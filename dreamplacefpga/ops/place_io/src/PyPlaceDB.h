@@ -46,6 +46,7 @@ struct PyPlaceDB
     pybind11::list net2pincount_map; ///< array of 1D array, number of pins in net
     pybind11::list node2outpinIdx_map; ///< array of 1D array, output pin idx of each node
     pybind11::list lut_type; ///< 1D array, nodeTypes(FPGA)
+    pybind11::list cluster_lut_type; ///< 1D array, LUT types for clustering
     pybind11::dict node_name2id_map; ///< node name to id map, cell name 
     //pybind11::dict movable_node_name2id_map; ///< node name to id map, cell name 
     //pybind11::dict fixed_node_name2id_map; ///< node name to id map, cell name 

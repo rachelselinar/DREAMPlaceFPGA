@@ -383,49 +383,96 @@ inline __device__ bool two_lut_compatibility_check(const int* lut_type, const in
         return true;
     }
 
+    //Include condition for LUT0
+    if (lut_type[lutA] == 0 || lut_type[lutB] == 0)
+    {
+        return false;
+    }
+
+    int lutANets[20], lutBNets[20];
+    int lutAIdx(0), lutBIdx(0);
+
     int lutAIt = flat_node2pin_start_map[lutA];
     int lutBIt = flat_node2pin_start_map[lutB];
     int lutAEnd = flat_node2pin_start_map[lutA+1];
     int lutBEnd = flat_node2pin_start_map[lutB+1];
 
-    if (pin_typeIds[flat_node2pin_map[lutAIt]] != INPUT_PIN)
+    for (int el = lutAIt; el < lutAEnd; ++el)
     {
-        ++lutAIt;
-    }
-    if (pin_typeIds[flat_node2pin_map[lutBIt]] != INPUT_PIN)
-    {
-        ++lutBIt;
+        //Skip if not an input pin
+        if (pin_typeIds[flat_node2pin_map[el]] != INPUT_PIN) continue;
+
+        int netId = pin2net_map[flat_node2pin_map[el]];
+        lutANets[lutAIdx] = netId;
+        ++lutAIdx;
     }
 
-    int netIdA = pin2net_map[flat_node2pin_map[lutAIt]];
-    int netIdB = pin2net_map[flat_node2pin_map[lutBIt]];
+    if (lutAIdx > 1)
+    {
+        //Sort contents of lutANets
+        for (int ix = 1; ix < lutAIdx; ++ix)
+        {
+            for (int jx = 0; jx < lutAIdx-1; ++jx)
+            {
+                if (lutANets[jx] > lutANets[jx+1])
+                {
+                    int val = lutANets[jx];
+                    lutANets[jx] = lutANets[jx+1];
+                    lutANets[jx+1] = val;
+                }
+            }
+        }
+    }
+
+    for (int el = lutBIt; el < lutBEnd; ++el)
+    {
+        //Skip if not an input pin
+        if (pin_typeIds[flat_node2pin_map[el]] != INPUT_PIN) continue;
+
+        int netId = pin2net_map[flat_node2pin_map[el]];
+        lutBNets[lutBIdx] = netId;
+        ++lutBIdx;
+    }
+
+    if (lutBIdx > 1)
+    {
+        //Sort contents of lutBNets
+        for (int ix = 1; ix < lutBIdx; ++ix)
+        {
+            for (int jx = 0; jx < lutBIdx-1; ++jx)
+            {
+                if (lutBNets[jx] > lutBNets[jx+1])
+                {
+                    int val = lutBNets[jx];
+                    lutBNets[jx] = lutBNets[jx+1];
+                    lutBNets[jx+1] = val;
+                }
+            }
+        }
+    }
+
+    int idxA = 0, idxB = 0;
+    int netIdA = lutANets[idxA];
+    int netIdB = lutBNets[idxB];
 
     while(numInputs > LUT_MAXSHARED_INPUTS)
     {
-        if (sorted_net_map[netIdA] < sorted_net_map[netIdB])
+        if (netIdA < netIdB)
         {
-            ++lutAIt;
-            if (pin_typeIds[flat_node2pin_map[lutAIt]] != INPUT_PIN)
+            ++idxA;
+            if (idxA < lutAIdx)
             {
-                ++lutAIt;
-            }
-            if (lutAIt < lutAEnd)
-            {
-                netIdA = pin2net_map[flat_node2pin_map[lutAIt]];
+                netIdA = lutANets[idxA];
             } else
             {
                 break;
             }
-        } else if (sorted_net_map[netIdA] > sorted_net_map[netIdB])
+        } else if (netIdA > netIdB)
         {
-            ++lutBIt;
-            if (pin_typeIds[flat_node2pin_map[lutBIt]] != INPUT_PIN)
+            ++idxB;
+            if (idxB < lutBIdx)
             {
-                ++lutBIt;
-            }
-            if (lutBIt < lutBEnd)
-            {
-                netIdB = pin2net_map[flat_node2pin_map[lutBIt]];
+                netIdB = lutBNets[idxB];
             } else
             {
                 break;
@@ -434,21 +481,13 @@ inline __device__ bool two_lut_compatibility_check(const int* lut_type, const in
         } else
         {
             --numInputs;
-            ++lutAIt;
-            ++lutBIt;
-            if (pin_typeIds[flat_node2pin_map[lutAIt]] != INPUT_PIN)
-            {
-                ++lutAIt;
-            }
-            if (pin_typeIds[flat_node2pin_map[lutBIt]] != INPUT_PIN)
-            {
-                ++lutBIt;
-            }
+            ++idxA;
+            ++idxB;
 
-            if (lutAIt < lutAEnd && lutBIt < lutBEnd)
+            if (idxA < lutAIdx && idxB < lutBIdx)
             {
-                netIdA = pin2net_map[flat_node2pin_map[lutAIt]];
-                netIdB = pin2net_map[flat_node2pin_map[lutBIt]];
+                netIdA = lutANets[idxA];
+                netIdB = lutBNets[idxB];
             } else
             {
                 break;

@@ -47,7 +47,6 @@ class LegalizeCLB(nn.Module):
         self.node2outpinIdx_map=node2outpin
         self.pin_typeIds=pin_types
         self.lut_type=lut_type
-        self.lut_type[node2fence == 0] += 1
         self.net_wts=net_wts
         self.avg_lut_area=avg_lut_area
         self.avg_ff_area=avg_ff_area
