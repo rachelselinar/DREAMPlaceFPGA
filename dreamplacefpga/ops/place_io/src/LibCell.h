@@ -34,10 +34,11 @@ class LibCell : public Object
         string2index_map_type const& libCellPinName2Type() const {return m_mPinName2Type;}
         string2index_map_type& libCellPinName2Type() {return m_mPinName2Type;}
 
-        index_type pinType(std::string const& s) const 
+        int pinType(std::string const& s) const 
         {
             string2index_map_type::const_iterator found = m_mPinName2Type.find(s);
-            return (found != m_mPinName2Type.end())? found->second : std::numeric_limits<index_type>::max();
+            //return (found != m_mPinName2Type.end())? found->second : std::numeric_limits<index_type>::max();
+            return (found != m_mPinName2Type.end())? found->second : -1;
         }
 
     void addInputPin(std::string& s)

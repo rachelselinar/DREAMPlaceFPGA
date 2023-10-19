@@ -44,6 +44,10 @@ struct Candidate
         siteId = INVALID;
         sigIdx = 0;
 
+        for(int sg = 0; sg < 2*SLICE_CAPACITY; ++sg)
+        {
+            sig[sg] = INVALID;
+        }
         for(int sg = 0; sg < SLICE_CAPACITY; ++sg)
         {
             impl_lut[sg] = INVALID;
@@ -74,6 +78,15 @@ struct RipUpCand
     T score = -10000.0; 
     bool legal = false;
     Candidate<T> cand;
+
+    void reset()
+    {
+        siteId = INVALID;
+        score = -10000.0; 
+        legal = false;
+        cand.reset();
+    }
+
 };
 
 //Struct for BLE
@@ -88,6 +101,38 @@ struct BLE
 
 //////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////
+
+void clear_cand_contents(
+        const int tsPQ, const int SIG_IDX, const int SLICE_CAPACITY,
+        const int CKSR_IN_CLB, const int CE_IN_CLB,
+        int* site_sig_idx, int* site_sig,
+        int* site_impl_lut, int* site_impl_ff,
+        int* site_impl_cksr, int* site_impl_ce)
+{
+    int topIdx(tsPQ*SIG_IDX);
+    int lutIdx = tsPQ*SLICE_CAPACITY;
+    int ckIdx = tsPQ*CKSR_IN_CLB;
+    int ceIdx = tsPQ*CE_IN_CLB;
+
+    for(int sg = 0; sg < SIG_IDX; ++sg)
+    {
+        site_sig[topIdx + sg] = INVALID;
+    }
+    for(int sg = 0; sg < SLICE_CAPACITY; ++sg)
+    {
+        site_impl_lut[lutIdx + sg] = INVALID;
+        site_impl_ff[lutIdx + sg] = INVALID;
+    }
+    for(int sg = 0; sg < CKSR_IN_CLB; ++sg)
+    {
+        site_impl_cksr[ckIdx + sg] = INVALID;
+    }
+    for(int sg = 0; sg < CE_IN_CLB; ++sg)
+    {
+        site_impl_ce[ceIdx + sg] = INVALID;
+    }
+    site_sig_idx[tsPQ] = 0;
+}
 
 // check if candidate is valid
 inline bool candidate_validity_check(const int topIdx, const int siteCurrPQSigIdx, const int siteCurrPQSiteId, const int* site_curr_pq_sig, const int* inst_curr_detSite)
@@ -253,47 +298,29 @@ inline bool check_sig_in_site_next_pq_sig(const int* nwCand_sig, const int nwCan
 inline bool add_inst_to_sig(const int node2prclstrCount, const int* flat_node2precluster_map, const int* sorted_node_map, const int instPcl, int* nwCand_sig, int& nwCand_sigIdx)
 {
     std::vector<int> temp;
-    int itA(0), itB(0); 
-    int endA(nwCand_sigIdx), endB(node2prclstrCount);
 
-    while (itA != endA && itB != endB)
+    for (int el = 0; el < node2prclstrCount; ++el)
     {
-        if(sorted_node_map[nwCand_sig[itA]] < sorted_node_map[flat_node2precluster_map[instPcl+itB]])
+        int newInstId = flat_node2precluster_map[instPcl+el];
+        //Ensure instance is not in sig
+        if (!inst_in_sig(newInstId, nwCand_sigIdx, nwCand_sig, 0))
         {
-            temp.emplace_back(nwCand_sig[itA]);
-            ++itA;
-        }
-        else if(sorted_node_map[nwCand_sig[itA]] > sorted_node_map[flat_node2precluster_map[instPcl+itB]])
-        {
-            temp.emplace_back(flat_node2precluster_map[instPcl+itB]);
-            ++itB;
+            temp.emplace_back(newInstId);
         } else
         {
             return false;
         }
     }
-    if (itA == endA)
-    {
-        for (int mBIdx = itB; mBIdx < endB; ++mBIdx)
-        {
-            temp.emplace_back(flat_node2precluster_map[instPcl+mBIdx]);
-        }
-    } else
-    {
-        for (int mAIdx = itA; mAIdx < endA; ++mAIdx)
-        {
-            temp.emplace_back(nwCand_sig[mAIdx]);
-        }
-    }
 
-    if (temp.size() > 2*SLICE_CAPACITY)
+    if (nwCand_sigIdx + temp.size() > 2*SLICE_CAPACITY)
     {
         return false;
     }
-    nwCand_sigIdx = (int)temp.size();
-    for(unsigned int i = 0; i < temp.size(); ++i)
+
+    for (int mBIdx = 0; mBIdx < temp.size(); ++mBIdx)
     {
-        nwCand_sig[i] = temp[i];
+        nwCand_sig[nwCand_sigIdx] = temp[mBIdx];
+        ++nwCand_sigIdx;
     }
     return true;
 }
@@ -541,7 +568,7 @@ inline void compute_candidate_score(const T* pos_x, const T* pos_y, const T* pin
             {
                 ++numNets;
                 numIntNets += (currNetIntPins.size() == net2pincount[currNetId] ? 1 : 0);
-                netShareScore += net_weights[currNetId] * (currNetIntPins.size() - 1.0) / (net2pincount[currNetId] - 1.0);
+                netShareScore += net_weights[currNetId] * (currNetIntPins.size() - 1.0) / DREAMPLACE_STD_NAMESPACE::max(1.0, net2pincount[currNetId] - 1.0);
             }
             if (net2pincount[currNetId] <= wlScoreMaxNetDegree)
             {
@@ -561,7 +588,7 @@ inline void compute_candidate_score(const T* pos_x, const T* pos_y, const T* pin
     {
         ++numNets;
         numIntNets += (currNetIntPins.size() == net2pincount[currNetId] ? 1 : 0);
-        netShareScore += net_weights[currNetId] * (currNetIntPins.size() - 1.0) / (net2pincount[currNetId] - 1.0);
+        netShareScore += net_weights[currNetId] * (currNetIntPins.size() - 1.0) / DREAMPLACE_STD_NAMESPACE::max(1.0, net2pincount[currNetId] - 1.0);
     }
     if (net2pincount[currNetId] <= wlScoreMaxNetDegree)
     {
@@ -1182,38 +1209,73 @@ void pairLUTs(const std::vector<int> &lut, const std::vector<BLE<T> > &bleP, con
 }
 
 template <typename T>
-inline bool compare_pq_tops(const int siteId, const int sPQ, const int SIG_IDX, const T* site_curr_pq_score, const int* site_curr_pq_top_idx, const int* site_curr_pq_siteId, const int* site_curr_pq_sig_idx, const int* site_curr_pq_sig, const T* site_next_pq_score, const int* site_next_pq_top_idx, const int* site_next_pq_siteId, const int* site_next_pq_sig_idx, const int* site_next_pq_sig)
+inline bool compare_pq_tops(
+        const T* site_curr_pq_score, const int* site_curr_pq_top_idx, const int* site_curr_pq_validIdx,
+        const int* site_curr_pq_siteId, const int* site_curr_pq_sig_idx, const int* site_curr_pq_sig,
+        const int* site_curr_pq_impl_lut, const int* site_curr_pq_impl_ff, const int* site_curr_pq_impl_cksr,
+        const int* site_curr_pq_impl_ce, const T* site_next_pq_score, const int* site_next_pq_top_idx,
+        const int* site_next_pq_validIdx, const int* site_next_pq_siteId, const int* site_next_pq_sig_idx,
+        const int* site_next_pq_sig, const int* site_next_pq_impl_lut, const int* site_next_pq_impl_ff,
+        const int* site_next_pq_impl_cksr, const int* site_next_pq_impl_ce, const int siteId,
+        const int sPQ, const int SIG_IDX, const int CKSR_IN_CLB, const int CE_IN_CLB, const int SLICE_CAPACITY)
 {
     //Check site_curr_pq TOP == site_next_pq TOP
     int curr_pq_topId = sPQ+site_curr_pq_top_idx[siteId];
     int next_pq_topId = sPQ+site_next_pq_top_idx[siteId];
 
+    if (site_curr_pq_validIdx[curr_pq_topId] != site_next_pq_validIdx[next_pq_topId] || 
+            site_curr_pq_validIdx[curr_pq_topId] != 1)
+    {
+        return false;
+    }
     if (site_curr_pq_score[curr_pq_topId] == site_next_pq_score[next_pq_topId] && 
-        site_curr_pq_siteId[curr_pq_topId] == site_next_pq_siteId[next_pq_topId] &&
-        site_curr_pq_sig_idx[curr_pq_topId] == site_next_pq_sig_idx[next_pq_topId])
+            site_curr_pq_siteId[curr_pq_topId] == site_next_pq_siteId[next_pq_topId] &&
+            site_curr_pq_sig_idx[curr_pq_topId] == site_next_pq_sig_idx[next_pq_topId])
     {
         //Check both sig
         int currPQSigIdx = curr_pq_topId*SIG_IDX;
         int nextPQSigIdx = next_pq_topId*SIG_IDX;
 
-        std::vector<int> currEls, nextEls;
-
-        for (int x = 0; x < site_curr_pq_sig_idx[curr_pq_topId]; ++x)
+        for (int sg = 0; sg < site_curr_pq_sig_idx[curr_pq_topId]; ++sg)
         {
-            currEls.emplace_back(site_curr_pq_sig[currPQSigIdx + x]);
-        }
-        for (int x = 0; x < site_next_pq_sig_idx[next_pq_topId]; ++x)
-        {
-            nextEls.emplace_back(site_next_pq_sig[nextPQSigIdx + x]);
+            if (site_curr_pq_sig[currPQSigIdx + sg] != site_next_pq_sig[nextPQSigIdx + sg])
+            {
+                return false;
+            }
         }
 
-        std::sort(currEls.begin(), currEls.end());
-        std::sort(nextEls.begin(), nextEls.end());
+        //Check impl
+        int cCKRId = curr_pq_topId*CKSR_IN_CLB;
+        int cCEId = curr_pq_topId*CE_IN_CLB;
+        int cFFId = curr_pq_topId*SLICE_CAPACITY;
+        int nCKRId = next_pq_topId*CKSR_IN_CLB;
+        int nCEId = next_pq_topId*CE_IN_CLB;
+        int nFFId = next_pq_topId*SLICE_CAPACITY;
 
-        if (currEls == nextEls)
+        for (int sg = 0; sg < SLICE_CAPACITY; ++sg)
         {
-            return true;
+            if (site_curr_pq_impl_lut[cFFId + sg] != site_next_pq_impl_lut[nFFId + sg] || 
+                    site_curr_pq_impl_ff[cFFId + sg] != site_next_pq_impl_ff[nFFId + sg])
+            {
+                return false;
+            }
         }
+        for (int sg = 0; sg < CKSR_IN_CLB; ++sg)
+        {
+            if (site_curr_pq_impl_cksr[cCKRId + sg] != site_next_pq_impl_cksr[nCKRId + sg])
+            {
+                return false;
+            }
+        }
+        for (int sg = 0; sg < CE_IN_CLB; ++sg)
+        {
+            if(site_curr_pq_impl_ce[cCEId + sg] != site_next_pq_impl_ce[nCEId + sg])
+            {
+                return false;
+            }
+        }
+        /////
+        return true;
     }
     return false;
 }
@@ -1714,6 +1776,7 @@ int runDLIteration(const T* pos_x,
                    int* site_nbr,
                    int* site_nbrGroup_idx,
                    int* site_curr_pq_top_idx,
+                   int* site_curr_pq_validIdx,
                    int* site_curr_pq_sig_idx,
                    int* site_curr_pq_sig,
                    int* site_curr_pq_idx,
@@ -1852,32 +1915,48 @@ int runDLIteration(const T* pos_x,
                     site_det_sig_idx, sIdx, sNbrIdx, HALF_SLICE_CAPACITY, NUM_BLE_PER_SLICE, SIG_IDX, CKSR_IN_CLB, CE_IN_CLB, site_nbr_idx, site_nbr);
 
             //Clear pq and make scl only contain the committed candidate
-            int sclCount(0);
+            //int sclCount(0);
             for (int vId = 0; vId < PQ_IDX; ++vId)
             {
                 int nPQId = sPQ + vId;
-                if (site_next_pq_validIdx[nPQId] != INVALID)
-                {
-                    site_next_pq_validIdx[nPQId] = INVALID;
-                    site_next_pq_sig_idx[nPQId] = 0;
-                    site_next_pq_siteId[nPQId] = INVALID;
-                    site_next_pq_score[nPQId] = 0.0;
-                    ++sclCount;
-                    if (sclCount == site_next_pq_idx[sIdx])
-                    {
-                        break;
-                    }
-                }
+                //if (site_next_pq_validIdx[nPQId] != INVALID)
+                //{
+                //Clear contents thoroughly
+                clear_cand_contents(
+                        nPQId, SIG_IDX, SLICE_CAPACITY, CKSR_IN_CLB, CE_IN_CLB,
+                        site_next_pq_sig_idx, site_next_pq_sig,
+                        site_next_pq_impl_lut, site_next_pq_impl_ff,
+                        site_next_pq_impl_cksr, site_next_pq_impl_ce);
+
+                site_next_pq_validIdx[nPQId] = INVALID;
+                site_next_pq_siteId[nPQId] = INVALID;
+                site_next_pq_score[nPQId] = 0.0;
+                site_next_pq_sig_idx[nPQId] = 0;
+
+                //++sclCount;
+                //if (sclCount == site_next_pq_idx[sIdx])
+                //{
+                //    break;
+                //}
+                //}
             }
             site_next_pq_idx[sIdx] = 0;
             site_next_pq_top_idx[sIdx] = INVALID;
+            site_next_stable[sIdx] = 0;
 
-            sclCount = 0;
+            int sclCount = 0;
             for (int vId = 0; vId < SCL_IDX; ++vId)
             {
                 int cSclId = sSCL + vId;
                 if (site_curr_scl_validIdx[cSclId] != INVALID)
                 {
+                    //Clear contents thoroughly
+                    clear_cand_contents(
+                            cSclId, SIG_IDX, SLICE_CAPACITY, CKSR_IN_CLB, CE_IN_CLB,
+                            site_curr_scl_sig_idx, site_curr_scl_sig,
+                            site_curr_scl_impl_lut, site_curr_scl_impl_ff,
+                            site_curr_scl_impl_cksr, site_curr_scl_impl_ce);
+
                     site_curr_scl_validIdx[cSclId] = INVALID;
                     site_curr_scl_sig_idx[cSclId] = 0;
                     site_curr_scl_siteId[cSclId] = INVALID;
@@ -1923,8 +2002,8 @@ int runDLIteration(const T* pos_x,
             //Remove invalid candidates from site PQ
             if (site_next_pq_idx[sIdx] > 0)
             {
-                int snCnt = 0;
-                int maxEntries = site_next_pq_idx[sIdx];
+                //int snCnt = 0;
+                //int maxEntries = site_next_pq_idx[sIdx];
                 for (int nIdx = 0; nIdx < PQ_IDX; ++nIdx)
                 {
                     int ssPQ = sPQ + nIdx;
@@ -1934,49 +2013,53 @@ int runDLIteration(const T* pos_x,
                     {
                         if (!candidate_validity_check(topIdx, site_next_pq_sig_idx[ssPQ], site_next_pq_siteId[ssPQ], site_next_pq_sig, inst_curr_detSite))
                         {
+                            //Clear contents thoroughly
+                            clear_cand_contents(
+                                    ssPQ, SIG_IDX, SLICE_CAPACITY, CKSR_IN_CLB, CE_IN_CLB,
+                                    site_next_pq_sig_idx, site_next_pq_sig,
+                                    site_next_pq_impl_lut, site_next_pq_impl_ff,
+                                    site_next_pq_impl_cksr, site_next_pq_impl_ce);
+
                             site_next_pq_validIdx[ssPQ] = INVALID;
                             site_next_pq_sig_idx[ssPQ] = 0;
                             site_next_pq_siteId[ssPQ] = INVALID;
                             site_next_pq_score[ssPQ] = 0.0;
                             --site_next_pq_idx[sIdx];
                         }
-                        ++snCnt;
-                        if (snCnt == maxEntries)
-                        {
-                            break;
-                        }
+                        //++snCnt;
+                        //if (snCnt == maxEntries)
+                        //{
+                        //    break;
+                        //}
                     }
                 }
 
                 //Recompute top idx
-                if (site_next_pq_validIdx[sPQ + site_next_pq_top_idx[sIdx]] == INVALID)
+                site_next_pq_top_idx[sIdx] = INVALID;
+                if (site_next_pq_idx[sIdx] > 0)
                 {
-                    site_next_pq_top_idx[sIdx] = INVALID;
-                    if (site_next_pq_idx[sIdx] > 0)
+                    //snCnt = 0;
+                    //maxEntries = site_next_pq_idx[sIdx];
+                    T maxScore(-1000.0);
+                    int maxScoreId(INVALID);
+                    for (int nIdx = 0; nIdx < PQ_IDX; ++nIdx)
                     {
-                        snCnt = 0;
-                        maxEntries = site_next_pq_idx[sIdx];
-                        T maxScore(-1000.0);
-                        int maxScoreId(INVALID);
-                        for (int nIdx = 0; nIdx < PQ_IDX; ++nIdx)
+                        int ssPQ = sPQ + nIdx;
+                        if (site_next_pq_validIdx[ssPQ] != INVALID)
                         {
-                            int ssPQ = sPQ + nIdx;
-                            if (site_next_pq_validIdx[ssPQ] != INVALID)
+                            if (site_next_pq_score[ssPQ] > maxScore)
                             {
-                                if (site_next_pq_score[ssPQ] > maxScore)
-                                {
-                                    maxScore = site_next_pq_score[ssPQ];
-                                    maxScoreId = nIdx;
-                                }
-                                ++snCnt;
-                                if (snCnt == maxEntries)
-                                {
-                                    break;
-                                }
+                                maxScore = site_next_pq_score[ssPQ];
+                                maxScoreId = nIdx;
                             }
+                            //++snCnt;
+                            //if (snCnt == maxEntries)
+                            //{
+                            //    break;
+                            //}
                         }
-                        site_next_pq_top_idx[sIdx] = maxScoreId;
                     }
+                    site_next_pq_top_idx[sIdx] = maxScoreId;
                 }
             }
 
@@ -1993,6 +2076,13 @@ int runDLIteration(const T* pos_x,
                     {
                         if(!candidate_validity_check(topIdx, site_curr_scl_sig_idx[ssPQ], site_curr_scl_siteId[ssPQ], site_curr_scl_sig, inst_curr_detSite))
                         {
+                            //Clear contents thoroughly
+                            clear_cand_contents(
+                                    ssPQ, SIG_IDX, SLICE_CAPACITY, CKSR_IN_CLB, CE_IN_CLB,
+                                    site_curr_scl_sig_idx, site_curr_scl_sig,
+                                    site_curr_scl_impl_lut, site_curr_scl_impl_ff,
+                                    site_curr_scl_impl_cksr, site_curr_scl_impl_ce);
+
                             site_curr_scl_validIdx[ssPQ] = INVALID;
                             site_curr_scl_sig_idx[ssPQ] = 0;
                             site_curr_scl_siteId[ssPQ] = INVALID;
@@ -2100,41 +2190,36 @@ int runDLIteration(const T* pos_x,
                         int sFFId = siteCurrIdx*SLICE_CAPACITY;
                         int sGId = siteCurrIdx*SIG_IDX;
 
-                        T nwCand_score = site_curr_scl_score[siteCurrIdx];
-                        int nwCand_siteId = site_curr_scl_siteId[siteCurrIdx];
-                        int nwCand_sigIdx = site_curr_scl_sig_idx[siteCurrIdx];
-
-                        //array instantiation
-                        int nwCand_sig[32];
-                        int nwCand_lut[SLICE_CAPACITY];
-                        int nwCand_ff[SLICE_CAPACITY];
-                        int nwCand_ce[4];
-                        int nwCand_cksr[2];
+                        Candidate<T> nwCand;
+                        nwCand.reset();
+                        nwCand.score = site_curr_scl_score[siteCurrIdx];
+                        nwCand.siteId = site_curr_scl_siteId[siteCurrIdx];
+                        nwCand.sigIdx = site_curr_scl_sig_idx[siteCurrIdx];
 
                         for (int sg = 0; sg < site_curr_scl_sig_idx[siteCurrIdx]; ++sg)
                         {
-                            nwCand_sig[sg] = site_curr_scl_sig[sGId + sg];
+                            nwCand.sig[sg] = site_curr_scl_sig[sGId + sg];
                         }
                         for (int sg = 0; sg < SLICE_CAPACITY; ++sg)
                         {
-                            nwCand_lut[sg] = site_curr_scl_impl_lut[sFFId + sg];
-                            nwCand_ff[sg] = site_curr_scl_impl_ff[sFFId + sg];
+                            nwCand.impl_lut[sg] = site_curr_scl_impl_lut[sFFId + sg];
+                            nwCand.impl_ff[sg] = site_curr_scl_impl_ff[sFFId + sg];
                         }
                         for (int sg = 0; sg < CKSR_IN_CLB; ++sg)
                         {
-                            nwCand_cksr[sg] = site_curr_scl_impl_cksr[sCKRId + sg];
+                            nwCand.impl_cksr[sg] = site_curr_scl_impl_cksr[sCKRId + sg];
                         }
                         for (int sg = 0; sg < CE_IN_CLB; ++sg)
                         {
-                            nwCand_ce[sg] = site_curr_scl_impl_ce[sCEId + sg];
+                            nwCand.impl_ce[sg] = site_curr_scl_impl_ce[sCEId + sg];
                         }
                         /////
 
-                        if (add_inst_to_sig(flat_node2prclstrCount[instId], flat_node2precluster_map, sorted_node_map, instPcl, nwCand_sig, nwCand_sigIdx) && 
-                                !check_sig_in_site_next_pq_sig(nwCand_sig, nwCand_sigIdx, sPQ, PQ_IDX, site_next_pq_validIdx, site_next_pq_sig, site_next_pq_sig_idx, SIG_IDX) && 
-                                add_inst_to_cand_impl(lut_type, flat_node2pin_start_map, flat_node2pin_map, node2pincount, net2pincount, pin2net_map, pin_typeIds, sorted_net_map, flat_node2prclstrCount, flat_node2precluster_map, flop2ctrlSetId_map, node2fence_region_map, flop_ctrlSets, instId, CKSR_IN_CLB, CE_IN_CLB, HALF_SLICE_CAPACITY, NUM_BLE_PER_SLICE, nwCand_lut, nwCand_ff, nwCand_cksr, nwCand_ce))
+                        if (add_inst_to_sig(flat_node2prclstrCount[instId], flat_node2precluster_map, sorted_node_map, instPcl, nwCand.sig, nwCand.sigIdx) && 
+                                !check_sig_in_site_next_pq_sig(nwCand.sig, nwCand.sigIdx, sPQ, PQ_IDX, site_next_pq_validIdx, site_next_pq_sig, site_next_pq_sig_idx, SIG_IDX) && 
+                                add_inst_to_cand_impl(lut_type, flat_node2pin_start_map, flat_node2pin_map, node2pincount, net2pincount, pin2net_map, pin_typeIds, sorted_net_map, flat_node2prclstrCount, flat_node2precluster_map, flop2ctrlSetId_map, node2fence_region_map, flop_ctrlSets, instId, CKSR_IN_CLB, CE_IN_CLB, HALF_SLICE_CAPACITY, NUM_BLE_PER_SLICE, nwCand.impl_lut, nwCand.impl_ff, nwCand.impl_cksr, nwCand.impl_ce))
                         {
-                            compute_candidate_score(pos_x, pos_y, pin_offset_x, pin_offset_y, net_bbox, net_weights, net_pinIdArrayX, net_pinIdArrayY, flat_net2pin_start_map, flat_node2pin_start_map, flat_node2pin_map, sorted_net_map, pin2net_map, pin2node_map, net2pincount, site_xy, node_names, xWirelenWt, yWirelenWt, extNetCountWt, wirelenImprovWt, netShareScoreMaxNetDegree, wlScoreMaxNetDegree, nwCand_sig, nwCand_siteId, nwCand_sigIdx, nwCand_score);
+                            compute_candidate_score(pos_x, pos_y, pin_offset_x, pin_offset_y, net_bbox, net_weights, net_pinIdArrayX, net_pinIdArrayY, flat_net2pin_start_map, flat_node2pin_start_map, flat_node2pin_map, sorted_net_map, pin2net_map, pin2node_map, net2pincount, site_xy, node_names, xWirelenWt, yWirelenWt, extNetCountWt, wirelenImprovWt, netShareScoreMaxNetDegree, wlScoreMaxNetDegree, nwCand.sig, nwCand.siteId, nwCand.sigIdx, nwCand.score);
 
                             int nxtId(INVALID);
                             //find least score and replace if current score is greater
@@ -2149,10 +2234,11 @@ int runDLIteration(const T* pos_x,
                                         break;
                                     }
                                 }
-                            } else
+                            }
+                            if (nxtId == INVALID)
                             {
                                 //find least score and replace if current score is greater
-                                T ckscore(nwCand_score);
+                                T ckscore(nwCand.score);
                                 for (int vId = 0; vId < PQ_IDX; ++vId)
                                 {
                                     if (ckscore > site_next_pq_score[sPQ + vId])
@@ -2173,30 +2259,30 @@ int runDLIteration(const T* pos_x,
 
                                 /////
                                 site_next_pq_validIdx[nTId] = 1;
-                                site_next_pq_score[nTId] = nwCand_score;
-                                site_next_pq_siteId[nTId] = nwCand_siteId;
-                                site_next_pq_sig_idx[nTId] = nwCand_sigIdx;
+                                site_next_pq_score[nTId] = nwCand.score;
+                                site_next_pq_siteId[nTId] = nwCand.siteId;
+                                site_next_pq_sig_idx[nTId] = nwCand.sigIdx;
 
-                                for (int sg = 0; sg < nwCand_sigIdx; ++sg)
+                                for (int sg = 0; sg < nwCand.sigIdx; ++sg)
                                 {
-                                    site_next_pq_sig[nSGId + sg] = nwCand_sig[sg];
+                                    site_next_pq_sig[nSGId + sg] = nwCand.sig[sg];
                                 }
                                 for (int sg = 0; sg < SLICE_CAPACITY; ++sg)
                                 {
-                                    site_next_pq_impl_lut[nFFId + sg] = nwCand_lut[sg];
-                                    site_next_pq_impl_ff[nFFId + sg] = nwCand_ff[sg];
+                                    site_next_pq_impl_lut[nFFId + sg] = nwCand.impl_lut[sg];
+                                    site_next_pq_impl_ff[nFFId + sg] = nwCand.impl_ff[sg];
                                 }
                                 for (int sg = 0; sg < CKSR_IN_CLB; ++sg)
                                 {
-                                    site_next_pq_impl_cksr[nCKRId + sg] = nwCand_cksr[sg];
+                                    site_next_pq_impl_cksr[nCKRId + sg] = nwCand.impl_cksr[sg];
                                 }
                                 for (int sg = 0; sg < CE_IN_CLB; ++sg)
                                 {
-                                    site_next_pq_impl_ce[nCEId + sg] = nwCand_ce[sg];
+                                    site_next_pq_impl_ce[nCEId + sg] = nwCand.impl_ce[sg];
                                 }
                                 /////
 
-                                if (site_next_pq_idx[sIdx] == 1 || nwCand_score > site_next_pq_score[sPQ + site_next_pq_top_idx[sIdx]])
+                                if (site_next_pq_idx[sIdx] == 1 || nwCand.score > site_next_pq_score[sPQ + site_next_pq_top_idx[sIdx]])
                                 {
                                     site_next_pq_top_idx[sIdx] = nxtId;
                                 }
@@ -2217,7 +2303,7 @@ int runDLIteration(const T* pos_x,
                                 } else
                                 {
                                     //find least score and replace if current score is greater
-                                    T ckscore(nwCand_score);
+                                    T ckscore(nwCand.score);
                                     for (int vId = 0; vId < SCL_IDX; ++vId)
                                     {
                                         if (ckscore > site_next_scl_score[sSCL+vId])
@@ -2238,26 +2324,26 @@ int runDLIteration(const T* pos_x,
                                     nSGId = nTId*SIG_IDX;
 
                                     site_next_scl_validIdx[nTId] = 1;
-                                    site_next_scl_score[nTId] = nwCand_score;
-                                    site_next_scl_siteId[nTId] = nwCand_siteId;
-                                    site_next_scl_sig_idx[nTId] = nwCand_sigIdx;
+                                    site_next_scl_score[nTId] = nwCand.score;
+                                    site_next_scl_siteId[nTId] = nwCand.siteId;
+                                    site_next_scl_sig_idx[nTId] = nwCand.sigIdx;
 
-                                    for (int sg = 0; sg < nwCand_sigIdx; ++sg)
+                                    for (int sg = 0; sg < nwCand.sigIdx; ++sg)
                                     {
-                                        site_next_scl_sig[nSGId + sg] = nwCand_sig[sg];
+                                        site_next_scl_sig[nSGId + sg] = nwCand.sig[sg];
                                     }
                                     for (int sg = 0; sg < SLICE_CAPACITY; ++sg)
                                     {
-                                        site_next_scl_impl_lut[nFFId + sg] = nwCand_lut[sg];
-                                        site_next_scl_impl_ff[nFFId + sg] = nwCand_ff[sg];
+                                        site_next_scl_impl_lut[nFFId + sg] = nwCand.impl_lut[sg];
+                                        site_next_scl_impl_ff[nFFId + sg] = nwCand.impl_ff[sg];
                                     }
                                     for (int sg = 0; sg < CKSR_IN_CLB; ++sg)
                                     {
-                                        site_next_scl_impl_cksr[nCKRId + sg] = nwCand_cksr[sg];
+                                        site_next_scl_impl_cksr[nCKRId + sg] = nwCand.impl_cksr[sg];
                                     }
                                     for (int sg = 0; sg < CE_IN_CLB; ++sg)
                                     {
-                                        site_next_scl_impl_ce[nCEId + sg] = nwCand_ce[sg];
+                                        site_next_scl_impl_ce[nCEId + sg] = nwCand.impl_ce[sg];
                                     }
                                     /////
                                 }
@@ -2307,6 +2393,13 @@ int runDLIteration(const T* pos_x,
                 {
                     if (ckscore > site_next_scl_score[vId])
                     {
+                        //Clear contents thoroughly
+                        clear_cand_contents(
+                                vId, SIG_IDX, SLICE_CAPACITY, CKSR_IN_CLB, CE_IN_CLB,
+                                site_next_scl_sig_idx, site_next_scl_sig,
+                                site_next_scl_impl_lut, site_next_scl_impl_ff,
+                                site_next_scl_impl_cksr, site_next_scl_impl_ce);
+
                         site_next_scl_validIdx[vId] = INVALID;
                         site_next_scl_sig_idx[vId] = 0;
                         site_next_scl_siteId[vId] = INVALID;
@@ -2323,7 +2416,14 @@ int runDLIteration(const T* pos_x,
         }
 
         if (site_curr_pq_idx[sIdx] > 0 && site_next_pq_idx[sIdx] > 0 && 
-                compare_pq_tops(sIdx, sPQ, SIG_IDX, site_curr_pq_score, site_curr_pq_top_idx, site_curr_pq_siteId, site_curr_pq_sig_idx, site_curr_pq_sig, site_next_pq_score, site_next_pq_top_idx, site_next_pq_siteId, site_next_pq_sig_idx, site_next_pq_sig))
+                compare_pq_tops(site_curr_pq_score, site_curr_pq_top_idx,
+                    site_curr_pq_validIdx, site_curr_pq_siteId, site_curr_pq_sig_idx,
+                    site_curr_pq_sig, site_curr_pq_impl_lut, site_curr_pq_impl_ff,
+                    site_curr_pq_impl_cksr, site_curr_pq_impl_ce, site_next_pq_score,
+                    site_next_pq_top_idx, site_next_pq_validIdx, site_next_pq_siteId,
+                    site_next_pq_sig_idx, site_next_pq_sig, site_next_pq_impl_lut,
+                    site_next_pq_impl_ff, site_next_pq_impl_cksr, site_next_pq_impl_ce,
+                    sIdx, sPQ, SIG_IDX, CKSR_IN_CLB, CE_IN_CLB, SLICE_CAPACITY))
         {
             //Check both sig
             site_next_stable[sIdx] = site_curr_stable[sIdx] + 1;
@@ -2601,22 +2701,29 @@ int runDLSynchronize(
 
             //clear site_next_scl
             sPQ = sIdx*SCL_IDX;
-            sclCount = 0;
+            //sclCount = 0;
             for (int ckId = 0; ckId < SCL_IDX; ++ckId)
             {
                 int vIdx = sPQ+ckId;
-                if (site_next_scl_validIdx[vIdx] != INVALID)
-                {
-                    site_next_scl_validIdx[vIdx] = INVALID;
-                    site_next_scl_sig_idx[vIdx] = 0;
-                    site_next_scl_siteId[vIdx] = INVALID;
-                    site_next_scl_score[vIdx] = 0.0;
-                    ++sclCount;
-                    if (sclCount == site_next_scl_idx[sIdx])
-                    {
-                        break;
-                    }
-                }
+                //if (site_next_scl_validIdx[vIdx] != INVALID)
+                //{
+                //Clear contents thoroughly
+                clear_cand_contents(
+                        vIdx, SIG_IDX, SLICE_CAPACITY, CKSR_IN_CLB, CE_IN_CLB,
+                        site_next_scl_sig_idx, site_next_scl_sig,
+                        site_next_scl_impl_lut, site_next_scl_impl_ff,
+                        site_next_scl_impl_cksr, site_next_scl_impl_ce);
+
+                site_next_scl_validIdx[vIdx] = INVALID;
+                site_next_scl_sig_idx[vIdx] = 0;
+                site_next_scl_siteId[vIdx] = INVALID;
+                site_next_scl_score[vIdx] = 0.0;
+                //++sclCount;
+                //if (sclCount == site_next_scl_idx[sIdx])
+                //{
+                //    break;
+                //}
+                //}
             }
             site_next_scl_idx[sIdx] = 0;
 
@@ -2725,7 +2832,7 @@ int ripUp_Greedy_LG(
         int instPcl = instId*3;
 
         //RipUpCandidates
-        std::vector<RipUpCand<T> > ripUpCandidates(1);
+        std::vector<RipUpCand<T> > ripUpCandidates;
 
         int xLo = DREAMPLACE_STD_NAMESPACE::max(pos_x[instId] - nbrDistEnd, T(0));
         int yLo = DREAMPLACE_STD_NAMESPACE::max(pos_y[instId] - nbrDistEnd, T(0));
@@ -2744,6 +2851,7 @@ int ripUp_Greedy_LG(
                     if (dist < nbrDistEnd)
                     {
                         RipUpCand<T> rpCand;
+                        rpCand.reset();
                         int sIdx = site2addr_map[siteId];
 
                         rpCand.siteId = siteId;
@@ -2822,7 +2930,10 @@ int ripUp_Greedy_LG(
         }
 
         //Sort ripup candidate indices based on legal and score
-        std::sort(ripUpCandidates.begin(), ripUpCandidates.end());
+        if (ripUpCandidates.size() > 1)
+        {
+            std::sort(ripUpCandidates.begin(), ripUpCandidates.end());
+        }
 
         int ripupLegalizeInst(INVALID);
         int greedyLegalizeInst(INVALID);
@@ -2876,6 +2987,7 @@ int ripUp_Greedy_LG(
                 dets.reserve(site_det_sig_idx[stAdId]);
 
                 Candidate<T> tCand;
+                tCand.reset();
                 tCand.score = site_det_score[stAdId];
                 tCand.siteId = site_det_siteId[stAdId];
                 tCand.sigIdx = site_det_sig_idx[stAdId];
@@ -2897,6 +3009,7 @@ int ripUp_Greedy_LG(
                 {
                     tCand.impl_ce[sg] = site_det_impl_ce[sdCEId+ sg];
                 }
+
                 dets.emplace_back(tCand);
                 tCand.reset();
 
@@ -2905,6 +3018,11 @@ int ripUp_Greedy_LG(
                 {
                     inst_curr_detSite[site_det_sig[sdSGId + sg]] = INVALID;
                 }
+
+                //Clear contents of site_det_sig
+                clear_cand_contents(stAdId, SIG_IDX, SLICE_CAPACITY, CKSR_IN_CLB,
+                        CE_IN_CLB, site_det_sig_idx, site_det_sig, site_det_impl_lut,
+                        site_det_impl_ff, site_det_impl_cksr, site_det_impl_ce);
 
                 site_det_sig_idx[stAdId] = flat_node2prclstrCount[instId];
                 tCand.sigIdx = flat_node2prclstrCount[instId];
@@ -2915,23 +3033,16 @@ int ripUp_Greedy_LG(
                     site_det_sig[sdSGId + idx] = clInstId;
                     tCand.sig[idx] = clInstId;
                 }
-
-                for(int sg = 0; sg < SLICE_CAPACITY; ++sg)
-                {
-                    site_det_impl_lut[sdLutId+ sg] = INVALID;
-                    site_det_impl_ff[sdLutId+ sg] = INVALID;
-                }
-                for(int sg = 0; sg < CKSR_IN_CLB; ++sg)
-                {
-                    site_det_impl_cksr[sdCKId+ sg] = INVALID;
-                }
-                for(int sg = 0; sg < CE_IN_CLB; ++sg)
-                {
-                    site_det_impl_ce[sdCEId+ sg] = INVALID;
-                }
                 ///
 
-                if (add_inst_to_cand_impl(lut_type, flat_node2pin_start_map, flat_node2pin_map, node2pincount, net2pincount, pin2net_map, pin_typeIds, sorted_net_map, flat_node2prclstrCount, flat_node2precluster_map, flop2ctrlSetId_map, node2fence_region_map, flop_ctrlSets, instId, CKSR_IN_CLB, CE_IN_CLB, HALF_SLICE_CAPACITY, NUM_BLE_PER_SLICE, tCand.impl_lut, tCand.impl_ff, tCand.impl_cksr, tCand.impl_ce))
+                if (add_inst_to_cand_impl(lut_type, flat_node2pin_start_map,
+                            flat_node2pin_map, node2pincount, net2pincount, pin2net_map,
+                            pin_typeIds, sorted_net_map, flat_node2prclstrCount,
+                            flat_node2precluster_map, flop2ctrlSetId_map,
+                            node2fence_region_map, flop_ctrlSets, instId,
+                            CKSR_IN_CLB, CE_IN_CLB, HALF_SLICE_CAPACITY,
+                            NUM_BLE_PER_SLICE, tCand.impl_lut, tCand.impl_ff,
+                            tCand.impl_cksr, tCand.impl_ce))
                 {
                     ///
                     site_det_sig_idx[stAdId] = tCand.sigIdx;
@@ -2969,12 +3080,13 @@ int ripUp_Greedy_LG(
                 }
 
                 int sig[2*SLICE_CAPACITY];
+                int tmp_sigIdx = dets[0].sigIdx;
                 for (int sg = 0; sg < dets[0].sigIdx; ++sg)
                 {
                     sig[sg] = dets[0].sig[sg];
                 }
 
-                for (int rIdx = 0; rIdx < dets[0].sigIdx; ++rIdx)
+                for (int rIdx = 0; rIdx < tmp_sigIdx; ++rIdx)
                 {
                     int ruInst = sig[rIdx];
                     if (inst_curr_detSite[ruInst] != INVALID)
@@ -3008,6 +3120,7 @@ int ripUp_Greedy_LG(
 
                     //BestCandidate
                     Candidate<T> bestCand;
+                    bestCand.reset();
                     T bestScoreImprov(-10000.0);
 
                     for (int spId = beg; spId < end; ++spId)
@@ -3026,6 +3139,7 @@ int ripUp_Greedy_LG(
                         }
 
                         Candidate<T> cand;
+                        cand.reset();
                         cand.score = site_det_score[siteMapAIdx];
                         cand.siteId = site_det_siteId[siteMapAIdx];
                         cand.sigIdx = site_det_sig_idx[siteMapAIdx];
@@ -3135,6 +3249,7 @@ int ripUp_Greedy_LG(
                         int sbAId = site2addr_map[sbId];
 
                         Candidate<T> tCand;
+                        tCand.reset();
                         ///
                         tCand.score = site_det_score[sbAId];
                         tCand.siteId = site_det_siteId[sbAId];
@@ -3208,7 +3323,7 @@ int ripUp_Greedy_LG(
         if (ripupLegalizeInst != 1)
         {
             inst_curr_detSite[instId] = INVALID;
-            
+
             int beg(spiralBegin), end(spiralEnd);
 
             T cenX(pos_x[flat_node2precluster_map[instPcl]] * wlPrecond[flat_node2precluster_map[instPcl]]);
@@ -3228,6 +3343,7 @@ int ripUp_Greedy_LG(
 
             //BestCandidate
             Candidate<T> bestCand;
+            bestCand.reset();
             T bestScoreImprov(-10000.0);
 
             for (int sIdx = beg; sIdx < end; ++sIdx)
@@ -3244,6 +3360,7 @@ int ripUp_Greedy_LG(
                     continue;
                 }
                 Candidate<T> cand;
+                cand.reset();
                 cand.score = site_det_score[siteMapAIdx];
                 cand.siteId = site_det_siteId[siteMapAIdx];
                 cand.sigIdx = site_det_sig_idx[siteMapAIdx];
@@ -3582,6 +3699,7 @@ int ripUp_LG(
                 dets.reserve(site_det_sig_idx[stAdId]);
 
                 Candidate<T> tCand;
+                tCand.reset();
                 tCand.score = site_det_score[stAdId];
                 tCand.siteId = site_det_siteId[stAdId];
                 tCand.sigIdx = site_det_sig_idx[stAdId];
@@ -3746,6 +3864,7 @@ int ripUp_LG(
 
                     //BestCandidate
                     Candidate<T> bestCand;
+                    bestCand.reset();
                     T bestScoreImprov(-10000.0);
 
                     for (int spId = beg; spId < end; ++spId)
@@ -3764,6 +3883,7 @@ int ripUp_LG(
                         }
 
                         Candidate<T> cand;
+                        cand.reset();
                         cand.score = site_det_score[siteMapAIdx];
                         cand.siteId = site_det_siteId[siteMapAIdx];
                         cand.sigIdx = site_det_sig_idx[siteMapAIdx];
@@ -3870,6 +3990,7 @@ int ripUp_LG(
                         int sbAId = site2addr_map[sbId];
 
                         Candidate<T> tCand;
+                        tCand.reset();
                         ///
                         tCand.score = site_det_score[sbAId];
                         tCand.siteId = site_det_siteId[sbAId];
@@ -5307,6 +5428,7 @@ void runDLIter(at::Tensor pos,
                     DREAMPLACE_TENSOR_DATA_PTR(site_nbr, int),
                     DREAMPLACE_TENSOR_DATA_PTR(site_nbrGroup_idx, int),
                     DREAMPLACE_TENSOR_DATA_PTR(site_curr_pq_top_idx, int),
+                    DREAMPLACE_TENSOR_DATA_PTR(site_curr_pq_validIdx, int),
                     DREAMPLACE_TENSOR_DATA_PTR(site_curr_pq_sig_idx, int),
                     DREAMPLACE_TENSOR_DATA_PTR(site_curr_pq_sig, int),
                     DREAMPLACE_TENSOR_DATA_PTR(site_curr_pq_idx, int),
@@ -5429,7 +5551,7 @@ void runDLIter(at::Tensor pos,
                                 DREAMPLACE_TENSOR_DATA_PTR(illegalStatus, int));
                     });
 
-    //std::cout << "Run DL Sync: " << DLStatus << std::endl;
+    //std::cout << "Run DL Sync " << std::endl;
 }
 
 //RipUp & Greedy Legalization

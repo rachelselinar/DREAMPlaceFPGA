@@ -104,7 +104,7 @@ class LegalizeCLB(nn.Module):
 
         self.flat_node2precluster_map = torch.ones((num_nodes,3), dtype=torch.int, device=device)
         self.flat_node2precluster_map *= -1
-        self.flat_node2precluster_map[:,0] = torch.arange(num_nodes)
+        self.flat_node2precluster_map[:,0] = torch.arange(num_nodes, dtype=torch.int, device=device)
         self.flat_node2prclstrCount = torch.ones(num_nodes, dtype=torch.int, device=device)
 
         #Instance Candidates
@@ -392,14 +392,14 @@ class LegalizeCLB(nn.Module):
 
         self.flat_node2precluster_map[:] = -1
         #Update first element as itself
-        self.flat_node2precluster_map[:,0] = torch.arange(self.num_nodes)
+        self.flat_node2precluster_map[:,0] = torch.arange(self.num_nodes, dtype=torch.int, device=self.device)
         self.flat_node2prclstrCount[:] = 1
         self.flat_node2prclstrCount[self.node2fence_region_map >1] = 0
 
         #RipUp + Greedy Legalization
         num_remInsts = (self.inst_curr_detSite == -1).sum().item()
         rem_inst_areas = self.inst_areas[self.inst_curr_detSite == -1]
-        rem_inst_ids = torch.arange(self.num_nodes)[self.inst_curr_detSite ==  -1]
+        rem_inst_ids = torch.arange(self.num_nodes, dtype=torch.int, device=self.device)[self.inst_curr_detSite ==  -1]
 
         #sorted node ids only comprise of remaining instances
         _, sorted_ids = torch.sort(rem_inst_areas, descending=True)
@@ -413,7 +413,7 @@ class LegalizeCLB(nn.Module):
 
         #DBG
         #print("RipUp & Greedy LG on ", num_remInsts, "insts (neighbors within", self.nbrDistEnd, "distance)")
-        numFFs = self.node2fence_region_map[rem_inst_ids].sum().item()
+        numFFs = self.node2fence_region_map[rem_inst_ids.long()].sum().item()
         numLUTs = rem_inst_ids.shape[0] - numFFs
         #print("RipUP & Greedy LG on ", num_remInsts, " insts (", numLUTs, " LUTs + ", numFFs, " FFs)")
         #pdb.set_trace()

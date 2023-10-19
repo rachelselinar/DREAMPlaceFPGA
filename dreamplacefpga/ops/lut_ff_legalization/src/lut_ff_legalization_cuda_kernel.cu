@@ -202,6 +202,38 @@ __device__ void lift(const int n, const int* g, const int* b, const int* bIndex,
 
 ///End of helper functions for Edmonds Blossom Implementation based on https://codeforces.com/blog/entry/92339
 
+//Clear entries in candidate
+inline __device__ void clear_cand_contents(const int tsPQ, const int SIG_IDX,
+        const int CKSR_IN_CLB, const int CE_IN_CLB, int* site_sig_idx, int* site_sig,
+        int* site_impl_lut, int* site_impl_ff, int* site_impl_cksr, int* site_impl_ce)
+{
+    int topIdx(tsPQ*SIG_IDX);
+    int lutIdx = tsPQ*SLICE_CAPACITY;
+    int ckIdx = tsPQ*CKSR_IN_CLB;
+    int ceIdx = tsPQ*CE_IN_CLB;
+
+    for(int sg = 0; sg < SIG_IDX; ++sg)
+    {
+        site_sig[topIdx + sg] = INVALID;
+    }
+    for(int sg = 0; sg < SLICE_CAPACITY; ++sg)
+    {
+        site_impl_lut[lutIdx + sg] = INVALID;
+    }
+    for(int sg = 0; sg < SLICE_CAPACITY; ++sg)
+    {
+        site_impl_ff[lutIdx + sg] = INVALID;
+    }
+    for(int sg = 0; sg < CKSR_IN_CLB; ++sg)
+    {
+        site_impl_cksr[ckIdx + sg] = INVALID;
+    }
+    for(int sg = 0; sg < CE_IN_CLB; ++sg)
+    {
+        site_impl_ce[ceIdx + sg] = INVALID;
+    }
+}
+
 //Check if entry exists in array
 inline __device__ bool val_in_array(const int *array, const int arraySize, const int arrayIdx, const int val)
 {
@@ -1000,19 +1032,6 @@ inline __device__ bool add_inst_to_sig(const int node2prclstrCount, const int* f
         }
     }
 
-    ////Sort
-    //for (int ix = 1; ix < mIdx; ++ix)
-    //{
-    //    for (int jx = 0; jx < mIdx-1; ++jx)
-    //    {
-    //        if (temp[jx] > temp[jx+1])
-    //        {
-    //            int val = temp[jx];
-    //            temp[jx] = temp[jx+1];
-    //            temp[jx+1] = val;
-    //        }
-    //    }
-    //}
     //Remove duplicates
     for (int i = 0; i < mIdx; ++i)
     {
@@ -1180,22 +1199,6 @@ __device__ void compute_candidate_score(const T* pos_x, const T* pos_y, const T*
                 }
             }
         }
-    ////Remove duplicates after sorting pins
-    //for (int i = 0; i < pinIdx; ++i)
-    //{
-    //    for (int j=0; j < i; ++j)
-    //    {
-    //        if (pins[i] == pins[j])
-    //        {
-    //            --pinIdx;
-    //            for (int k=i; k < pinIdx; ++k)
-    //            {
-    //                pins[k] = pins[k+1];
-    //            }
-    //            --i;
-    //        }
-    //    }
-    //}
     } else
     {
         result = T(0.0);
@@ -1231,7 +1234,7 @@ __device__ void compute_candidate_score(const T* pos_x, const T* pos_y, const T*
             {
                 ++numNets;
                 numIntNets += (cNIPIdx == net2pincount[currNetId] ? 1 : 0);
-                netShareScore += net_weights[currNetId] * (cNIPIdx - 1.0) / (net2pincount[currNetId] - 1.0);
+                netShareScore += net_weights[currNetId] * (cNIPIdx - 1.0) / DREAMPLACE_STD_NAMESPACE::max(T(1.0), net2pincount[currNetId] - T(1.0));
             }
             if (net2pincount[currNetId] <= wlscoreMaxNetDegree)
             {
@@ -1253,7 +1256,7 @@ __device__ void compute_candidate_score(const T* pos_x, const T* pos_y, const T*
     {
         ++numNets;
         numIntNets += (cNIPIdx == net2pincount[currNetId] ? 1 : 0);
-        netShareScore += net_weights[currNetId] * (cNIPIdx - 1.0) / (net2pincount[currNetId] - 1.0);
+        netShareScore += net_weights[currNetId] * (cNIPIdx - 1.0) / DREAMPLACE_STD_NAMESPACE::max(T(1.0), net2pincount[currNetId] - T(1.0));
     }
     if (net2pincount[currNetId] <= wlscoreMaxNetDegree)
     {
@@ -1264,38 +1267,72 @@ __device__ void compute_candidate_score(const T* pos_x, const T* pos_y, const T*
 }
 
 template <typename T>
-inline __device__ bool compare_pq_tops(const int siteId, const int sPQ, const int SIG_IDX, const T* site_curr_pq_score, const int* site_curr_pq_top_idx, const int* site_curr_pq_siteId, const int* site_curr_pq_sig_idx, const int* site_curr_pq_sig, const T* site_next_pq_score, const int* site_next_pq_top_idx, const int* site_next_pq_siteId, const int* site_next_pq_sig_idx, const int* site_next_pq_sig)
+inline __device__ bool compare_pq_tops(
+        const T* site_curr_pq_score, const int* site_curr_pq_top_idx, const int* site_curr_pq_validIdx,
+        const int* site_curr_pq_siteId, const int* site_curr_pq_sig_idx, const int* site_curr_pq_sig,
+        const int* site_curr_pq_impl_lut, const int* site_curr_pq_impl_ff, const int* site_curr_pq_impl_cksr,
+        const int* site_curr_pq_impl_ce, const T* site_next_pq_score, const int* site_next_pq_top_idx,
+        const int* site_next_pq_validIdx, const int* site_next_pq_siteId, const int* site_next_pq_sig_idx,
+        const int* site_next_pq_sig, const int* site_next_pq_impl_lut, const int* site_next_pq_impl_ff,
+        const int* site_next_pq_impl_cksr, const int* site_next_pq_impl_ce, const int siteId,
+        const int sPQ, const int SIG_IDX, const int CKSR_IN_CLB, const int CE_IN_CLB)
 {
     //Check site_curr_pq TOP == site_next_pq TOP
     int curr_pq_topId = sPQ+site_curr_pq_top_idx[siteId];
     int next_pq_topId = sPQ+site_next_pq_top_idx[siteId];
 
+    if (site_curr_pq_validIdx[curr_pq_topId] != site_next_pq_validIdx[next_pq_topId] || 
+            site_curr_pq_validIdx[curr_pq_topId] != 1)
+    {
+        return false;
+    }
     if (site_curr_pq_score[curr_pq_topId] == site_next_pq_score[next_pq_topId] && 
-        site_curr_pq_siteId[curr_pq_topId] == site_next_pq_siteId[next_pq_topId] &&
-        site_curr_pq_sig_idx[curr_pq_topId] == site_next_pq_sig_idx[next_pq_topId])
+            site_curr_pq_siteId[curr_pq_topId] == site_next_pq_siteId[next_pq_topId] &&
+            site_curr_pq_sig_idx[curr_pq_topId] == site_next_pq_sig_idx[next_pq_topId])
     {
         //Check both sig
         int currPQSigIdx = curr_pq_topId*SIG_IDX;
         int nextPQSigIdx = next_pq_topId*SIG_IDX;
-        int match = 0;
 
-        //Assume no duplicate entries
-        for (int x = 0; x < site_curr_pq_sig_idx[curr_pq_topId]; ++x)
+        for (int sg = 0; sg < site_curr_pq_sig_idx[curr_pq_topId]; ++sg)
         {
-            for (int y = 0; y < site_next_pq_sig_idx[next_pq_topId]; ++y)
+            if (site_curr_pq_sig[currPQSigIdx + sg] != site_next_pq_sig[nextPQSigIdx + sg])
             {
-                if (site_curr_pq_sig[currPQSigIdx + x] == site_next_pq_sig[nextPQSigIdx + y])
-                {
-                    ++match;
-                    break;
-                }
+                return false;
             }
         }
 
-        if (match == site_curr_pq_sig_idx[curr_pq_topId])
+        //Check impl
+        int cCKRId = curr_pq_topId*CKSR_IN_CLB;
+        int cCEId = curr_pq_topId*CE_IN_CLB;
+        int cFFId = curr_pq_topId*SLICE_CAPACITY;
+        int nCKRId = next_pq_topId*CKSR_IN_CLB;
+        int nCEId = next_pq_topId*CE_IN_CLB;
+        int nFFId = next_pq_topId*SLICE_CAPACITY;
+
+        for (int sg = 0; sg < SLICE_CAPACITY; ++sg)
         {
-            return true;
+            if (site_curr_pq_impl_lut[cFFId + sg] != site_next_pq_impl_lut[nFFId + sg] || 
+                    site_curr_pq_impl_ff[cFFId + sg] != site_next_pq_impl_ff[nFFId + sg])
+            {
+                return false;
+            }
         }
+        for (int sg = 0; sg < CKSR_IN_CLB; ++sg)
+        {
+            if (site_curr_pq_impl_cksr[cCKRId + sg] != site_next_pq_impl_cksr[nCKRId + sg])
+            {
+                return false;
+            }
+        }
+        for (int sg = 0; sg < CE_IN_CLB; ++sg)
+        {
+            if(site_curr_pq_impl_ce[cCEId + sg] != site_next_pq_impl_ce[nCEId + sg])
+            {
+                return false;
+            }
+        }
+        return true;
     }
     return false;
 }
@@ -1641,6 +1678,7 @@ __global__ void runDLIteration(const T* pos_x,
                                int* site_nbr,
                                int* site_nbrGroup_idx,
                                int* site_curr_pq_top_idx,
+                               int* site_curr_pq_validIdx,
                                int* site_curr_pq_sig_idx,
                                int* site_curr_pq_sig,
                                int* site_curr_pq_idx,
@@ -1781,36 +1819,50 @@ __global__ void runDLIteration(const T* pos_x,
                     site_det_sig_idx, sIdx, sNbrIdx, HALF_SLICE_CAPACITY, NUM_BLE_PER_SLICE, SIG_IDX, CKSR_IN_CLB, CE_IN_CLB, site_nbr_idx, site_nbr);
 
             //Clear pq and make scl only contain the committed candidate
-            int sclCount = 0;
+            //int sclCount = 0;
             for (int vId = 0; vId < PQ_IDX; ++vId)
             {
                 int nPQId = sPQ + vId;
-                if (site_next_pq_validIdx[nPQId] != INVALID)
-                {
-                    site_next_pq_validIdx[nPQId] = INVALID;
-                    site_next_pq_sig_idx[nPQId] = 0;
-                    site_next_pq_siteId[nPQId] = INVALID;
-                    site_next_pq_score[nPQId] = T(0.0);
-                    ++sclCount;
-                    if (sclCount == site_next_pq_idx[sIdx])
-                    {
-                        break;
-                    }
-                }
+                //if (site_next_pq_validIdx[nPQId] != INVALID)
+                //{
+                //Clear contents thoroughly
+                clear_cand_contents(
+                        nPQId, SIG_IDX, CKSR_IN_CLB, CE_IN_CLB,
+                        site_next_pq_sig_idx, site_next_pq_sig,
+                        site_next_pq_impl_lut, site_next_pq_impl_ff,
+                        site_next_pq_impl_cksr, site_next_pq_impl_ce);
+
+                site_next_pq_validIdx[nPQId] = INVALID;
+                site_next_pq_sig_idx[nPQId] = 0;
+                site_next_pq_siteId[nPQId] = INVALID;
+                site_next_pq_score[nPQId] = T(0.0);
+                //++sclCount;
+                //if (sclCount == site_next_pq_idx[sIdx])
+                //{
+                //    break;
+                //}
+                //}
             }
             site_next_pq_idx[sIdx] = 0;
             site_next_pq_top_idx[sIdx] = INVALID;
 
-            sclCount = 0;
+            int sclCount = 0;
             for (int vId = 0; vId < SCL_IDX; ++vId)
             {
                 int cSclId = sSCL + vId;
                 if (site_curr_scl_validIdx[cSclId] != INVALID)
                 {
+                    //Clear contents thoroughly
+                    clear_cand_contents(
+                            cSclId, SIG_IDX, CKSR_IN_CLB, CE_IN_CLB,
+                            site_curr_scl_sig_idx, site_curr_scl_sig,
+                            site_curr_scl_impl_lut, site_curr_scl_impl_ff,
+                            site_curr_scl_impl_cksr, site_curr_scl_impl_ce);
+
                     site_curr_scl_validIdx[cSclId] = INVALID;
                     site_curr_scl_sig_idx[cSclId] = 0;
                     site_curr_scl_siteId[cSclId] = INVALID;
-                    site_curr_scl_score[cSclId] = T(0.0);
+                    site_curr_scl_score[cSclId] = 0.0;
                     ++sclCount;
                     if (sclCount == site_curr_scl_idx[sIdx])
                     {
@@ -1852,8 +1904,8 @@ __global__ void runDLIteration(const T* pos_x,
             //Remove invalid candidates from site PQ
             if (site_next_pq_idx[sIdx] > 0)
             {
-                int snCnt = 0;
-                int maxEntries = site_next_pq_idx[sIdx];
+                //int snCnt = 0;
+                //int maxEntries = site_next_pq_idx[sIdx];
                 for (int nIdx = 0; nIdx < PQ_IDX; ++nIdx)
                 {
                     int ssPQ = sPQ + nIdx;
@@ -1863,17 +1915,24 @@ __global__ void runDLIteration(const T* pos_x,
                     {
                         if (!candidate_validity_check(topIdx, site_next_pq_sig_idx[ssPQ], site_next_pq_siteId[ssPQ], site_next_pq_sig, inst_curr_detSite))
                         {
+                            //Clear contents thoroughly
+                            clear_cand_contents(
+                                    ssPQ, SIG_IDX, CKSR_IN_CLB, CE_IN_CLB,
+                                    site_next_pq_sig_idx, site_next_pq_sig,
+                                    site_next_pq_impl_lut, site_next_pq_impl_ff,
+                                    site_next_pq_impl_cksr, site_next_pq_impl_ce);
+
                             site_next_pq_validIdx[ssPQ] = INVALID;
                             site_next_pq_sig_idx[ssPQ] = 0;
                             site_next_pq_siteId[ssPQ] = INVALID;
-                            site_next_pq_score[ssPQ] = T(0.0);
+                            site_next_pq_score[ssPQ] = 0.0;
                             --site_next_pq_idx[sIdx];
                         }
-                        ++snCnt;
-                        if (snCnt == maxEntries)
-                        {
-                            break;
-                        }
+                        //++snCnt;
+                        //if (snCnt == maxEntries)
+                        //{
+                        //    break;
+                        //}
                     }
                 }
 
@@ -1883,8 +1942,8 @@ __global__ void runDLIteration(const T* pos_x,
 
                     if (site_next_pq_idx[sIdx] > 0)
                     {
-                        snCnt = 0;
-                        maxEntries = site_next_pq_idx[sIdx];
+                        int snCnt = 0;
+                        int maxEntries = site_next_pq_idx[sIdx];
                         T maxScore(-1000.0);
                         int maxScoreId(INVALID);
                         //Recompute top idx
@@ -1924,10 +1983,17 @@ __global__ void runDLIteration(const T* pos_x,
                     {
                         if (!candidate_validity_check(topIdx, site_curr_scl_sig_idx[ssPQ], site_curr_scl_siteId[ssPQ], site_curr_scl_sig, inst_curr_detSite))
                         {
+                            //Clear contents thoroughly
+                            clear_cand_contents(
+                                    ssPQ, SIG_IDX, CKSR_IN_CLB, CE_IN_CLB,
+                                    site_curr_scl_sig_idx, site_curr_scl_sig,
+                                    site_curr_scl_impl_lut, site_curr_scl_impl_ff,
+                                    site_curr_scl_impl_cksr, site_curr_scl_impl_ce);
+
                             site_curr_scl_validIdx[ssPQ] = INVALID;
                             site_curr_scl_sig_idx[ssPQ] = 0;
                             site_curr_scl_siteId[ssPQ] = INVALID;
-                            site_curr_scl_score[ssPQ] = T(0.0);
+                            site_curr_scl_score[ssPQ] = 0.0;
                             --site_curr_scl_idx[sIdx];
                         }
                         ++sclCount;
@@ -2345,10 +2411,17 @@ __global__ void runDLIteration(const T* pos_x,
                 {
                     if (ckscore > site_next_scl_score[vId])
                     {
+                        //Clear contents thoroughly
+                        clear_cand_contents(
+                                vId, SIG_IDX, CKSR_IN_CLB, CE_IN_CLB,
+                                site_next_scl_sig_idx, site_next_scl_sig,
+                                site_next_scl_impl_lut, site_next_scl_impl_ff,
+                                site_next_scl_impl_cksr, site_next_scl_impl_ce);
+
                         site_next_scl_validIdx[vId] = INVALID;
                         site_next_scl_sig_idx[vId] = 0;
                         site_next_scl_siteId[vId] = INVALID;
-                        site_next_scl_score[vId] = T(0.0);
+                        site_next_scl_score[vId] = 0.0;
                         --site_next_scl_idx[sIdx];
                     }
                     ++sclCount;
@@ -2362,7 +2435,14 @@ __global__ void runDLIteration(const T* pos_x,
 
         //Update stable Iteration count
         if (site_curr_pq_idx[sIdx] > 0 && site_next_pq_idx[sIdx] > 0 && 
-                compare_pq_tops(sIdx, sPQ, SIG_IDX, site_curr_pq_score, site_curr_pq_top_idx, site_curr_pq_siteId, site_curr_pq_sig_idx, site_curr_pq_sig, site_next_pq_score, site_next_pq_top_idx, site_next_pq_siteId, site_next_pq_sig_idx, site_next_pq_sig))
+                compare_pq_tops(site_curr_pq_score, site_curr_pq_top_idx,
+                    site_curr_pq_validIdx, site_curr_pq_siteId, site_curr_pq_sig_idx,
+                    site_curr_pq_sig, site_curr_pq_impl_lut, site_curr_pq_impl_ff,
+                    site_curr_pq_impl_cksr, site_curr_pq_impl_ce, site_next_pq_score,
+                    site_next_pq_top_idx, site_next_pq_validIdx, site_next_pq_siteId,
+                    site_next_pq_sig_idx, site_next_pq_sig, site_next_pq_impl_lut,
+                    site_next_pq_impl_ff, site_next_pq_impl_cksr, site_next_pq_impl_ce,
+                    sIdx, sPQ, SIG_IDX, CKSR_IN_CLB, CE_IN_CLB))
         {
             site_next_stable[sIdx] = site_curr_stable[sIdx] + 1;
         } else
@@ -2457,6 +2537,10 @@ __global__ void runDLIteration_kernel_1(
                    int* site_next_pq_siteId,
                    int* site_next_pq_sig_idx,
                    int* site_next_pq_sig,
+                   int* site_next_pq_impl_lut,
+                   int* site_next_pq_impl_ff,
+                   int* site_next_pq_impl_cksr,
+                   int* site_next_pq_impl_ce,
                    T* site_det_score,
                    int* site_det_siteId,
                    int* site_det_sig_idx,
@@ -2551,36 +2635,51 @@ __global__ void runDLIteration_kernel_1(
                     site_det_sig_idx, sIdx, sNbrIdx, HALF_SLICE_CAPACITY, NUM_BLE_PER_SLICE, SIG_IDX, CKSR_IN_CLB, CE_IN_CLB, site_nbr_idx, site_nbr);
 
             //Clear pq and make scl only contain the committed candidate
-            int sclCount = 0;
+            //int sclCount = 0;
             for (int vId = 0; vId < PQ_IDX; ++vId)
             {
                 int nPQId = sPQ + vId;
-                if (site_next_pq_validIdx[nPQId] != INVALID)
-                {
-                    site_next_pq_validIdx[nPQId] = INVALID;
-                    site_next_pq_sig_idx[nPQId] = 0;
-                    site_next_pq_siteId[nPQId] = INVALID;
-                    site_next_pq_score[nPQId] = T(0.0);
-                    ++sclCount;
-                    if (sclCount == site_next_pq_idx[sIdx])
-                    {
-                        break;
-                    }
-                }
+                //if (site_next_pq_validIdx[nPQId] != INVALID)
+                //{
+                //Clear contents thoroughly
+                clear_cand_contents(
+                        nPQId, SIG_IDX, CKSR_IN_CLB, CE_IN_CLB,
+                        site_next_pq_sig_idx, site_next_pq_sig,
+                        site_next_pq_impl_lut, site_next_pq_impl_ff,
+                        site_next_pq_impl_cksr, site_next_pq_impl_ce);
+
+                site_next_pq_validIdx[nPQId] = INVALID;
+                site_next_pq_siteId[nPQId] = INVALID;
+                site_next_pq_score[nPQId] = 0.0;
+                site_next_pq_sig_idx[nPQId] = 0;
+
+                //++sclCount;
+                //if (sclCount == site_next_pq_idx[sIdx])
+                //{
+                //    break;
+                //}
+                //}
             }
             site_next_pq_idx[sIdx] = 0;
             site_next_pq_top_idx[sIdx] = INVALID;
 
-            sclCount = 0;
+            int sclCount = 0;
             for (int vId = 0; vId < SCL_IDX; ++vId)
             {
                 int cSclId = sSCL + vId;
                 if (site_curr_scl_validIdx[cSclId] != INVALID)
                 {
+                    //Clear contents thoroughly
+                    clear_cand_contents(
+                            cSclId, SIG_IDX, CKSR_IN_CLB, CE_IN_CLB,
+                            site_curr_scl_sig_idx, site_curr_scl_sig,
+                            site_curr_scl_impl_lut, site_curr_scl_impl_ff,
+                            site_curr_scl_impl_cksr, site_curr_scl_impl_ce);
+
                     site_curr_scl_validIdx[cSclId] = INVALID;
                     site_curr_scl_sig_idx[cSclId] = 0;
                     site_curr_scl_siteId[cSclId] = INVALID;
-                    site_curr_scl_score[cSclId] = T(0.0);
+                    site_curr_scl_score[cSclId] = 0.0;
                     ++sclCount;
                     if (sclCount == site_curr_scl_idx[sIdx])
                     {
@@ -2633,10 +2732,17 @@ __global__ void runDLIteration_kernel_1(
                     {
                         if (!candidate_validity_check(topIdx, site_next_pq_sig_idx[ssPQ], site_next_pq_siteId[ssPQ], site_next_pq_sig, inst_curr_detSite))
                         {
+                            //Clear contents thoroughly
+                            clear_cand_contents(
+                                    ssPQ, SIG_IDX, CKSR_IN_CLB, CE_IN_CLB,
+                                    site_next_pq_sig_idx, site_next_pq_sig,
+                                    site_next_pq_impl_lut, site_next_pq_impl_ff,
+                                    site_next_pq_impl_cksr, site_next_pq_impl_ce);
+
                             site_next_pq_validIdx[ssPQ] = INVALID;
                             site_next_pq_sig_idx[ssPQ] = 0;
                             site_next_pq_siteId[ssPQ] = INVALID;
-                            site_next_pq_score[ssPQ] = T(0.0);
+                            site_next_pq_score[ssPQ] = 0.0;
                             --site_next_pq_idx[sIdx];
                         }
                     }
@@ -2682,10 +2788,17 @@ __global__ void runDLIteration_kernel_1(
                     {
                         if (!candidate_validity_check(topIdx, site_curr_scl_sig_idx[ssPQ], site_curr_scl_siteId[ssPQ], site_curr_scl_sig, inst_curr_detSite))
                         {
+                            //Clear contents thoroughly
+                            clear_cand_contents(
+                                    ssPQ, SIG_IDX, CKSR_IN_CLB, CE_IN_CLB,
+                                    site_curr_scl_sig_idx, site_curr_scl_sig,
+                                    site_curr_scl_impl_lut, site_curr_scl_impl_ff,
+                                    site_curr_scl_impl_cksr, site_curr_scl_impl_ce);
+
                             site_curr_scl_validIdx[ssPQ] = INVALID;
                             site_curr_scl_sig_idx[ssPQ] = 0;
                             site_curr_scl_siteId[ssPQ] = INVALID;
-                            site_curr_scl_score[ssPQ] = T(0.0);
+                            site_curr_scl_score[ssPQ] = 0.0;
                             --site_curr_scl_idx[sIdx];
                         }
                         ++sclCount;
@@ -2830,8 +2943,13 @@ __global__ void runDLIteration_kernel_2(const T* pos_x,
                    int* site_nbr_idx,
                    int* site_nbr,
                    int* site_curr_pq_top_idx,
+                   int* site_curr_pq_validIdx,
                    int* site_curr_pq_sig_idx,
                    int* site_curr_pq_sig,
+                   int* site_curr_pq_impl_lut,
+                   int* site_curr_pq_impl_ff,
+                   int* site_curr_pq_impl_cksr,
+                   int* site_curr_pq_impl_ce,
                    int* site_curr_pq_idx,
                    int* site_curr_stable,
                    int* site_curr_pq_siteId,
@@ -3203,10 +3321,17 @@ __global__ void runDLIteration_kernel_2(const T* pos_x,
                 {
                     if (ckscore > site_next_scl_score[vId])
                     {
+                        //Clear contents thoroughly
+                        clear_cand_contents(
+                                vId, SIG_IDX, CKSR_IN_CLB, CE_IN_CLB,
+                                site_next_scl_sig_idx, site_next_scl_sig,
+                                site_next_scl_impl_lut, site_next_scl_impl_ff,
+                                site_next_scl_impl_cksr, site_next_scl_impl_ce);
+
                         site_next_scl_validIdx[vId] = INVALID;
                         site_next_scl_sig_idx[vId] = 0;
                         site_next_scl_siteId[vId] = INVALID;
-                        site_next_scl_score[vId] = T(0.0);
+                        site_next_scl_score[vId] = 0.0;
                         --site_next_scl_idx[sIdx];
                     }
                     ++sclCount;
@@ -3220,7 +3345,14 @@ __global__ void runDLIteration_kernel_2(const T* pos_x,
 
         //Update stable Iteration count
         if (site_curr_pq_idx[sIdx] > 0 && site_next_pq_idx[sIdx] > 0 && 
-                compare_pq_tops(sIdx, sPQ, SIG_IDX, site_curr_pq_score, site_curr_pq_top_idx, site_curr_pq_siteId, site_curr_pq_sig_idx, site_curr_pq_sig, site_next_pq_score, site_next_pq_top_idx, site_next_pq_siteId, site_next_pq_sig_idx, site_next_pq_sig))
+                compare_pq_tops(site_curr_pq_score, site_curr_pq_top_idx,
+                    site_curr_pq_validIdx, site_curr_pq_siteId, site_curr_pq_sig_idx,
+                    site_curr_pq_sig, site_curr_pq_impl_lut, site_curr_pq_impl_ff,
+                    site_curr_pq_impl_cksr, site_curr_pq_impl_ce, site_next_pq_score,
+                    site_next_pq_top_idx, site_next_pq_validIdx, site_next_pq_siteId,
+                    site_next_pq_sig_idx, site_next_pq_sig, site_next_pq_impl_lut,
+                    site_next_pq_impl_ff, site_next_pq_impl_cksr, site_next_pq_impl_ce,
+                    sIdx, sPQ, SIG_IDX, CKSR_IN_CLB, CE_IN_CLB))
         {
             site_next_stable[sIdx] = site_curr_stable[sIdx] + 1;
         } else
@@ -3469,22 +3601,29 @@ __global__ void runDLSyncSites(
         }
 
         sPQ = sIdx*SCL_IDX;
-        sclCount = 0;
+        //sclCount = 0;
         for (int ckId = 0; ckId < SCL_IDX; ++ckId)
         {
             int vIdx = sPQ+ckId;
-            if (site_next_scl_validIdx[vIdx] != INVALID)
-            {
-                site_next_scl_validIdx[vIdx] = INVALID;
-                site_next_scl_sig_idx[vIdx] = 0;
-                site_next_scl_siteId[vIdx] = INVALID;
-                site_next_scl_score[vIdx] = T(0.0);
-                ++sclCount;
-                if (sclCount == site_next_scl_idx[sIdx])
-                {
-                    break;
-                }
-            }
+            //if (site_next_scl_validIdx[vIdx] != INVALID)
+            //{
+            //Clear contents thoroughly
+            clear_cand_contents(
+                    vIdx, SIG_IDX, CKSR_IN_CLB, CE_IN_CLB,
+                    site_next_scl_sig_idx, site_next_scl_sig,
+                    site_next_scl_impl_lut, site_next_scl_impl_ff,
+                    site_next_scl_impl_cksr, site_next_scl_impl_ce);
+
+            site_next_scl_validIdx[vIdx] = INVALID;
+            site_next_scl_sig_idx[vIdx] = 0;
+            site_next_scl_siteId[vIdx] = INVALID;
+            site_next_scl_score[vIdx] = 0.0;
+            //++sclCount;
+            //if (sclCount == site_next_scl_idx[sIdx])
+            //{
+            //    break;
+            //}
+            //}
         }
         site_next_scl_idx[sIdx] = 0;
 
@@ -3796,7 +3935,8 @@ int runDLIterCuda(const T* pos_x,
 
     //DLkernel split Implementation to enable rearranging
     runDLIteration_kernel_1<<<block_count, THREAD_COUNT>>>(node2fence_region_map, flop_ctrlSets, flop2ctrlSetId_map, lut_type, flat_node2pin_start_map, flat_node2pin_map, node2pincount, net2pincount, pin2net_map, pin_typeIds, sorted_net_map, flat_node2prclstrCount, flat_node2precluster_map, site_nbrList, site_nbrRanges, site_nbrRanges_idx, addr2site_map,
-    num_clb_sites, minStableIter, maxList, HALF_SLICE_CAPACITY, NUM_BLE_PER_SLICE, minNeighbors, numGroups, CKSR_IN_CLB, CE_IN_CLB, SCL_IDX, SIG_IDX, site_nbr_idx, site_nbr, site_nbrGroup_idx, site_curr_pq_top_idx, site_curr_pq_sig_idx, site_curr_pq_sig, site_curr_pq_idx, site_curr_stable, site_curr_pq_siteId, site_curr_pq_score, site_curr_pq_impl_lut, site_curr_pq_impl_ff, site_curr_pq_impl_cksr, site_curr_pq_impl_ce, site_curr_scl_score, site_curr_scl_siteId, site_curr_scl_idx, site_curr_scl_validIdx, site_curr_scl_sig_idx, site_curr_scl_sig, site_curr_scl_impl_lut, site_curr_scl_impl_ff, site_curr_scl_impl_cksr, site_curr_scl_impl_ce, site_next_pq_idx, site_next_pq_validIdx, site_next_pq_top_idx, site_next_pq_score, site_next_pq_siteId, site_next_pq_sig_idx, site_next_pq_sig, site_det_score, site_det_siteId, site_det_sig_idx, site_det_sig, site_det_impl_lut, site_det_impl_ff, site_det_impl_cksr, site_det_impl_ce, inst_curr_detSite, inst_curr_bestSite, inst_next_detSite, validIndices_curr_scl, cumsum_curr_scl);
+    num_clb_sites, minStableIter, maxList, HALF_SLICE_CAPACITY, NUM_BLE_PER_SLICE, minNeighbors, numGroups, CKSR_IN_CLB, CE_IN_CLB, SCL_IDX, SIG_IDX, site_nbr_idx, site_nbr, site_nbrGroup_idx, site_curr_pq_top_idx, site_curr_pq_sig_idx, site_curr_pq_sig, site_curr_pq_idx, site_curr_stable, site_curr_pq_siteId, site_curr_pq_score, site_curr_pq_impl_lut, site_curr_pq_impl_ff, site_curr_pq_impl_cksr, site_curr_pq_impl_ce, site_curr_scl_score, site_curr_scl_siteId, site_curr_scl_idx, site_curr_scl_validIdx, site_curr_scl_sig_idx, site_curr_scl_sig, site_curr_scl_impl_lut, site_curr_scl_impl_ff, site_curr_scl_impl_cksr, site_curr_scl_impl_ce, site_next_pq_idx, site_next_pq_validIdx, site_next_pq_top_idx, site_next_pq_score, site_next_pq_siteId, site_next_pq_sig_idx, site_next_pq_sig, site_next_pq_impl_lut, site_next_pq_impl_ff, site_next_pq_impl_cksr, site_next_pq_impl_ce,
+    site_det_score, site_det_siteId, site_det_sig_idx, site_det_sig, site_det_impl_lut, site_det_impl_ff, site_det_impl_cksr, site_det_impl_ce, inst_curr_detSite, inst_curr_bestSite, inst_next_detSite, validIndices_curr_scl, cumsum_curr_scl);
     cudaDeviceSynchronize();
 
     //////Use thrust to sort cumsum_curr_scl to compute sorted siteIds based on load
@@ -3809,11 +3949,12 @@ int runDLIterCuda(const T* pos_x,
 
     runDLIteration_kernel_2<<<block_count, THREAD_COUNT>>>(pos_x, pos_y, pin_offset_x, pin_offset_y, net_bbox, site_xy, net_pinIdArrayX, net_pinIdArrayY,
     node2fence_region_map, flop_ctrlSets, flop2ctrlSetId_map, lut_type, flat_node2pin_start_map, flat_node2pin_map, node2pincount, net2pincount, pin2net_map, pin_typeIds, flat_net2pin_start_map, pin2node_map, sorted_node_map, sorted_net_map, flat_node2prclstrCount, flat_node2precluster_map, net_weights, addr2site_map, validIndices_curr_scl, sorted_clb_siteIds, 
-        intMinVal, num_clb_sites, maxList, HALF_SLICE_CAPACITY, NUM_BLE_PER_SLICE, netShareScoreMaxNetDegree, wlscoreMaxNetDegree, xWirelenWt, yWirelenWt, wirelenImprovWt, extNetCountWt, CKSR_IN_CLB, CE_IN_CLB, SCL_IDX, SIG_IDX, site_nbr_idx, site_nbr, site_curr_pq_top_idx, site_curr_pq_sig_idx, site_curr_pq_sig, site_curr_pq_idx, site_curr_stable, site_curr_pq_siteId, site_curr_pq_score, site_curr_scl_score, site_curr_scl_siteId, site_curr_scl_idx, site_curr_scl_validIdx, site_curr_scl_sig_idx, site_curr_scl_sig, site_curr_scl_impl_lut, site_curr_scl_impl_ff, site_curr_scl_impl_cksr, site_curr_scl_impl_ce, site_next_pq_idx, site_next_pq_validIdx, site_next_pq_top_idx, site_next_pq_score, site_next_pq_siteId, site_next_pq_sig_idx, site_next_pq_sig, site_next_pq_impl_lut, site_next_pq_impl_ff, site_next_pq_impl_cksr, site_next_pq_impl_ce, site_next_scl_score, site_next_scl_siteId, site_next_scl_idx, site_next_scl_validIdx, site_next_scl_sig_idx, site_next_scl_sig, site_next_scl_impl_lut, site_next_scl_impl_ff, site_next_scl_impl_cksr, site_next_scl_impl_ce, site_next_stable, site_det_score, inst_curr_detSite, inst_next_bestScoreImprov, inst_next_bestSite, inst_score_improv, site_score_improv);
+        intMinVal, num_clb_sites, maxList, HALF_SLICE_CAPACITY, NUM_BLE_PER_SLICE, netShareScoreMaxNetDegree, wlscoreMaxNetDegree, xWirelenWt, yWirelenWt, wirelenImprovWt, extNetCountWt, CKSR_IN_CLB, CE_IN_CLB, SCL_IDX, SIG_IDX, site_nbr_idx, site_nbr, site_curr_pq_top_idx, site_curr_pq_validIdx, site_curr_pq_sig_idx, site_curr_pq_sig, site_curr_pq_impl_lut, site_curr_pq_impl_ff, site_curr_pq_impl_cksr, site_curr_pq_impl_ce,
+        site_curr_pq_idx, site_curr_stable, site_curr_pq_siteId, site_curr_pq_score, site_curr_scl_score, site_curr_scl_siteId, site_curr_scl_idx, site_curr_scl_validIdx, site_curr_scl_sig_idx, site_curr_scl_sig, site_curr_scl_impl_lut, site_curr_scl_impl_ff, site_curr_scl_impl_cksr, site_curr_scl_impl_ce, site_next_pq_idx, site_next_pq_validIdx, site_next_pq_top_idx, site_next_pq_score, site_next_pq_siteId, site_next_pq_sig_idx, site_next_pq_sig, site_next_pq_impl_lut, site_next_pq_impl_ff, site_next_pq_impl_cksr, site_next_pq_impl_ce, site_next_scl_score, site_next_scl_siteId, site_next_scl_idx, site_next_scl_validIdx, site_next_scl_sig_idx, site_next_scl_sig, site_next_scl_impl_lut, site_next_scl_impl_ff, site_next_scl_impl_cksr, site_next_scl_impl_ce, site_next_stable, site_det_score, inst_curr_detSite, inst_next_bestScoreImprov, inst_next_bestSite, inst_score_improv, site_score_improv);
     cudaDeviceSynchronize();
 
     ////TODO - Comment out single DLIter implementation - rearrange not possible
-    //runDLIteration<<<block_count, THREAD_COUNT>>>(pos_x, pos_y, pin_offset_x, pin_offset_y, net_bbox, site_xy, net_pinIdArrayX, net_pinIdArrayY, node2fence_region_map, flop_ctrlSets, flop2ctrlSetId_map, lut_type, flat_node2pin_start_map, flat_node2pin_map, node2pincount, net2pincount, pin2net_map, pin_typeIds, flat_net2pin_start_map, pin2node_map, sorted_net_map, sorted_node_map, flat_node2prclstrCount, flat_node2precluster_map, site_nbrList, site_nbrRanges, site_nbrRanges_idx, net_weights, addr2site_map, num_clb_sites, minStableIter, maxList, HALF_SLICE_CAPACITY, NUM_BLE_PER_SLICE, minNeighbors, intMinVal, numGroups, netShareScoreMaxNetDegree, wlscoreMaxNetDegree, xWirelenWt, yWirelenWt, wirelenImprovWt, extNetCountWt, CKSR_IN_CLB, CE_IN_CLB, SCL_IDX, SIG_IDX, validIndices_curr_scl, site_nbr_idx, site_nbr, site_nbrGroup_idx, site_curr_pq_top_idx, site_curr_pq_sig_idx, site_curr_pq_sig, site_curr_pq_idx, site_curr_stable, site_curr_pq_siteId, site_curr_pq_score, site_curr_pq_impl_lut, site_curr_pq_impl_ff, site_curr_pq_impl_cksr, site_curr_pq_impl_ce, site_curr_scl_score, site_curr_scl_siteId, site_curr_scl_idx, site_curr_scl_validIdx, site_curr_scl_sig_idx, site_curr_scl_sig, site_curr_scl_impl_lut, site_curr_scl_impl_ff, site_curr_scl_impl_cksr, site_curr_scl_impl_ce, site_next_pq_idx, site_next_pq_validIdx, site_next_pq_top_idx, site_next_pq_score, site_next_pq_siteId, site_next_pq_sig_idx, site_next_pq_sig, site_next_pq_impl_lut, site_next_pq_impl_ff, site_next_pq_impl_cksr, site_next_pq_impl_ce, site_next_scl_score, site_next_scl_siteId, site_next_scl_idx, site_next_scl_validIdx, site_next_scl_sig_idx, site_next_scl_sig, site_next_scl_impl_lut, site_next_scl_impl_ff, site_next_scl_impl_cksr, site_next_scl_impl_ce, site_next_stable, site_det_score, site_det_siteId, site_det_sig_idx, site_det_sig, site_det_impl_lut, site_det_impl_ff, site_det_impl_cksr, site_det_impl_ce, inst_curr_detSite, inst_curr_bestSite, inst_next_detSite, inst_next_bestScoreImprov, inst_next_bestSite, inst_score_improv, site_score_improv);
+    //runDLIteration<<<block_count, THREAD_COUNT>>>(pos_x, pos_y, pin_offset_x, pin_offset_y, net_bbox, site_xy, net_pinIdArrayX, net_pinIdArrayY, node2fence_region_map, flop_ctrlSets, flop2ctrlSetId_map, lut_type, flat_node2pin_start_map, flat_node2pin_map, node2pincount, net2pincount, pin2net_map, pin_typeIds, flat_net2pin_start_map, pin2node_map, sorted_net_map, sorted_node_map, flat_node2prclstrCount, flat_node2precluster_map, site_nbrList, site_nbrRanges, site_nbrRanges_idx, net_weights, addr2site_map, num_clb_sites, minStableIter, maxList, HALF_SLICE_CAPACITY, NUM_BLE_PER_SLICE, minNeighbors, intMinVal, numGroups, netShareScoreMaxNetDegree, wlscoreMaxNetDegree, xWirelenWt, yWirelenWt, wirelenImprovWt, extNetCountWt, CKSR_IN_CLB, CE_IN_CLB, SCL_IDX, SIG_IDX, validIndices_curr_scl, site_nbr_idx, site_nbr, site_nbrGroup_idx, site_curr_pq_top_idx, site_curr_pq_validIdx, site_curr_pq_sig_idx, site_curr_pq_sig, site_curr_pq_idx, site_curr_stable, site_curr_pq_siteId, site_curr_pq_score, site_curr_pq_impl_lut, site_curr_pq_impl_ff, site_curr_pq_impl_cksr, site_curr_pq_impl_ce, site_curr_scl_score, site_curr_scl_siteId, site_curr_scl_idx, site_curr_scl_validIdx, site_curr_scl_sig_idx, site_curr_scl_sig, site_curr_scl_impl_lut, site_curr_scl_impl_ff, site_curr_scl_impl_cksr, site_curr_scl_impl_ce, site_next_pq_idx, site_next_pq_validIdx, site_next_pq_top_idx, site_next_pq_score, site_next_pq_siteId, site_next_pq_sig_idx, site_next_pq_sig, site_next_pq_impl_lut, site_next_pq_impl_ff, site_next_pq_impl_cksr, site_next_pq_impl_ce, site_next_scl_score, site_next_scl_siteId, site_next_scl_idx, site_next_scl_validIdx, site_next_scl_sig_idx, site_next_scl_sig, site_next_scl_impl_lut, site_next_scl_impl_ff, site_next_scl_impl_cksr, site_next_scl_impl_ce, site_next_stable, site_det_score, site_det_siteId, site_det_sig_idx, site_det_sig, site_det_impl_lut, site_det_impl_ff, site_det_impl_cksr, site_det_impl_ce, inst_curr_detSite, inst_curr_bestSite, inst_next_detSite, inst_next_bestScoreImprov, inst_next_bestSite, inst_score_improv, site_score_improv);
 
     //cudaDeviceSynchronize();
 
