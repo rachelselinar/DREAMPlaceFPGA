@@ -155,7 +155,7 @@ git clone --recursive https://github.com/rachelselinar/DREAMPlaceFPGA.git
 
 ### <a name="python_dependency"></a>To install Python dependency 
 
-There is an aternative way to install Dreamplace using docker, if you want to use the docker, skip this step and goes to the next step, "To install with Docker"
+There is an aternative way to install DREAMPlaceFPGA using docker, if you want to use the docker, skip this step and goes to the next step, "To install with Docker"
 
 At the root directory:
 ```
@@ -174,28 +174,28 @@ You can use the Docker container to avoid building all the dependencies yourself
 3.  Get the docker image using one of the options
     Build the image locally
     ```
-    docker build . --file Dockerfile --tag <username>/dreamplace_fpga:1.0
+    docker build . --file Dockerfile --tag <username>/dreamplacefpga:1.0
     ```
-    replace `<username>` with a username, for instance 'utda_macro_placer'.
+    replace `<username>` with a username, for instance 'utda_placer'.
 4.  Enter bash environment of the container.
     Mount the repo and all the Designs into the Docker, which allows the Docker container to directly access and modify these files
 
     To run on a Linux machine without GPU:
     ```
-    docker run -it -v $(pwd):/DREAMPlaceFPGA <username>/dreamplace_fpga:1.0 bash
+    docker run -it -v $(pwd):/DREAMPlaceFPGA <username>/dreamplacefpga:1.0 bash
     ```
     To run on a Linux machine with GPU: (Docker verified on NVIDIA GPUs with compute capability 6.1, 7.5, and 8.0)
     ```
-    docker run --gpus 1 -it -v $(pwd):/DREAMPlaceFPGA <username>/dreamplace_fpga:1.0 bash
+    docker run --gpus 1 -it -v $(pwd):/DREAMPlaceFPGA <username>/dreamplacefpga:1.0 bash
     ```
 
     For example to run on a Linux machine without GPU:
     ```
-    docker run -it -v $(pwd):/DREAMPlaceFPGA utda_macro_placer/dreamplace_fpga:1.0 bash
+    docker run -it -v $(pwd):/DREAMPlaceFPGA utda_placer/dreamplacefpga:1.0 bash
     ```
 5.  Go to the `DREAMPlaceFPGA` directory in the Docker, which is the root directory of the project
     ```
-    cd /DREAMPlaceFPGA_mlcad
+    cd /DREAMPlaceFPGA
     ```
 
 
@@ -215,7 +215,7 @@ if you are using the docker, using the following at the root directory,
 rm -rf build
 mkdir build 
 cd build 
-cmake .. -DCMAKE_INSTALL_PREFIX=/DREAMPlaceFPGA_mlcad -DPYTHON_EXECUTABLE=$(which python)
+cmake .. -DCMAKE_INSTALL_PREFIX=/DREAMPlaceFPGA -DPYTHON_EXECUTABLE=$(which python)
 make
 make install
 ```

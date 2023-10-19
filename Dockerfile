@@ -7,7 +7,7 @@ FROM pytorch/pytorch:1.7.1-cuda11.0-cudnn8-devel
 # Add metadata to an image
 LABEL maintainer="zx.jiang@utexas.edu"
 LABEL version="1.0"
-LABEL description="Docker image for dreamplace_fpga"
+LABEL description="Docker image for dreamplacefpga"
 
 #
 RUN rm /etc/apt/sources.list.d/cuda.list
