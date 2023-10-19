@@ -46,6 +46,7 @@ void PlaceDB::add_bookshelf_node(std::string& name, std::string& type)
       mov_node_y.emplace_back(0.0);
       mov_node_z.emplace_back(0);
       lut_type.emplace_back(0);
+      cluster_lut_type.emplace_back(0);
       m_numFF += 1;
       ++num_movable_nodes;
     }
@@ -61,6 +62,7 @@ void PlaceDB::add_bookshelf_node(std::string& name, std::string& type)
       mov_node_y.emplace_back(0.0);
       mov_node_z.emplace_back(0);
       lut_type.emplace_back(0);
+      cluster_lut_type.emplace_back(0);
       m_numLUT += 1;
       ++num_movable_nodes;
     }
@@ -75,7 +77,8 @@ void PlaceDB::add_bookshelf_node(std::string& name, std::string& type)
       mov_node_x.emplace_back(0.0);
       mov_node_y.emplace_back(0.0);
       mov_node_z.emplace_back(0);
-      lut_type.emplace_back(0);
+      lut_type.emplace_back(1);
+      cluster_lut_type.emplace_back(0);
       m_numLUT += 1;
       ++num_movable_nodes;
     }
@@ -90,7 +93,8 @@ void PlaceDB::add_bookshelf_node(std::string& name, std::string& type)
       mov_node_x.emplace_back(0.0);
       mov_node_y.emplace_back(0.0);
       mov_node_z.emplace_back(0);
-      lut_type.emplace_back(1);
+      lut_type.emplace_back(2);
+      cluster_lut_type.emplace_back(1);
       m_numLUT += 1;
       ++num_movable_nodes;
     }
@@ -105,7 +109,8 @@ void PlaceDB::add_bookshelf_node(std::string& name, std::string& type)
       mov_node_x.emplace_back(0.0);
       mov_node_y.emplace_back(0.0);
       mov_node_z.emplace_back(0);
-      lut_type.emplace_back(2);
+      lut_type.emplace_back(3);
+      cluster_lut_type.emplace_back(2);
       m_numLUT += 1;
       ++num_movable_nodes;
     }
@@ -120,7 +125,8 @@ void PlaceDB::add_bookshelf_node(std::string& name, std::string& type)
       mov_node_x.emplace_back(0.0);
       mov_node_y.emplace_back(0.0);
       mov_node_z.emplace_back(0);
-      lut_type.emplace_back(3);
+      lut_type.emplace_back(4);
+      cluster_lut_type.emplace_back(3);
       m_numLUT += 1;
       ++num_movable_nodes;
     }
@@ -135,7 +141,8 @@ void PlaceDB::add_bookshelf_node(std::string& name, std::string& type)
       mov_node_x.emplace_back(0.0);
       mov_node_y.emplace_back(0.0);
       mov_node_z.emplace_back(0);
-      lut_type.emplace_back(4);
+      lut_type.emplace_back(5);
+      cluster_lut_type.emplace_back(4);
       m_numLUT += 1;
       ++num_movable_nodes;
     }
@@ -150,7 +157,8 @@ void PlaceDB::add_bookshelf_node(std::string& name, std::string& type)
       mov_node_x.emplace_back(0.0);
       mov_node_y.emplace_back(0.0);
       mov_node_z.emplace_back(0);
-      lut_type.emplace_back(5);
+      lut_type.emplace_back(6);
+      cluster_lut_type.emplace_back(5);
       m_numLUT += 1;
       ++num_movable_nodes;
     }
@@ -165,7 +173,8 @@ void PlaceDB::add_bookshelf_node(std::string& name, std::string& type)
       mov_node_x.emplace_back(0.0);
       mov_node_y.emplace_back(0.0);
       mov_node_z.emplace_back(0);
-      lut_type.emplace_back(5); //Treating same as LUT6
+      lut_type.emplace_back(6); //Treating same as LUT6
+      cluster_lut_type.emplace_back(5); //Treating same as LUT6
       m_numLUT += 1;
       ++num_movable_nodes;
     }
@@ -181,6 +190,7 @@ void PlaceDB::add_bookshelf_node(std::string& name, std::string& type)
       mov_node_y.emplace_back(0.0);
       mov_node_z.emplace_back(0);
       lut_type.emplace_back(0);
+      cluster_lut_type.emplace_back(0);
       m_numDSP += 1;
       ++num_movable_nodes;
     }
@@ -196,6 +206,7 @@ void PlaceDB::add_bookshelf_node(std::string& name, std::string& type)
       mov_node_y.emplace_back(0.0);
       mov_node_z.emplace_back(0);
       lut_type.emplace_back(0);
+      cluster_lut_type.emplace_back(0);
       m_numRAM += 1;
       ++num_movable_nodes;
     }

@@ -1,7 +1,7 @@
 /**
  * @file   lut_ff_legalization.cpp
- * @author Rachel Selina
- * @date   Mar 2021 (DREAMPlaceFPGA-PL)
+ * @author Rachel Selina (DREAMPlaceFPGA-PL)
+ * @date   Mar 2021
  * @brief  Legalize LUT/FF
  */
 
@@ -175,6 +175,12 @@ inline bool two_lut_compatibility_check(const int* lut_type, const int* flat_nod
     if (numInputs < 6)
     {
         return true;
+    } 
+
+    //Handle LUT0
+    if (lut_type[lutAId] == 0 || lut_type[lutBId] == 0)
+    {
+        return false;
     }
 
     int lutAIt = flat_node2pin_start_map[lutAId];
@@ -182,44 +188,51 @@ inline bool two_lut_compatibility_check(const int* lut_type, const int* flat_nod
     int lutAEnd = flat_node2pin_start_map[lutAId+1];
     int lutBEnd = flat_node2pin_start_map[lutBId+1];
 
-    if (pin_typeIds[flat_node2pin_map[lutAIt]] != 1)
-    {
-        ++lutAIt;
-    }
-    if (pin_typeIds[flat_node2pin_map[lutBIt]] != 1)
-    {
-        ++lutBIt;
-    }
+    //Handle LUT0
+    std::vector<int> lutAiNets, lutBiNets;
 
-    int netIdA = pin2net_map[flat_node2pin_map[lutAIt]];
-    int netIdB = pin2net_map[flat_node2pin_map[lutBIt]];
+    for (int el = lutAIt; el < lutAEnd; ++el)
+    {
+        //Skip if not an input pin
+        if (pin_typeIds[flat_node2pin_map[el]] != 1) continue;
+
+        int netId = pin2net_map[flat_node2pin_map[el]];
+        lutAiNets.emplace_back(netId);
+    }
+    std::sort(lutAiNets.begin(), lutAiNets.end());
+
+    for (int el = lutBIt; el < lutBEnd; ++el)
+    {
+        //Skip if not an input pin
+        if (pin_typeIds[flat_node2pin_map[el]] != 1) continue;
+
+        int netId = pin2net_map[flat_node2pin_map[el]];
+        lutBiNets.emplace_back(netId);
+    }
+    std::sort(lutBiNets.begin(), lutBiNets.end());
+
+    int idxA = 0, idxB = 0;
+    int netIdA = lutAiNets[idxA];
+    int netIdB = lutBiNets[idxB];
 
     while(numInputs > 5)
     {
-        if (sorted_net_map[netIdA] < sorted_net_map[netIdB])
+        if (netIdA < netIdB)
         {
-            ++lutAIt;
-            if (pin_typeIds[flat_node2pin_map[lutAIt]] != 1)
+            ++idxA;
+            if (idxA < lutAiNets.size())
             {
-                ++lutAIt;
-            }
-            if (lutAIt < lutAEnd)
-            {
-                netIdA = pin2net_map[flat_node2pin_map[lutAIt]];
+                netIdA = lutAiNets[idxA];
             } else
             {
                 break;
             }
-        } else if (sorted_net_map[netIdA] > sorted_net_map[netIdB])
+        } else if (netIdA > netIdB)
         {
-            ++lutBIt;
-            if (pin_typeIds[flat_node2pin_map[lutBIt]] != 1)
+            ++idxB;
+            if (idxB < lutBiNets.size())
             {
-                ++lutBIt;
-            }
-            if (lutBIt < lutBEnd)
-            {
-                netIdB = pin2net_map[flat_node2pin_map[lutBIt]];
+                netIdB = lutBiNets[idxB];
             } else
             {
                 break;
@@ -228,21 +241,13 @@ inline bool two_lut_compatibility_check(const int* lut_type, const int* flat_nod
         } else
         {
             --numInputs;
-            ++lutAIt;
-            ++lutBIt;
-            if (pin_typeIds[flat_node2pin_map[lutAIt]] != 1)
-            {
-                ++lutAIt;
-            }
-            if (pin_typeIds[flat_node2pin_map[lutBIt]] != 1)
-            {
-                ++lutBIt;
-            }
+            ++idxA;
+            ++idxB;
 
-            if (lutAIt < lutAEnd && lutBIt < lutBEnd)
+            if (idxA < lutAiNets.size() && idxB < lutBiNets.size())
             {
-                netIdA = pin2net_map[flat_node2pin_map[lutAIt]];
-                netIdB = pin2net_map[flat_node2pin_map[lutBIt]];
+                netIdA = lutAiNets[idxA];
+                netIdB = lutBiNets[idxB];
             } else
             {
                 break;
@@ -598,7 +603,7 @@ template <typename T>
 inline void compute_ble_score(const int* flat_node2pin_start_map, const int* flat_node2pin_map, const int* flat_net2pin_start_map, const int* flat_net2pin_map, const int* pin2net_map, const int* pin2node_map, const int* node2outpinIdx_map, const int* pin_typeIds, const int* sorted_net_map, const int* lut_type, const int lutA, const int lutB, const int ffA, const int ffB, T &score)
 {
     int numLUTShareInputs(0);
-    if (lutA != INVALID && lutB != INVALID)
+    if (lutA != INVALID && lutB != INVALID && lut_type[lutA] > 0 && lut_type[lutB] > 0)
     {
         int numLUTShareInputs = lut_type[lutA] + lut_type[lutB];
 
@@ -675,6 +680,7 @@ inline void compute_ble_score(const int* flat_node2pin_start_map, const int* fla
             }
         }
     }
+
     int numIntNets(0);
     for (int id : {lutA, lutB})
     {
@@ -994,7 +1000,7 @@ template <typename T>
 inline void computeBLEScore(const int* pin2node_map, const int* flat_net2pin_start_map, const int* flat_net2pin_map, const int* node2outpinIdx_map, const int* sorted_net_map, const int* pin2net_map, const int* lut_type, const int* pin_typeIds, const int* flat_node2pin_start_map, const int* flat_node2pin_map, const int lutA, const int lutB, const int ffA, const int ffB, T& score)
 {
     int numLUTShareInputs = 0;
-    if (lutA != INVALID && lutB != INVALID)
+    if (lutA != INVALID && lutB != INVALID && lut_type[lutA] > 0 && lut_type[lutB] > 0)
     {
         int lutAIt = flat_node2pin_start_map[lutA];
         int lutBIt = flat_node2pin_start_map[lutB];

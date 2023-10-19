@@ -131,6 +131,9 @@ class PlaceDB : public BookshelfParser::BookshelfDataBase
         std::vector<index_type> const& lutTypes() const {return lut_type;}
         std::vector<index_type>& lutTypes() {return lut_type;}
 
+        std::vector<index_type> const& clusterlutTypes() const {return cluster_lut_type;}
+        std::vector<index_type>& clusterlutTypes() {return cluster_lut_type;}
+
         std::vector<std::vector<index_type> > const& node2PinMap() const {return node2pin_map;}
         std::vector<std::vector<index_type> >& node2PinMap() {return node2pin_map;}
         index_type const& node2PinIdx(index_type xloc, index_type yloc) const {return node2pin_map.at(xloc).at(yloc);}
@@ -299,6 +302,7 @@ class PlaceDB : public BookshelfParser::BookshelfDataBase
         std::vector<double> mov_node_size_x;
         std::vector<double> mov_node_size_y;
         std::vector<index_type> lut_type;
+        std::vector<index_type> cluster_lut_type;
         std::vector<index_type> flop_indices;
 
         std::vector<double> mov_node_x;
