@@ -723,12 +723,12 @@ class PlaceObjFPGA(nn.Module):
         bins_y = math.ceil((placedb.yh - placedb.yl)/placedb.instDemStddevY) 
         return clustering_compatibility.LUTCompatibility(
             lut_indices=data_collections.lut_indices,
-            lut_type=data_collections.lut_type,
+            lut_type=data_collections.cluster_lut_type,
             node_size_x=data_collections.node_size_x,
             node_size_y=data_collections.node_size_y,
             num_bins_x=bins_x,
             num_bins_y=bins_y,
-            num_bins_l=placedb.lut_type.max()+1,
+            num_bins_l=placedb.cluster_lut_type.max()+1,
             xl=placedb.xl,
             yl=placedb.yl,
             xh=placedb.xh,
