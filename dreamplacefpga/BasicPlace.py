@@ -631,3 +631,71 @@ class BasicPlaceFPGA(nn.Module):
         logging.info("plotting to %s takes %.3f seconds" %
                      (figname, time.time() - tt))
 
+    def dump(self, params, placedb, pos, node_z, filename):
+        """
+        @brief dump intermediate solution as compressed pickle file (.pklz)
+        @param params parameters
+        @param placedb placement database
+        @param iteration optimization step
+        @param pos x,y locations of cells
+        @param node_z locations of cells within a site
+        @param filename output file name
+        """
+        with gzip.open(filename, "wb") as f:
+            pickle.dump(
+                (self.data_collections.node_size_x.cpu(),
+                 self.data_collections.node_size_y.cpu(),
+                 self.data_collections.node2fence_region_map.cpu(),
+                 self.data_collections.flat_net2pin_map.cpu(),
+                 self.data_collections.flat_net2pin_start_map.cpu(),
+                 self.data_collections.pin2net_map.cpu(),
+                 self.data_collections.flat_node2pin_map.cpu(),
+                 self.data_collections.flat_node2pin_start_map.cpu(),
+                 self.data_collections.pin2node_map.cpu(),
+                 self.data_collections.pin_offset_x.cpu(),
+                 self.data_collections.pin_offset_y.cpu(),
+                 self.data_collections.net_mask_ignore_large_degrees.cpu(),
+                 placedb.node_names, placedb.node_types,
+                 placedb.xl, placedb.yl, placedb.xh, placedb.yh,
+                 placedb.num_bins_x, placedb.num_bins_y,
+                 placedb.num_movable_nodes,
+                 placedb.num_terminals, placedb.num_filler_nodes,
+                 pos, node_z), f)
+
+    def load(self, params, placedb, filename):
+        """
+        @brief load intermediate solution as compressed pickle file (.pklz)
+        @param params parameters
+        @param placedb placement database
+        @param iteration optimization step
+        @param filename input file name
+        """
+        with gzip.open(filename, "rb") as f:
+            data = pickle.load(f)
+            self.data_collections.node_size_x.data = data[0].data.to(self.device)
+            self.data_collections.node_size_y.data = data[1].data.to(self.device)
+            self.data_collections.node2fence_region_map.data = data[2].data.to(self.device)
+            self.data_collections.flat_net2pin_map.data = data[3].data.to(self.device)
+            self.data_collections.flat_net2pin_start_map.data = data[4].data.to(self.device)
+            self.data_collections.pin2net_map.data = data[5].data.to(self.device)
+            self.data_collections.flat_node2pin_map.data = data[6].data.to(self.device)
+            self.data_collections.flat_node2pin_start_map.data = data[7].data.to(self.device)
+            self.data_collections.pin2node_map.data = data[8].data.to(self.device)
+            self.data_collections.pin_offset_x.data = data[9].data.to(self.device)
+            self.data_collections.pin_offset_y.data = data[10].data.to(self.device)
+            self.data_collections.net_mask_ignore_large_degrees.data = data[11].data.to(self.device)
+            placedb.node_names = data[12]
+            placedb.node_types = data[13]
+            placedb.xl = data[14]
+            placedb.yl = data[15]
+            placedb.xh = data[16]
+            placedb.yh = data[17]
+            placedb.num_bins_x = data[18]
+            placedb.num_bins_y = data[19]
+            placedb.num_nodes = data[0].numel()
+            placedb.num_movable_nodes = data[20]
+            placedb.num_terminals = data[21]
+            placedb.num_filler_nodes = data[22]
+            placedb.num_physical_nodes = placedb.num_movable_nodes + placedb.num_terminals
+            self.data_collections.pos[0].data = data[23].data.to(self.device)
+            self.data_collections.node_z.data = data[24].data.to(self.device)

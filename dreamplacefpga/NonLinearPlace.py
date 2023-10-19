@@ -709,12 +709,11 @@ class NonLinearPlaceFPGA (BasicPlaceFPGA):
 
         # dump global placement solution for legalization 
         if params.dump_global_place_solution_flag: 
-            self.dump(params, placedb, self.pos[0].cpu(), "%s.lg.pklz" %(params.design_name()))
+            self.dump(params, placedb, self.pos[0].cpu(), self.data_collections.node_z[:placedb.num_movable_nodes], "%s.lg.pklz" %(params.design_name()))
 
         # legalization 
         if params.legalize_flag:
             if params.global_place_flag == 0:
-                #TODO: Load from GP results
                 # global placement may run in multiple stages according to user specification 
                 for global_place_params in params.global_place_stages:
 
@@ -835,7 +834,7 @@ class NonLinearPlaceFPGA (BasicPlaceFPGA):
 
         # dump legalization solution for detailed placement 
         if params.dump_legalize_solution_flag: 
-            self.dump(params, placedb, self.pos[0].cpu(), "%s.dp.pklz" %(params.design_name()))
+            self.dump(params, placedb, self.pos[0].cpu(), self.data_collections.node_z[:placedb.num_movable_nodes], "%s.dp.pklz" %(params.design_name()))
 
         ## detailed placement 
         #if params.detailed_place_flag: 
