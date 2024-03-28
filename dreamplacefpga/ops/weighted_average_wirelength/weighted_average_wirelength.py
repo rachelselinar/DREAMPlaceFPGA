@@ -28,7 +28,8 @@ class WeightedAverageWirelengthFunction(Function):
     @brief compute weighted average wirelength.
     """
     @staticmethod
-    def forward(ctx, pos, flat_netpin, netpin_start, pin2net_map, net_weights, net_mask, pin_mask, inv_gamma, num_threads):
+    def forward(ctx, pos, flat_netpin, netpin_start, pin2net_map, net_weights,
+                net_mask, pin_mask, inv_gamma, num_threads):
         """
         @param pos pin location (x array, y array), not cell location
         @param flat_netpin flat netpin map, length of #pins
@@ -182,7 +183,7 @@ class WeightedAverageWirelengthAtomicFunction(Function):
         if grad_pos.is_cuda:
             torch.cuda.synchronize()
         logger.debug("wirelength backward %.3f ms" % ((time.time()-tt)*1000))
-        return output, None, None, None, None, None, None
+        return output, None, None, None, None, None, None, None, None
 
 class WeightedAverageWirelengthMergedFunction(Function):
     """
@@ -262,7 +263,10 @@ class WeightedAverageWirelength(nn.Module):
     GPU supports three algorithms: net-by-net, atomic, merged.
     Different parameters are required for different algorithms.
     """
-    def __init__(self, flat_netpin=None, netpin_start=None, pin2net_map=None, net_weights=None, net_mask=None, pin_mask=None, gamma=None, net_bounding_box_min=None, net_bounding_box_max=None, num_threads=None, algorithm='atomic'):
+    def __init__(self, flat_netpin=None, netpin_start=None, pin2net_map=None,
+                 net_weights=None, net_mask=None, pin_mask=None, gamma=None,
+                 net_bounding_box_min=None, net_bounding_box_max=None,
+                 num_threads=None, algorithm='atomic'):
         """
         @brief initialization
         @param flat_netpin flat netpin map, length of #pins

@@ -1,20 +1,33 @@
 ##
 # @file   logsumexp_wirelength_unitest.py
-# @author Yibo Lin
-# @date   Mar 2019
+# @author Yibo Lin (DREAMPlace) Rachel Selina (DREAMPlaceFPGA)
+# @date   Mar 2024
 #
 
 import os
 import sys
 import numpy as np
 import unittest
+import pdb
 
 import torch
 from torch.autograd import Function, Variable
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-from dreamplace.ops.logsumexp_wirelength import logsumexp_wirelength
+from dreamplacefpga.ops.logsumexp_wirelength import logsumexp_wirelength
 sys.path.pop()
+
+def print_val(array, name):
+    temp = "Contents of " + name + ": "
+    for el in array:
+        if hasattr(el, "__len__"):
+            temp += "["
+            for subEl in el:
+                temp += str(subEl.item()) + " "
+            temp += "] "
+        else:
+            temp += str(el.item()) + " "
+    print(temp)
 
 def unsorted_segment_max(pin_x, pin2net_map, num_nets):
     result = torch.zeros(num_nets, dtype=pin_x.dtype)
@@ -96,16 +109,19 @@ class LogSumExpWirelengthOpTest(unittest.TestCase):
             count += len(net2pin_map[i])
         flat_net2pin_start_map[len(net2pin_map)] = len(pin_pos)
         
-        print("flat_net2pin_map = ", flat_net2pin_map)
-        print("flat_net2pin_start_map = ", flat_net2pin_start_map)
+        #print("flat_net2pin_map = ", flat_net2pin_map)
+        print_val(flat_net2pin_map, "flat_net2pin_map")
+        #print("flat_net2pin_start_map = ", flat_net2pin_start_map)
+        print_val(flat_net2pin_start_map, "flat_net2pin_start_map")
 
-        print(np.transpose(pin_pos))
+        #print(np.transpose(pin_pos))
+        print_val(np.transpose(pin_pos), "pin_pos_transpose")
         pin_pos_var = Variable(torch.from_numpy(np.transpose(pin_pos)).reshape([-1]), requires_grad=True)
         #pin_pos_var = torch.nn.Parameter(torch.from_numpy(np.transpose(pin_pos)).reshape([-1]))
         print(pin_pos_var)
 
         golden = build_wirelength(pin_pos_var[:pin_pos_var.numel()//2], pin_pos_var[pin_pos_var.numel()//2:], pin2net_map, net2pin_map, gamma, ignore_net_degree, net_weights)
-        print("golden_value = ", golden.data)
+        print("golden_value = ", golden.item())
         golden.backward()
         golden_grad = pin_pos_var.grad.clone()
         print("golden_grad = ", golden_grad.data)
@@ -124,7 +140,7 @@ class LogSumExpWirelengthOpTest(unittest.TestCase):
                 algorithm='merged'
                 )
         result = custom.forward(pin_pos_var)
-        print("custom = ", result)
+        print("custom = ", result.item())
         result.backward()
         grad = pin_pos_var.grad.clone()
         print("custom_grad = ", grad)

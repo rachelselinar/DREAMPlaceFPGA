@@ -1,7 +1,7 @@
 ##
 # @file   pin_utilization_unitest.py
-# @author Zixuan Jiang, Jiaqi Gu
-# @date   Dec 2019
+# @author Zixuan Jiang, Jiaqi Gu (DREAMPlace) Rachel Selina (DREAMPlaceFPGA)
+# @date   Mar 2024
 #
 
 import os 
@@ -12,7 +12,7 @@ import numpy as np
 import math
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-from dreamplace.ops.pin_utilization import pin_utilization
+from dreamplacefpga.ops.pin_utilization import pin_utilization
 sys.path.pop()
 
 class PinUtilizationUnittest(unittest.TestCase):
@@ -76,8 +76,9 @@ class PinUtilizationUnittest(unittest.TestCase):
                 num_bins_y=num_bins_y,
                 unit_pin_capacity=unit_pin_capacity,
                 pin_stretch_ratio=pin_stretch_ratio,
-                num_threads=8
-                 )
+                deterministic_flag=True,
+                num_threads=1
+                )
 
         result_cpu = pin_utilization_op.forward(pos.t().contiguous().view(-1))
         print("Test on CPU. pin_utilization map = ", result_cpu)
@@ -99,6 +100,8 @@ class PinUtilizationUnittest(unittest.TestCase):
                     num_bins_y=num_bins_y,
                     unit_pin_capacity=unit_pin_capacity,
                     pin_stretch_ratio=pin_stretch_ratio,
+                    deterministic_flag=False,
+                    num_threads=1
                     )
 
             result_cuda = pin_utilization_op_cuda.forward(pos.t().contiguous().view(-1).cuda())

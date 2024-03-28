@@ -1,7 +1,7 @@
 ##
 # @file   density_potential_unitest.py
-# @author Yibo Lin
-# @date   Mar 2019
+# @author Yibo Lin (DREAMPlace) Rachel Selina (DREAMPlaceFPGA)
+# @date   Mar 2024
 #
 
 import os 
@@ -12,7 +12,7 @@ import unittest
 import torch
 from torch.autograd import Function, Variable
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-from dreamplace.ops.density_potential import density_potential
+from dreamplacefpga.ops.density_potential import density_potential
 sys.path.pop()
 import inspect
 import pdb 
@@ -140,18 +140,28 @@ class DensityPotentialOpTest(unittest.TestCase):
 
         # test cpu 
         custom = density_potential.DensityPotential(
-                    torch.tensor(node_size_x, requires_grad=False), torch.tensor(node_size_y, requires_grad=False), 
-                    torch.tensor(ax, requires_grad=False), torch.tensor(bx, requires_grad=False), torch.tensor(cx, requires_grad=False), 
-                    torch.tensor(ay, requires_grad=False), torch.tensor(by, requires_grad=False), torch.tensor(cy, requires_grad=False), 
-                    torch.tensor(bin_center_x, requires_grad=False), torch.tensor(bin_center_y, requires_grad=False), 
+                    torch.tensor(node_size_x, requires_grad=False),
+                    torch.tensor(node_size_y, requires_grad=False), 
+                    torch.tensor(ax, requires_grad=False),
+                    torch.tensor(bx, requires_grad=False),
+                    torch.tensor(cx, requires_grad=False), 
+                    torch.tensor(ay, requires_grad=False),
+                    torch.tensor(by, requires_grad=False),
+                    torch.tensor(cy, requires_grad=False), 
+                    torch.tensor(bin_center_x, requires_grad=False),
+                    torch.tensor(bin_center_y, requires_grad=False), 
                     target_density=torch.tensor(target_density, requires_grad=False), 
-                    xl=torch.tensor(xl, requires_grad=False), yl=torch.tensor(yl, requires_grad=False), xh=torch.tensor(xh, requires_grad=False), yh=torch.tensor(yh, requires_grad=False), 
-                    bin_size_x=torch.tensor(bin_size_x, requires_grad=False), bin_size_y=torch.tensor(bin_size_y, requires_grad=False), 
+                    xl=torch.tensor(xl, requires_grad=False),
+                    yl=torch.tensor(yl, requires_grad=False),
+                    xh=torch.tensor(xh, requires_grad=False),
+                    yh=torch.tensor(yh, requires_grad=False), 
+                    bin_size_x=torch.tensor(bin_size_x, requires_grad=False),
+                    bin_size_y=torch.tensor(bin_size_y, requires_grad=False), 
                     num_movable_nodes=torch.tensor(num_nodes, requires_grad=False), 
                     num_terminals=0, 
                     num_filler_nodes=0, 
                     padding=torch.tensor(0, dtype=torch.int32, requires_grad=False), 
-                    sigma=sigma, delta=delta)
+                    sigma=sigma, delta=delta, num_threads=1)
 
         pos = Variable(torch.from_numpy(np.concatenate([xx, yy])), requires_grad=True)
         result = custom.forward(pos)
@@ -163,18 +173,28 @@ class DensityPotentialOpTest(unittest.TestCase):
         # test cuda 
         if torch.cuda.device_count(): 
             custom_cuda = density_potential.DensityPotential(
-                        torch.tensor(node_size_x, requires_grad=False).cuda(), torch.tensor(node_size_y, requires_grad=False).cuda(), 
-                        torch.tensor(ax, requires_grad=False).cuda(), torch.tensor(bx, requires_grad=False).cuda(), torch.tensor(cx, requires_grad=False).cuda(), 
-                        torch.tensor(ay, requires_grad=False).cuda(), torch.tensor(by, requires_grad=False).cuda(), torch.tensor(cy, requires_grad=False).cuda(), 
-                        torch.tensor(bin_center_x, requires_grad=False).cuda(), torch.tensor(bin_center_y, requires_grad=False).cuda(), 
+                        torch.tensor(node_size_x, requires_grad=False).cuda(),
+                        torch.tensor(node_size_y, requires_grad=False).cuda(), 
+                        torch.tensor(ax, requires_grad=False).cuda(),
+                        torch.tensor(bx, requires_grad=False).cuda(),
+                        torch.tensor(cx, requires_grad=False).cuda(), 
+                        torch.tensor(ay, requires_grad=False).cuda(),
+                        torch.tensor(by, requires_grad=False).cuda(),
+                        torch.tensor(cy, requires_grad=False).cuda(), 
+                        torch.tensor(bin_center_x, requires_grad=False).cuda(),
+                        torch.tensor(bin_center_y, requires_grad=False).cuda(), 
                         target_density=torch.tensor(target_density, requires_grad=False).cuda(), 
-                        xl=torch.tensor(xl, requires_grad=False).cuda(), yl=torch.tensor(yl, requires_grad=False).cuda(), xh=torch.tensor(xh, requires_grad=False).cuda(), yh=torch.tensor(yh, requires_grad=False).cuda(), 
-                        bin_size_x=torch.tensor(bin_size_x, requires_grad=False).cuda(), bin_size_y=torch.tensor(bin_size_y, requires_grad=False).cuda(), 
+                        xl=torch.tensor(xl, requires_grad=False).cuda(),
+                        yl=torch.tensor(yl, requires_grad=False).cuda(),
+                        xh=torch.tensor(xh, requires_grad=False).cuda(),
+                        yh=torch.tensor(yh, requires_grad=False).cuda(), 
+                        bin_size_x=torch.tensor(bin_size_x, requires_grad=False).cuda(),
+                        bin_size_y=torch.tensor(bin_size_y, requires_grad=False).cuda(), 
                         num_movable_nodes=torch.tensor(num_nodes, requires_grad=False).cuda(), 
                         num_terminals=0, 
                         num_filler_nodes=0, 
                         padding=torch.tensor(0, dtype=torch.int32, requires_grad=False).cuda(), 
-                        sigma=sigma, delta=delta)
+                        sigma=sigma, delta=delta, num_threads=1)
 
             pos = Variable(torch.from_numpy(np.concatenate([xx, yy])).cuda(), requires_grad=True)
             #pos.grad.zero_()

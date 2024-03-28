@@ -17,10 +17,10 @@ import scipy
 from scipy import fftpack
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-from dreamplace.ops.dct import dct2_fft2
-from dreamplace.ops.dct import discrete_spectral_transform
-from dreamplace.ops.dct import dct_lee
-from dreamplace.ops.dct import dct
+from dreamplacefpga.ops.dct import dct2_fft2
+from dreamplacefpga.ops.dct import discrete_spectral_transform
+from dreamplacefpga.ops.dct import dct_lee
+from dreamplacefpga.ops.dct import dct
 sys.path.pop()
 
 dtype = torch.float32

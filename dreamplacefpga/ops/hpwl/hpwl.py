@@ -1,7 +1,7 @@
 ##
 # @file   hpwl.py
-# @author Yibo Lin (DREAMPlace)
-# @date   Jun 2018
+# @author Yibo Lin (DREAMPlace) Rachel Selina (DREAMPlaceFPGA)
+# @date   May 2023
 #
 
 import torch
@@ -28,13 +28,16 @@ class HPWLFunction(Function):
     @param pin2net_map pin2net map, second set of options 
     """
     @staticmethod
-    def forward(ctx, pos, flat_netpin, netpin_start, net_weights, net_mask, net_bounding_box_min, net_bounding_box_max, num_threads):
+    def forward(ctx, pos, flat_netpin, netpin_start, net_weights, net_mask,
+            net_bounding_box_min, net_bounding_box_max, xWeight, yWeight, num_threads):
         output = pos.new_empty(1)
         if pos.is_cuda:
-            output = hpwl_cuda.forward(pos.view(pos.numel()), flat_netpin, netpin_start, net_weights, net_mask)
-            return output[0].sum()*0.7 + output[1].sum()*1.2
+            output = hpwl_cuda.forward(pos.view(pos.numel()), flat_netpin, netpin_start, net_weights,
+                        net_mask)
+            return output[0].sum()*xWeight + output[1].sum()*yWeight
         else:
-            output = hpwl_cpp.forward(pos.view(pos.numel()), flat_netpin, netpin_start, net_weights, net_mask, num_threads)
+            output = hpwl_cpp.forward(pos.view(pos.numel()), flat_netpin, netpin_start, net_weights,
+                        net_mask, xWeight, yWeight, num_threads)
             return output 
 
 class HPWLAtomicFunction(Function):
@@ -45,13 +48,14 @@ class HPWLAtomicFunction(Function):
     @param net_mask a boolean mask containing whether a net should be computed 
     """
     @staticmethod
-    def forward(ctx, pos, pin2net_map, net_weights, net_mask):
+    def forward(ctx, pos, pin2net_map, net_weights, net_mask, xWeight, yWeight):
         output = pos.new_empty(1)
         if pos.is_cuda:
             output = hpwl_cuda_atomic.forward(pos.view(pos.numel()), pin2net_map, net_weights, net_mask)
+            return ((net_weights*output[0]).sum()*xWeight + (net_weights*output[1]).sum()*yWeight).sum().mul_(1.0/1000)
         else:
             output = hpwl_cpp_atomic.forward(pos.view(pos.numel()), pin2net_map, net_weights, net_mask)
-        return output 
+            return ((net_weights*output[0]).sum()*xWeight + (net_weights*output[1]).sum()*yWeight).sum()
 
 class HPWL(nn.Module):
     """ 
@@ -59,7 +63,9 @@ class HPWL(nn.Module):
     Support two algoriths: net-by-net and atomic. 
     Different parameters are required for different algorithms. 
     """
-    def __init__(self, flat_netpin=None, netpin_start=None, pin2net_map=None, net_weights=None, net_mask=None, net_bounding_box_min=None, net_bounding_box_max=None, num_threads=None, algorithm='atomic'):
+    def __init__(self, xWeight=None, yWeight=None, flat_netpin=None, netpin_start=None, pin2net_map=None,
+        net_weights=None, net_mask=None, net_bounding_box_min=None, net_bounding_box_max=None,
+        num_threads=None, algorithm='atomic'):
         """
         @brief initialization 
         @param flat_netpin flat netpin map, length of #pins 
@@ -75,6 +81,8 @@ class HPWL(nn.Module):
             assert flat_netpin is not None and netpin_start is not None, "flat_netpin, netpin_start are requried parameters for algorithm net-by-net"
         elif algorithm == 'atomic':
             assert pin2net_map is not None, "pin2net_map is required for algorithm atomic"
+        self.xWeight = xWeight
+        self.yWeight = yWeight
         self.flat_netpin = flat_netpin 
         self.netpin_start = netpin_start
         self.pin2net_map = pin2net_map 
@@ -93,11 +101,15 @@ class HPWL(nn.Module):
                     self.net_mask, 
                     self.net_bounding_box_min,
                     self.net_bounding_box_max,
+                    self.xWeight,
+                    self.yWeight,
                     self.num_threads
                     )
         elif self.algorithm == 'atomic':
             return HPWLAtomicFunction.apply(pos, 
                     self.pin2net_map, 
                     self.net_weights,
-                    self.net_mask
+                    self.net_mask,
+                    self.xWeight,
+                    self.yWeight
                     )

@@ -11,7 +11,7 @@ import os
 import sys
 import numpy as np
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-from dreamplace.ops.dct import dct, discrete_spectral_transform, dct2_fft2
+from dreamplacefpga.ops.dct import dct, discrete_spectral_transform, dct2_fft2
 sys.path.pop()
 
 
@@ -115,5 +115,7 @@ def compare_different_methods(cuda_flag, M=1024, N=1024, dtype=torch.float64):
 
 if __name__ == "__main__":
     compare_different_methods(cuda_flag=False, M=1024, N=1024, dtype=torch.float64)
+    print("Verified different methods in CPU") 
     if torch.cuda.device_count(): 
         compare_different_methods(cuda_flag=True, M=1024, N=1024, dtype=torch.float64)
+        print("Verified different methods in CUDA") 

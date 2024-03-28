@@ -83,11 +83,12 @@ at::Tensor hpwl_atomic_forward(
             AT_ERROR("hpwl_atomic_forward", " not implemented for '", at::toString(pos.scalar_type()), "'"); 
     }
 
-    if (net_weights.numel())
-    {
-        hpwl.mul_(net_weights.view({1, num_nets}));
-    }
-    return hpwl.sum().mul_(1.0/1000); 
+    //if (net_weights.numel())
+    //{
+    //    hpwl.mul_(net_weights.view({1, num_nets}));
+    //}
+    //return hpwl.sum().mul_(1.0/1000); 
+    return hpwl;
 }
 
 DREAMPLACE_END_NAMESPACE
