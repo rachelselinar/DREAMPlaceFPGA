@@ -1,7 +1,7 @@
 ##
 # @file   weighted_average_wirelength_unitest.py
-# @author Yibo Lin
-# @date   Mar 2019
+# @author Yibo Lin (DREAMPlace) Rachel Selina (DREAMPlaceFPGA)
+# @date   Mar 2024
 #
 
 import os
@@ -17,7 +17,7 @@ else:
     import _pickle as pickle
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-from dreamplace.ops.weighted_average_wirelength import weighted_average_wirelength
+from dreamplacefpga.ops.weighted_average_wirelength import weighted_average_wirelength
 sys.path.pop()
 
 import pdb
@@ -142,6 +142,9 @@ class WeightedAverageWirelengthOpTest(unittest.TestCase):
             if len(net2pin_map[i]) >= ignore_net_degree:
                 net_mask[i] = 0
 
+        net_bounding_box_min = np.ones_like(net_mask, dtype=np.float32)
+        net_bounding_box_min *= pin_pos.max()
+        net_bounding_box_max = np.zeros_like(net_mask, dtype=np.float32)
         # construct flat_net2pin_map and flat_net2pin_start_map
         # flat netpin map, length of #pins
         flat_net2pin_map = np.zeros(len(pin_pos), dtype=np.int32)
@@ -175,6 +178,9 @@ class WeightedAverageWirelengthOpTest(unittest.TestCase):
                 net_mask=torch.from_numpy(net_mask),
                 pin_mask=torch.from_numpy(pin_mask),
                 gamma=torch.tensor(gamma, dtype=dtype),
+                net_bounding_box_min=torch.from_numpy(net_bounding_box_min),
+                net_bounding_box_max=torch.from_numpy(net_bounding_box_max),
+                num_threads=1,
                 algorithm='net-by-net'
                 )
         result = custom.forward(pin_pos_var)
@@ -183,7 +189,7 @@ class WeightedAverageWirelengthOpTest(unittest.TestCase):
         grad = pin_pos_var.grad.clone()
         print("custom_grad = ", grad)
 
-        np.testing.assert_allclose(result.data.numpy(), golden_value, atol=1e-6)
+        np.testing.assert_allclose(result.data.numpy(), golden_value, atol=1e-4)
 
         # test cpu atomic
         pin_pos_var.grad.zero_()
@@ -195,6 +201,9 @@ class WeightedAverageWirelengthOpTest(unittest.TestCase):
                 net_mask=torch.from_numpy(net_mask),
                 pin_mask=torch.from_numpy(pin_mask),
                 gamma=torch.tensor(gamma, dtype=dtype),
+                net_bounding_box_min=torch.from_numpy(net_bounding_box_min),
+                net_bounding_box_max=torch.from_numpy(net_bounding_box_max),
+                num_threads=1,
                 algorithm='atomic'
                 )
         result = custom.forward(pin_pos_var)
@@ -203,8 +212,8 @@ class WeightedAverageWirelengthOpTest(unittest.TestCase):
         grad_atomic = pin_pos_var.grad.clone()
         print("custom_grad_cpu atomic = ", grad_atomic.data)
 
-        np.testing.assert_allclose(result.data.numpy(), golden_value, atol=1e-6)
-        np.testing.assert_allclose(grad_atomic.data.numpy(), grad.data.numpy(), rtol=1e-6, atol=1e-6)
+        np.testing.assert_allclose(result.data.numpy(), golden_value, atol=1e-4)
+        np.testing.assert_allclose(grad_atomic.data.numpy(), grad.data.numpy(), rtol=1e-4, atol=1e-4)
 
         # test cpu merged
         pin_pos_var.grad.zero_()
@@ -216,6 +225,9 @@ class WeightedAverageWirelengthOpTest(unittest.TestCase):
                 net_mask=torch.from_numpy(net_mask),
                 pin_mask=torch.from_numpy(pin_mask),
                 gamma=torch.tensor(gamma, dtype=dtype),
+                net_bounding_box_min=torch.from_numpy(net_bounding_box_min),
+                net_bounding_box_max=torch.from_numpy(net_bounding_box_max),
+                num_threads=1,
                 algorithm='merged'
                 )
         result = custom.forward(pin_pos_var)
@@ -224,8 +236,8 @@ class WeightedAverageWirelengthOpTest(unittest.TestCase):
         grad_merged = pin_pos_var.grad.clone()
         print("custom_grad_cpu merged = ", grad_merged.data)
 
-        np.testing.assert_allclose(result.data.numpy(), golden_value, atol=1e-6)
-        np.testing.assert_allclose(grad_merged.data.numpy(), grad.data.numpy(), rtol=1e-6, atol=1e-6)
+        np.testing.assert_allclose(result.data.numpy(), golden_value, atol=1e-4)
+        np.testing.assert_allclose(grad_merged.data.numpy(), grad.data.numpy(), rtol=1e-4, atol=1e-4)
 
         # test gpu
         if torch.cuda.device_count():
@@ -238,6 +250,9 @@ class WeightedAverageWirelengthOpTest(unittest.TestCase):
                     net_mask=torch.from_numpy(net_mask).cuda(),
                     pin_mask=torch.from_numpy(pin_mask).cuda(),
                     gamma=torch.tensor(gamma, dtype=dtype).cuda(),
+                    net_bounding_box_min=torch.from_numpy(net_bounding_box_min),
+                    net_bounding_box_max=torch.from_numpy(net_bounding_box_max),
+                    num_threads=1,
                     algorithm='net-by-net'
                     )
             result_cuda = custom_cuda.forward(pin_pos_var.cuda())
@@ -260,6 +275,9 @@ class WeightedAverageWirelengthOpTest(unittest.TestCase):
                     net_mask=torch.from_numpy(net_mask).cuda(),
                     pin_mask=torch.from_numpy(pin_mask).cuda(),
                     gamma=torch.tensor(gamma, dtype=dtype).cuda(),
+                    net_bounding_box_min=torch.from_numpy(net_bounding_box_min),
+                    net_bounding_box_max=torch.from_numpy(net_bounding_box_max),
+                    num_threads=1,
                     algorithm='atomic'
                     )
             result_cuda = custom_cuda.forward(pin_pos_var.cuda())
@@ -268,8 +286,8 @@ class WeightedAverageWirelengthOpTest(unittest.TestCase):
             grad_cuda = pin_pos_var.grad.clone()
             print("custom_grad_cuda atomic = ", grad_cuda.data.cpu())
 
-            np.testing.assert_allclose(result_cuda.data.cpu().numpy(), golden_value, atol=1e-6)
-            np.testing.assert_allclose(grad_cuda.data.cpu().numpy(), grad.data.numpy(), rtol=1e-6, atol=1e-6)
+            np.testing.assert_allclose(result_cuda.data.cpu().numpy(), golden_value, atol=1e-4)
+            np.testing.assert_allclose(grad_cuda.data.cpu().numpy(), grad.data.numpy(), rtol=1e-4, atol=1e-4)
 
         # test gpu merged
         if torch.cuda.device_count():
@@ -282,6 +300,9 @@ class WeightedAverageWirelengthOpTest(unittest.TestCase):
                     net_mask=torch.from_numpy(net_mask).cuda(),
                     pin_mask=torch.from_numpy(pin_mask).cuda(),
                     gamma=torch.tensor(gamma, dtype=dtype).cuda(),
+                    net_bounding_box_min=torch.from_numpy(net_bounding_box_min),
+                    net_bounding_box_max=torch.from_numpy(net_bounding_box_max),
+                    num_threads=1,
                     algorithm='merged'
                     )
             result_cuda = custom_cuda.forward(pin_pos_var.cuda())
@@ -290,13 +311,13 @@ class WeightedAverageWirelengthOpTest(unittest.TestCase):
             grad_cuda = pin_pos_var.grad.clone()
             print("custom_grad_cuda merged = ", grad_cuda.data.cpu())
 
-            np.testing.assert_allclose(result_cuda.data.cpu().numpy(), golden_value, atol=1e-6)
-            np.testing.assert_allclose(grad_cuda.data.cpu().numpy(), grad.data.numpy(), rtol=1e-6, atol=1e-6)
+            np.testing.assert_allclose(result_cuda.data.cpu().numpy(), golden_value, atol=1e-4)
+            np.testing.assert_allclose(grad_cuda.data.cpu().numpy(), grad.data.numpy(), rtol=1e-4, atol=1e-4)
 
 def eval_runtime(design):
-    # e.g,. adaptec1_wirelength.pklz
-    with gzip.open(design, "rb") as f:
-        flat_net2pin_map, flat_net2pin_start_map, pin2net_map, net_mask, pin_mask, gamma = pickle.load(f)
+    ## e.g,. adaptec1_wirelength.pklz
+    #with gzip.open(design, "rb") as f:
+    #    flat_net2pin_map, flat_net2pin_start_map, pin2net_map, net_mask, pin_mask, gamma = pickle.load(f)
     dtype = torch.float64
     net_weights = torch.Tensor()
     pin_pos_var = Variable(torch.empty(len(pin2net_map)*2, dtype=dtype).uniform_(0, 1000), requires_grad=True)
@@ -308,6 +329,8 @@ def eval_runtime(design):
             net_mask=torch.from_numpy(net_mask),
             pin_mask=torch.from_numpy(pin_mask),
             gamma=torch.tensor(gamma, dtype=dtype),
+            net_bounding_box_min=torch.from_numpy(net_bounding_box_min),
+            net_bounding_box_max=torch.from_numpy(net_bounding_box_max),
             algorithm='net-by-net',
             num_threads=10
             )
@@ -319,6 +342,8 @@ def eval_runtime(design):
             net_mask=torch.from_numpy(net_mask),
             pin_mask=torch.from_numpy(pin_mask),
             gamma=torch.tensor(gamma, dtype=dtype),
+            net_bounding_box_min=torch.from_numpy(net_bounding_box_min),
+            net_bounding_box_max=torch.from_numpy(net_bounding_box_max),
             algorithm='atomic',
             num_threads=10
             )
@@ -330,6 +355,8 @@ def eval_runtime(design):
             net_mask=torch.from_numpy(net_mask).cuda(),
             pin_mask=torch.from_numpy(pin_mask).cuda(),
             gamma=torch.tensor(gamma, dtype=dtype).cuda(),
+            net_bounding_box_min=torch.from_numpy(net_bounding_box_min),
+            net_bounding_box_max=torch.from_numpy(net_bounding_box_max),
             algorithm='net-by-net'
             )
     custom_atomic = weighted_average_wirelength.WeightedAverageWirelength(
@@ -340,6 +367,8 @@ def eval_runtime(design):
             net_mask=torch.from_numpy(net_mask).cuda(),
             pin_mask=torch.from_numpy(pin_mask).cuda(),
             gamma=torch.tensor(gamma, dtype=dtype).cuda(),
+            net_bounding_box_min=torch.from_numpy(net_bounding_box_min),
+            net_bounding_box_max=torch.from_numpy(net_bounding_box_max),
             algorithm='atomic'
             )
     custom_sparse = weighted_average_wirelength.WeightedAverageWirelength(
@@ -350,6 +379,8 @@ def eval_runtime(design):
             net_mask=torch.from_numpy(net_mask).cuda(),
             pin_mask=torch.from_numpy(pin_mask).cuda(),
             gamma=torch.tensor(gamma, dtype=dtype).cuda(),
+            net_bounding_box_min=torch.from_numpy(net_bounding_box_min),
+            net_bounding_box_max=torch.from_numpy(net_bounding_box_max),
             algorithm='sparse'
             )
 

@@ -322,6 +322,10 @@ class AdjustNodeArea(nn.Module):
                 #filler_nodes_length = new_filler_area_sum / old_filler_area_sum
             else:
                 new_filler_area_sum = old_filler_area_sum
+                new_movable_area_lut_sum = old_movable_area_lut_sum
+                new_lut_filler_area = old_filler_area_lut_sum
+                new_movable_area_flop_sum = old_movable_area_flop_sum
+                new_flop_filler_area = old_filler_area_sum
 
             logger.info(
                 "old total movable nodes area %.3E, filler area %.3E, total movable + filler area %.3E, total_place_area %.3E"

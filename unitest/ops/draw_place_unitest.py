@@ -19,7 +19,7 @@ if sys.version_info[0] < 3:
 else:
     import _pickle as pickle
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-from dreamplace.ops.draw_place import draw_place
+from dreamplacefpga.ops.draw_place import draw_place
 sys.path.pop()
 
 class DrawPlaceOpTest(unittest.TestCase):
@@ -60,7 +60,7 @@ class DrawPlaceOpTest(unittest.TestCase):
                     bin_size_x, bin_size_y, 
                     num_movable_nodes, 
                     num_filler_nodes, 
-                    "test.gds" # png, jpg, eps, pdf, gds 
+                    "test.png" # png, jpg, eps, pdf 
                     )
         print(custom)
 

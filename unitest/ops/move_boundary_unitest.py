@@ -1,7 +1,7 @@
 ##
 # @file   move_boundary_unitest.py
-# @author Yibo Lin
-# @date   Mar 2019
+# @author Yibo Lin (DREAMPlace) Rachel Selina (DREAMPlaceFPGA)
+# @date   Mar 2024
 #
 
 import os 
@@ -13,7 +13,7 @@ import torch
 from torch.autograd import Function, Variable
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-from dreamplace.ops.move_boundary import move_boundary
+from dreamplacefpga.ops.move_boundary import move_boundary
 sys.path.pop()
 
 class MoveBoundaryOpTest(unittest.TestCase):
@@ -43,10 +43,11 @@ class MoveBoundaryOpTest(unittest.TestCase):
                     torch.from_numpy(node_size_x), torch.from_numpy(node_size_y), 
                     xl=xl, yl=yl, xh=xh, yh=yh, 
                     num_movable_nodes=num_movable_nodes, 
-                    num_filler_nodes=num_filler_nodes)
+                    num_filler_nodes=num_filler_nodes,
+                    num_threads=1)
 
         pos = Variable(torch.from_numpy(np.concatenate([xx, yy])))
-        result = custom.forward(pos)
+        result = custom(pos)
         print("custom_result = ", result)
 
         #result.retain_grad()
@@ -56,13 +57,15 @@ class MoveBoundaryOpTest(unittest.TestCase):
         # test cuda 
         if torch.cuda.device_count(): 
             custom_cuda = move_boundary.MoveBoundary(
-                        torch.from_numpy(node_size_x).cuda(), torch.from_numpy(node_size_y).cuda(), 
+                        torch.from_numpy(node_size_x).cuda(),
+                        torch.from_numpy(node_size_y).cuda(), 
                         xl=xl, yl=yl, xh=xh, yh=yh, 
                         num_movable_nodes=num_movable_nodes, 
-                        num_filler_nodes=num_filler_nodes)
+                        num_filler_nodes=num_filler_nodes,
+                        num_threads=1)
 
             pos = Variable(torch.from_numpy(np.concatenate([xx, yy]))).cuda()
-            result_cuda = custom_cuda.forward(pos)
+            result_cuda = custom_cuda(pos)
             print("custom_result = ", result_cuda.data.cpu())
 
 

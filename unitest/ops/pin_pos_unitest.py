@@ -1,7 +1,7 @@
 ##
 # @file   pin_pos_unitest.py
-# @author Yibo Lin
-# @date   Aug 2019
+# @author Yibo Lin (DREAMPlace) Rachel Selina (DREAMPlaceFPGA)
+# @date   Mar 2024
 #
 
 import os
@@ -17,7 +17,7 @@ else:
     import _pickle as pickle
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-from dreamplace.ops.pin_pos import pin_pos
+from dreamplacefpga.ops.pin_pos import pin_pos
 sys.path.pop()
 
 import pdb
@@ -26,7 +26,7 @@ import torch
 from torch.autograd import Function, Variable
 
 def build_pin_pos(pos, pin_offset_x, pin_offset_y, pin2node_map, num_physical_nodes):
-    num_nodes = pos.numel()/2
+    num_nodes = pos.numel()//2
     pin_x = pin_offset_x.add(torch.index_select(pos[0:num_physical_nodes], dim=0, index=pin2node_map.long()))
     pin_y = pin_offset_y.add(torch.index_select(pos[num_nodes:num_nodes+num_physical_nodes], dim=0, index=pin2node_map.long()))
     pin_pos = torch.cat([pin_x, pin_y], dim=0)
@@ -67,7 +67,9 @@ class WeightedAverageWirelengthOpTest(unittest.TestCase):
 
         pos_var = Variable(torch.from_numpy(pos).reshape([-1]), requires_grad=True)
 
-        golden_value = build_pin_pos(pos_var, torch.from_numpy(pin_offset_x), torch.from_numpy(pin_offset_y), torch.from_numpy(pin2node_map), num_physical_nodes)
+        golden_value = build_pin_pos(pos_var, torch.from_numpy(pin_offset_x),
+                            torch.from_numpy(pin_offset_y),
+                            torch.from_numpy(pin2node_map), num_physical_nodes)
         golden_loss = golden_value.sum()
         print("golden_value = ", golden_value)
         print("golden_loss = ", golden_loss)

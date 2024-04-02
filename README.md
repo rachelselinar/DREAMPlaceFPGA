@@ -73,15 +73,16 @@ Support for the following architectures are available
 ## <a name="developers"></a>Developers
 
 - Rachel Selina Rajarathnam, [UTDA](https://www.cerc.utexas.edu/utda), ECE Department, The University of Texas at Austin
-- Zixuan Jiang, [UTDA](https://www.cerc.utexas.edu/utda), ECE Department, The University of Texas at Austin
 - Zhili Xiong, [UTDA](https://www.cerc.utexas.edu/utda), ECE Department, The University of Texas at Austin
+- Zhixing (Ethan) Jiang, [UTDA](https://www.cerc.utexas.edu/utda), ECE Department, The University of Texas at Austin
+- Zixuan Jiang, [UTDA](https://www.cerc.utexas.edu/utda), ECE Department, The University of Texas at Austin
 
 ## <a name="publications"></a>Publications 
 
-* Rachel Selina Rajarathnam, Mohamed Baker Alawieh, Zixuan Jiang, Mahesh A. Iyer, and [David Z. Pan](http://users.ece.utexas.edu/~dpan),  "**[``DREAMPlaceFPGA``: An Open-Source Analytical Placer for Large Scale Heterogeneous FPGAs using Deep-Learning Toolkit](https://ieeexplore.ieee.org/document/9712562)**", 
-  *27th IEEE/ACM Asian and South Pacific Design Automation Conference (ASP-DAC)*, 2022.
 * Rachel Selina Rajarathnam, Zixuan Jiang, Mahesh A. Iyer, and [David Z. Pan](http://users.ece.utexas.edu/~dpan), 
   "**[``DREAMPlaceFPGA-PL``: An Open-Source GPU-Accelerated Packer-Legalizer for Heterogeneous FPGAs](https://dl.acm.org/doi/abs/10.1145/3569052.3571881)**",  *ACM International Symposium on Physical Design (ISPD)*, 2023.
+* Rachel Selina Rajarathnam, Mohamed Baker Alawieh, Zixuan Jiang, Mahesh A. Iyer, and [David Z. Pan](http://users.ece.utexas.edu/~dpan),  "**[``DREAMPlaceFPGA``: An Open-Source Analytical Placer for Large Scale Heterogeneous FPGAs using Deep-Learning Toolkit](https://ieeexplore.ieee.org/document/9712562)**", 
+  *27th IEEE/ACM Asian and South Pacific Design Automation Conference (ASP-DAC)*, 2022.
 
 ## <a name="dependencies"></a>External Dependencies
 
@@ -124,9 +125,10 @@ Support for the following architectures are available
 - [CUDA 9.1 or later](https://developer.nvidia.com/cuda-toolkit) (Optional)
     - If installed and found, GPU acceleration will be enabled. 
     - Otherwise, only CPU implementation is enabled. 
+    - **Version 12.0 or higher is not compatible!**
 
 - GPU architecture compatibility 6.0 or later (Optional)
-    - Code has been tested on GPUs with compute compatibility 6.0, 7.0, and 7.5. 
+    - Code has been tested on GPUs with compute compatibility 6.0, 7.0, 7.5, and 8.0. <a name="compute_capability"></a>
     - Please check the [compatibility](https://developer.nvidia.com/cuda-gpus) of the GPU devices. 
     - The default compilation target is compatibility 6.0. This is the minimum requirement and lower compatibility is not supported for the GPU feature. 
 
@@ -246,12 +248,12 @@ Here are the available options for CMake.
 - CMAKE_INSTALL_PREFIX: installation or root directory
     - Example ```cmake -DCMAKE_INSTALL_PREFIX=path/to/root/directory```
 - CMAKE_CUDA_FLAGS: custom string for NVCC (default -gencode=arch=compute_60,code=sm_60)
-    - Example ```cmake -DCMAKE_CUDA_FLAGS=-gencode=arch=compute_60,code=sm_60```
+    - Each GPU has a specific [compute capability](https://developer.nvidia.com/cuda-gpus). Use this flag if your GPU's [compute capability is not included in the default settings](#compute_capability)
+    - Example for compute capability of 6.0: ```cmake -DCMAKE_CUDA_FLAGS=-gencode=arch=compute_60,code=sm_60```
 - CMAKE_CXX_ABI: 0|1 for the value of _GLIBCXX_USE_CXX11_ABI for C++ compiler, default is 0. 
     - Example ```cmake -DCMAKE_CXX_ABI=0```
     - It must be consistent with the _GLIBCXX_USE_CXX11_ABI for compling all the C++ dependencies, such as Boost and PyTorch. 
     - PyTorch in default is compiled with _GLIBCXX_USE_CXX11_ABI=0, but in a customized PyTorch environment, it might be compiled with _GLIBCXX_USE_CXX11_ABI=1. 
-
 
 ## <a name="sample"></a>Sample Benchmarks
 

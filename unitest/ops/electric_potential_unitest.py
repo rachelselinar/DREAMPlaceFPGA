@@ -1,13 +1,14 @@
 ##
 # @file   electric_potential_unitest.py
-# @author Yibo Lin
-# @date   Mar 2019
+# @author Yibo Lin (DREAMPlace) Rachel Selina (DREAMPlaceFPGA)
+# @date   Mar 2024
 #
 
 import time
 import numpy as np
 import unittest
 import logging
+import random
 
 import torch
 from torch.autograd import Function, Variable
@@ -18,9 +19,9 @@ import gzip
 sys.path.append(
     os.path.dirname(os.path.dirname(os.path.dirname(
         os.path.abspath(__file__)))))
-from dreamplace.ops.dct import dct
-from dreamplace.ops.dct import discrete_spectral_transform
-from dreamplace.ops.electric_potential import electric_potential
+from dreamplacefpga.ops.dct import dct
+from dreamplacefpga.ops.dct import discrete_spectral_transform
+from dreamplacefpga.ops.electric_potential import electric_potential
 sys.path.pop()
 
 if sys.version_info[0] < 3:
@@ -36,136 +37,106 @@ matplotlib.use('Agg')
 from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.pyplot as plt
 
+class PlaceDB (object):
+    def __init__(self):
+        self.num_nodes = 0
+        self.num_terminals = 0
+        self.num_movable_nodes = 0
+        self.num_filler_nodes = 0
+        self.xWirelenWt = 1.0
+        self.yWirelenWt = 1.0
+        self.filler_start_map = []
+        self.overflowInstDensityStretchRatio = []
 
 class ElectricPotentialOpTest(unittest.TestCase):
     def test_densityOverflowRandom(self):
         dtype = np.float64
-        xx = np.array([
-            1000, 11148, 11148, 11148, 11148, 11148, 11124, 11148, 11148,
-            11137, 11126, 11148, 11130, 11148, 11148, 11148, 11148, 11148,
-            11148, 0, 11148, 11148, 11150, 11134, 11148, 11148, 11148, 10550,
-            11148, 11148, 11144, 11148, 11148, 11148, 11148, 11140, 11120,
-            11154, 11148, 11133, 11148, 11148, 11134, 11125, 11148, 11148,
-            11148, 11155, 11127, 11148, 11148, 11148, 11148, 11131, 11148,
-            11148, 11148, 11148, 11136, 11148, 11146, 11148, 11135, 11148,
-            11125, 11150, 11148, 11139, 11148, 11148, 11130, 11148, 11128,
-            11148, 11138, 11148, 11148, 11148, 11130, 11148, 11132, 11148,
-            11148, 11090
-        ]).astype(dtype)
-        yy = np.array([
-            1000, 11178, 11178, 11190, 11400, 11178, 11172, 11178, 11178,
-            11418, 11418, 11178, 11418, 11178, 11178, 11178, 11178, 11178,
-            11178, 11414, 11178, 11178, 11172, 11418, 11406, 11184, 11178,
-            10398, 11178, 11178, 11172, 11178, 11178, 11178, 11178, 11418,
-            11418, 11172, 11178, 11418, 11178, 11178, 11172, 11418, 11178,
-            11178, 11178, 11418, 11418, 11178, 11178, 11178, 11178, 11418,
-            11178, 11178, 11394, 11178, 11418, 11178, 11418, 11178, 11418,
-            11178, 11418, 11418, 11178, 11172, 11178, 11178, 11418, 11178,
-            11418, 11178, 11418, 11412, 11178, 11178, 11172, 11178, 11418,
-            11178, 11178, 11414
-        ]).astype(dtype)
-        node_size_x = np.array([
-            6, 3, 3, 3, 3, 3, 5, 3, 3, 1, 1, 3, 1, 3, 3, 3, 3, 3, 3, 16728, 3,
-            3, 5, 1, 3, 3, 3, 740, 3, 3, 5, 3, 3, 3, 3, 5, 5, 5, 3, 1, 3, 3, 5,
-            1, 3, 3, 3, 5, 1, 3, 3, 3, 3, 1, 3, 3, 3, 3, 5, 3, 5, 3, 1, 3, 5,
-            5, 3, 5, 3, 3, 5, 3, 1, 3, 1, 3, 3, 3, 5, 3, 1, 3, 3, 67
-        ]).astype(dtype)
-        node_size_y = np.array([
-            6, 240, 240, 6, 6, 240, 6, 240, 240, 6, 6, 240, 6, 240, 240, 240,
-            240, 240, 240, 10, 240, 6, 6, 6, 6, 6, 240, 780, 240, 240, 6, 240,
-            240, 240, 240, 6, 6, 6, 240, 6, 240, 240, 6, 6, 240, 240, 240, 6,
-            6, 240, 240, 240, 240, 6, 240, 240, 6, 240, 6, 240, 6, 240, 6, 240,
-            6, 6, 240, 6, 240, 240, 6, 240, 6, 240, 6, 6, 240, 240, 6, 240, 6,
-            240, 240, 10
-        ]).astype(dtype)
-        #xx = np.array([2.0]).astype(dtype)
-        #yy = np.array([1.5]).astype(dtype)
-        #node_size_x = np.array([1.0]).astype(dtype)
-        #node_size_y = np.array([1.0]).astype(dtype)
-        num_nodes = len(xx)
-        num_movable_nodes = 1
-        num_terminals = len(xx) - num_movable_nodes
 
-        scale_factor = 1.0
+        stretchRatio = np.sqrt(2.0)
+        ## Create a database
+        placedb = PlaceDB()
+        placedb.num_nodes = 84
+        placedb.num_terminals = 1
+        placedb.num_movable_nodes = placedb.num_nodes - placedb.num_terminals
+        placedb.filler_start_map = np.array([0, 0, 0, 0, 0, 0], dtype=np.int32)
+        placedb.overflowInstDensityStretchRatio = np.array([stretchRatio, stretchRatio, 1.0, 1.0, 0], dtype=dtype)
 
         xl = 0.0
-        yl = 6.0
-        xh = 16728.0
-        yh = 11430.0
-        target_density = 0.7
-        num_bins_x = 1024
-        num_bins_y = 1024
+        yl = 0.0
+        xh = 100.0
+        yh = 360.0
+
+        xx = np.array([random.randint(int(xl),int(xh)) for i in range(placedb.num_nodes)]).astype(dtype)
+        yy = np.array([random.randint(int(yl),int(yh)) for i in range(placedb.num_nodes)]).astype(dtype)
+        node2fence_region_map = np.array([0 for i in range(placedb.num_nodes)]).astype(np.int32)
+        #Keep last entry as fixed
+        xx[-1] = 0
+        yy[-1] = 0
+        node2fence_region_map[-1] = 4
+
+        node_size_x = np.array([
+            0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25,
+            0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.5, 0.25, 0.25, 0.25, 0.25,
+            0.25, 0.25, 0.25, 0.5, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25,
+            0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25,
+            0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25,
+            0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25,
+            0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 1.0
+        ]).astype(dtype)
+        node_size_y = np.array([
+            0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25,
+            0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.5, 0.25, 0.25, 0.25, 0.25,
+            0.25, 0.25, 0.25, 0.5, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25,
+            0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25,
+            0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25,
+            0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25,
+            0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 1.0
+        ]).astype(dtype)
+
+        region_id = 0
+
+        num_bins_x = 256 
+        num_bins_y = 256
         bin_size_x = (xh - xl) / num_bins_x
         bin_size_y = (yh - yl) / num_bins_y
-        """
-        return bin xl
-        """
-        def bin_xl(id_x):
-            return xl + id_x * bin_size_x
+        initial_density_map = np.zeros([num_bins_x, num_bins_y], dtype=dtype)
+        fixed_cols = int(num_bins_x/(xh-xl)) + 1 
+        for val in range(fixed_cols):
+            initial_density_map[val] = bin_size_x*bin_size_y
+            initial_density_map[:,val] = bin_size_x*bin_size_y
 
-        """
-        return bin xh
-        """
-
-        def bin_xh(id_x):
-            return min(bin_xl(id_x) + bin_size_x, xh)
-
-        """
-        return bin yl
-        """
-
-        def bin_yl(id_y):
-            return yl + id_y * bin_size_y
-
-        """
-        return bin yh
-        """
-
-        def bin_yh(id_y):
-            return min(bin_yl(id_y) + bin_size_y, yh)
-
-        bin_center_x = np.zeros(num_bins_x, dtype=dtype)
-        for id_x in range(num_bins_x):
-            bin_center_x[id_x] = (bin_xl(id_x) +
-                                  bin_xh(id_x)) / 2 * scale_factor
-
-        bin_center_y = np.zeros(num_bins_y, dtype=dtype)
-        for id_y in range(num_bins_y):
-            bin_center_y[id_y] = (bin_yl(id_y) +
-                                  bin_yh(id_y)) / 2 * scale_factor
-
-        print("target_area = ", target_density * bin_size_x * bin_size_y)
+        print("target_area = ", bin_size_x * bin_size_y)
 
         if dtype == np.float64:
             dtype = torch.float64
         elif dtype == np.float32:
             dtype = torch.float32
-        movable_size_x = node_size_x[:num_movable_nodes]
+
+        movable_size_x = node_size_x[:placedb.num_movable_nodes]
         _, sorted_node_map = torch.sort(
             torch.tensor(movable_size_x, requires_grad=False, dtype=dtype))
         sorted_node_map = sorted_node_map.to(torch.int32).contiguous()
+
         # test cpu
         custom = electric_potential.ElectricPotential(
             torch.tensor(node_size_x, requires_grad=False, dtype=dtype),
             torch.tensor(node_size_y, requires_grad=False, dtype=dtype),
-            torch.tensor(bin_center_x, requires_grad=False, dtype=dtype),
-            torch.tensor(bin_center_y, requires_grad=False, dtype=dtype),
-            target_density=torch.tensor(target_density,
-                                        requires_grad=False,
-                                        dtype=dtype),
             xl=xl,
             yl=yl,
             xh=xh,
             yh=yh,
             bin_size_x=bin_size_x,
             bin_size_y=bin_size_y,
-            num_movable_nodes=num_movable_nodes,
-            num_terminals=num_terminals,
+            num_movable_nodes=placedb.num_movable_nodes,
+            num_terminals=placedb.num_terminals,
             num_filler_nodes=0,
-            padding=0,
+            deterministic_flag=True,
             sorted_node_map=sorted_node_map,
-            movable_macro_mask=None,
-            deterministic_flag=True)
+            region_id=region_id,
+            fence_regions=torch.tensor(initial_density_map, requires_grad=False, dtype=dtype),
+            node2fence_region_map=torch.tensor(node2fence_region_map, requires_grad=False, dtype=torch.int32),
+            placedb=placedb,
+            stretchRatio=stretchRatio)
 
         pos = Variable(torch.from_numpy(np.concatenate([xx, yy])),
                        requires_grad=True)
@@ -183,26 +154,24 @@ class ElectricPotentialOpTest(unittest.TestCase):
                              dtype=dtype).cuda(),
                 torch.tensor(node_size_y, requires_grad=False,
                              dtype=dtype).cuda(),
-                torch.tensor(bin_center_x, requires_grad=False,
-                             dtype=dtype).cuda(),
-                torch.tensor(bin_center_y, requires_grad=False,
-                             dtype=dtype).cuda(),
-                target_density=torch.tensor(target_density,
-                                            requires_grad=False,
-                                            dtype=dtype).cuda(),
                 xl=xl,
                 yl=yl,
                 xh=xh,
                 yh=yh,
                 bin_size_x=bin_size_x,
                 bin_size_y=bin_size_y,
-                num_movable_nodes=num_movable_nodes,
-                num_terminals=num_terminals,
+                num_movable_nodes=placedb.num_movable_nodes,
+                num_terminals=placedb.num_terminals,
                 num_filler_nodes=0,
-                padding=0,
+                deterministic_flag=False,
                 sorted_node_map=sorted_node_map.cuda(),
-                movable_macro_mask=None,
-                deterministic_flag=False)
+                region_id=region_id,
+                fence_regions=torch.tensor(initial_density_map, requires_grad=False,
+                                            dtype=dtype).cuda(),
+                node2fence_region_map=torch.tensor(node2fence_region_map, requires_grad=False,
+                                                    dtype=torch.int32).cuda(),
+                placedb=placedb,
+                stretchRatio=stretchRatio)
 
             pos = Variable(torch.from_numpy(np.concatenate([xx, yy])).cuda(),
                            requires_grad=True)
@@ -264,19 +233,21 @@ def plot(plot_count, density_map, padding, name):
 
 
 def eval_runtime(design):
-    # e.g., adaptec1_density.pklz
-    with gzip.open(design, "rb") as f:
-        node_size_x, node_size_y, bin_center_x, bin_center_y, target_density, xl, yl, xh, yh, bin_size_x, bin_size_y, num_movable_nodes, num_terminals, num_filler_nodes = pickle.load(
-            f)
+    ## e.g., adaptec1_density.pklz
+    #with gzip.open(design, "rb") as f:
+    #    node_size_x, node_size_y, bin_center_x, bin_center_y, xl, yl, xh, yh, bin_size_x, bin_size_y, num_movable_nodes, num_terminals, num_filler_nodes = pickle.load(
+    #        f)
 
     dtype = torch.float64
     num_threads = 10
     torch.set_num_threads(num_threads)
     print("num_threads = %d" % (torch.get_num_threads()))
-    movable_size_x = node_size_x[:num_movable_nodes]
+    movable_size_x = node_size_x[:placedb.num_movable_nodes]
     _, sorted_node_map = torch.sort(
         torch.tensor(movable_size_x, requires_grad=False, dtype=dtype).cuda())
     sorted_node_map = sorted_node_map.to(torch.int32).contiguous()
+    node2fence_region_map = node2fence_region_map.to(torch.int32).contiguous()
+    initial_density_map = initial_density_map.to(dtype).contiguous()
 
     pos_var = Variable(torch.empty(len(node_size_x) * 2,
                                    dtype=dtype).uniform_(xl, xh),
@@ -284,43 +255,42 @@ def eval_runtime(design):
     custom = electric_potential.ElectricPotential(
         torch.tensor(node_size_x, requires_grad=False, dtype=dtype).cpu(),
         torch.tensor(node_size_y, requires_grad=False, dtype=dtype).cpu(),
-        torch.tensor(bin_center_x, requires_grad=False, dtype=dtype).cpu(),
-        torch.tensor(bin_center_y, requires_grad=False, dtype=dtype).cpu(),
-        target_density=torch.tensor(target_density,
-                                    requires_grad=False,
-                                    dtype=dtype).cpu(),
         xl=xl,
         yl=yl,
         xh=xh,
         yh=yh,
         bin_size_x=bin_size_x,
         bin_size_y=bin_size_y,
-        num_movable_nodes=num_movable_nodes,
-        num_terminals=num_terminals,
+        num_movable_nodes=placedb.num_movable_nodes,
+        num_terminals=placedb.num_terminals,
         num_filler_nodes=num_filler_nodes,
-        padding=0,
+        deterministic_flag=True,
         sorted_node_map=sorted_node_map.cpu(),
-        num_threads=num_threads)
+        region_id=region_id,
+        fence_regions=initial_density_map.cpu(),
+        node2fence_region_map=node2fence_region_map.cpu(),
+        placedb=placedb,
+        stretchRatio=stretchRatio)
 
     custom_cuda = electric_potential.ElectricPotential(
         torch.tensor(node_size_x, requires_grad=False, dtype=dtype).cuda(),
         torch.tensor(node_size_y, requires_grad=False, dtype=dtype).cuda(),
-        torch.tensor(bin_center_x, requires_grad=False, dtype=dtype).cuda(),
-        torch.tensor(bin_center_y, requires_grad=False, dtype=dtype).cuda(),
-        target_density=torch.tensor(target_density,
-                                    requires_grad=False,
-                                    dtype=dtype).cuda(),
         xl=xl,
         yl=yl,
         xh=xh,
         yh=yh,
         bin_size_x=bin_size_x,
         bin_size_y=bin_size_y,
-        num_movable_nodes=num_movable_nodes,
-        num_terminals=num_terminals,
+        num_movable_nodes=placedb.num_movable_nodes,
+        num_terminals=placedb.num_terminals,
         num_filler_nodes=num_filler_nodes,
-        padding=0,
-        sorted_node_map=sorted_node_map)
+        deterministic_flag=False,
+        sorted_node_map=sorted_node_map,
+        region_id=region_id,
+        fence_regions=initial_density_map,
+        node2fence_region_map=node2fence_region_map,
+        placedb=placedb,
+        stretchRatio=stretchRatio)
 
     torch.cuda.synchronize()
     iters = 100
@@ -345,7 +315,7 @@ def eval_runtime(design):
 
 
 if __name__ == '__main__':
-    logging.root.name = 'DREAMPlace'
+    logging.root.name = 'DREAMPlaceFPGA'
     logging.basicConfig(level=logging.DEBUG,
                         format='[%(levelname)-7s] %(name)s - %(message)s',
                         stream=sys.stdout)

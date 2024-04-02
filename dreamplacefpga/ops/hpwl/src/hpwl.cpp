@@ -1,7 +1,7 @@
 /**
  * @file   hpwl.cpp
- * @author Yibo Lin (DREAMPlace)
- * @date   Jun 2018
+ * @author Yibo Lin (DREAMPlace) Rachel Selina Rajarathnam (DREAMPlaceFPGA)
+ * @date   May 2023
  * @brief  Compute half-perimeter wirelength 
  */
 #include "utility/src/torch.h"
@@ -12,12 +12,15 @@ DREAMPLACE_BEGIN_NAMESPACE
 template <typename T>
 int computeHPWLLauncher(
         const T* x, const T* y, 
+        const T* net_weights,
         const int* flat_netpin, 
         const int* netpin_start, 
         const unsigned char* net_mask, 
         int num_nets, 
+        T xWeight,
+        T yWeight,
         int num_threads, 
-        T* hpwl 
+        T* hpwl
         );
 
 #define CHECK_FLAT(x) AT_ASSERTM(!x.is_cuda() && x.ndimension() == 1, #x "must be a flat tensor on CPU")
@@ -36,6 +39,8 @@ at::Tensor hpwl_forward(
         at::Tensor netpin_start, 
         at::Tensor net_weights, 
         at::Tensor net_mask, 
+        double xWeight,
+        double yWeight,
         int num_threads
         ) 
 {
@@ -55,29 +60,34 @@ at::Tensor hpwl_forward(
     at::Tensor hpwl = at::zeros(num_nets, pos.options()); 
     DREAMPLACE_DISPATCH_FLOATING_TYPES(pos, "computeHPWLLauncher", [&] {
             computeHPWLLauncher<scalar_t>(
-                    DREAMPLACE_TENSOR_DATA_PTR(pos, scalar_t), DREAMPLACE_TENSOR_DATA_PTR(pos, scalar_t)+pos.numel()/2, 
+                    DREAMPLACE_TENSOR_DATA_PTR(pos, scalar_t),
+                    DREAMPLACE_TENSOR_DATA_PTR(pos, scalar_t)+pos.numel()/2, 
+                    DREAMPLACE_TENSOR_DATA_PTR(net_weights, scalar_t), 
                     DREAMPLACE_TENSOR_DATA_PTR(flat_netpin, int), 
                     DREAMPLACE_TENSOR_DATA_PTR(netpin_start, int), 
                     DREAMPLACE_TENSOR_DATA_PTR(net_mask, unsigned char), 
-                    num_nets, 
+                    num_nets, xWeight, yWeight, 
                     num_threads, 
                     DREAMPLACE_TENSOR_DATA_PTR(hpwl, scalar_t)
                     );
             });
-    if (net_weights.numel())
-    {
-        hpwl.mul_(net_weights);
-    }
+    //if (net_weights.numel())
+    //{
+    //    hpwl.mul_(net_weights);
+    //}
     return hpwl.sum(); 
 }
 
 template <typename T>
 int computeHPWLLauncher(
         const T* x, const T* y, 
+        const T* net_weights,
         const int* flat_netpin, 
         const int* netpin_start, 
         const unsigned char* net_mask, 
         int num_nets, 
+        T xWeight,
+        T yWeight,
         int num_threads, 
         T* hpwl
         )
@@ -100,7 +110,7 @@ int computeHPWLLauncher(
                 min_y = std::min(min_y, y[flat_netpin[j]]);
                 max_y = std::max(max_y, y[flat_netpin[j]]);
             }
-            hpwl[i] = max_x-min_x + max_y-min_y; 
+            hpwl[i] = ((max_x-min_x)*net_weights[i]*xWeight) + ((max_y-min_y)*net_weights[i]*yWeight); 
         }
     }
 

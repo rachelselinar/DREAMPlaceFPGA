@@ -1,7 +1,7 @@
 ##
 # @file   adjust_node_area_unitest.py
-# @author Zixuan Jiang, Jiaqi Gu
-# @date   Dec 2019
+# @author Zixuan Jiang, Jiaqi Gu (DREAMPlace) Rachel Selina (DREAMPlaceFPGA)
+# @date   Mar 2024
 #
 
 import os 
@@ -9,9 +9,10 @@ import sys
 import unittest
 import torch
 import numpy as np
+import pdb
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-from dreamplace.ops.adjust_node_area import adjust_node_area
+from dreamplacefpga.ops.adjust_node_area import adjust_node_area
 sys.path.pop()
 
 class AdjustNodeAreaUnittest(unittest.TestCase):
@@ -23,9 +24,16 @@ class AdjustNodeAreaUnittest(unittest.TestCase):
         node_size_x = torch.Tensor([0.5, 0.5, 0.5]).to(dtype)
         node_size_y = torch.Tensor([0.05, 0.05, 0.05]).to(dtype)
 
+        flop_lut_indices = torch.Tensor([0, 1, 2]).to(torch.int32)
+        flop_lut_mask = torch.Tensor([True, True, True])
+        flop_mask = torch.Tensor([True, False, False])
+        lut_mask = torch.Tensor([False, True, True])
+        filler_start_map = torch.Tensor([0, 1, 2]).to(torch.int32)
+        resource_areas = torch.Tensor([0.1,0.1,0.1,0.1,0.1]).to(dtype)
+
         node2pin_map = np.array([np.array([0, 4]), np.array([1, 2, 3])])
         num_movable_nodes = len(node2pin_map)
-        num_filler_nodes = 1
+        num_filler_nodes = 2
         # assume no terminals 
 
         num_pins = 0
@@ -68,7 +76,8 @@ class AdjustNodeAreaUnittest(unittest.TestCase):
         pin_weights = None
 
         max_route_opt_adjust_rate = 3.0
-        max_pin_opt_adjust_rate = 10.0
+        max_pin_opt_adjust_rate = 2.5
+        route_opt_adjust_exponent = 2.5
 
         target_density = torch.Tensor([0.9])
 
@@ -77,6 +86,11 @@ class AdjustNodeAreaUnittest(unittest.TestCase):
             flat_node2pin_map=flat_node2pin_map,
             flat_node2pin_start_map=flat_node2pin_start_map,
             pin_weights=pin_weights,
+            flop_lut_indices=flop_lut_indices,
+            flop_lut_mask=flop_lut_mask,
+            flop_mask=flop_mask,
+            lut_mask=lut_mask,
+            filler_start_map=filler_start_map,
             xl=xl,
             yl=yl,
             xh=xh,
@@ -90,12 +104,12 @@ class AdjustNodeAreaUnittest(unittest.TestCase):
             total_place_area=total_place_area, 
             total_whitespace_area=total_whitespace_area, 
             max_route_opt_adjust_rate=max_route_opt_adjust_rate,
+            route_opt_adjust_exponent=route_opt_adjust_exponent,
             max_pin_opt_adjust_rate=max_pin_opt_adjust_rate, 
             area_adjust_stop_ratio=area_adjust_stop_ratio,
             route_area_adjust_stop_ratio=route_area_adjust_stop_ratio,
             pin_area_adjust_stop_ratio=pin_area_adjust_stop_ratio,
-            unit_pin_capacity=unit_pin_capacity,
-            num_threads=8
+            unit_pin_capacity=unit_pin_capacity
         )
 
         pos_cpu = pos.clone().t().contiguous().view(-1)
@@ -103,13 +117,15 @@ class AdjustNodeAreaUnittest(unittest.TestCase):
         node_size_y_cpu = node_size_y.clone()
         pin_offset_x_cpu = pin_offset_x.clone()
         pin_offset_y_cpu = pin_offset_y.clone()
-        flag1_cpu, flag2_cpu, flag3_cpu = adjust_node_area_op.forward(
+        resource_areas_cpu = resource_areas.clone()
+        flag1_cpu, flag2_cpu, flag3_cpu, flag4_cpu = adjust_node_area_op.forward(
             pos_cpu,
             node_size_x_cpu,
             node_size_y_cpu,
             pin_offset_x_cpu,
             pin_offset_y_cpu,
             target_density, 
+            resource_areas_cpu,
             route_utilization_map.clone(),
             pin_utilization_map.clone())
 
@@ -118,6 +134,11 @@ class AdjustNodeAreaUnittest(unittest.TestCase):
                 flat_node2pin_map=flat_node2pin_map.cuda(),
                 flat_node2pin_start_map=flat_node2pin_start_map.cuda(),
                 pin_weights=pin_weights,
+                flop_lut_indices=flop_lut_indices.cuda(),
+                flop_lut_mask=flop_lut_mask.cuda(),
+                flop_mask=flop_mask.cuda(),
+                lut_mask=lut_mask.cuda(),
+                filler_start_map=filler_start_map.cuda(),
                 xl=xl,
                 yl=yl,
                 xh=xh,
@@ -131,6 +152,7 @@ class AdjustNodeAreaUnittest(unittest.TestCase):
                 total_place_area=total_place_area, 
                 total_whitespace_area=total_whitespace_area, 
                 max_route_opt_adjust_rate=max_route_opt_adjust_rate,
+                route_opt_adjust_exponent=route_opt_adjust_exponent,
                 max_pin_opt_adjust_rate=max_pin_opt_adjust_rate, 
                 area_adjust_stop_ratio=area_adjust_stop_ratio,
                 route_area_adjust_stop_ratio=route_area_adjust_stop_ratio,
@@ -142,19 +164,22 @@ class AdjustNodeAreaUnittest(unittest.TestCase):
             node_size_y_cuda = node_size_y.cuda()
             pin_offset_x_cuda = pin_offset_x.cuda()
             pin_offset_y_cuda = pin_offset_y.cuda()
-            flag1_cuda, flag2_cuda, flag3_cuda = adjust_node_area_op_cuda.forward(
+            resource_areas_cuda = resource_areas.cuda()
+            flag1_cuda, flag2_cuda, flag3_cuda, flag4_cuda = adjust_node_area_op_cuda.forward(
                 pos_cuda,
                 node_size_x_cuda,
                 node_size_y_cuda,
                 pin_offset_x_cuda,
                 pin_offset_y_cuda,
                 target_density.cuda(), 
+                resource_areas_cuda,
                 route_utilization_map.cuda(),
                 pin_utilization_map.cuda())
 
             assert (flag1_cpu == flag1_cuda) and \
                    (flag2_cpu == flag2_cuda) and \
-                   (flag3_cpu == flag3_cuda), "the flags via CPU and GPU are different"
+                   (flag3_cpu == flag3_cuda) and \
+                   (flag4_cpu == flag4_cuda), "the flags via CPU and GPU are different"
 
             if flag1_cpu:
                 assert torch.allclose(pos_cuda.cpu(), pos_cpu) and \

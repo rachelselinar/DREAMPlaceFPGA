@@ -426,6 +426,8 @@ class BasicPlaceFPGA(nn.Module):
         @param device cpu or cuda
         """
         wirelength_for_pin_op = hpwl.HPWL(
+            xWeight=placedb.xWirelenWt,
+            yWeight=placedb.yWirelenWt,
             flat_netpin=data_collections.flat_net2pin_map,
             netpin_start=data_collections.flat_net2pin_start_map,
             pin2net_map=data_collections.pin2net_map,

@@ -1,7 +1,7 @@
 ##
 # @file   rudy_unitest.py
-# @author Zixuan Jiang, Jiaqi Gu
-# @date   Dec 2019
+# @author Zixuan Jiang, Jiaqi Gu (DREAMPlace) Rachel Selina (DREAMPlaceFPGA)
+# @date   Mar 2024
 #
 
 import os 
@@ -11,7 +11,7 @@ import torch
 import numpy as np
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-from dreamplace.ops.rudy import rudy
+from dreamplacefpga.ops.rudy import rudy
 sys.path.pop()
 
 class RudyUnittest(unittest.TestCase):
@@ -60,7 +60,10 @@ class RudyUnittest(unittest.TestCase):
             num_bins_y=num_bins_y,
             unit_horizontal_capacity=unit_horizontal_capacity,
             unit_vertical_capacity=unit_vertical_capacity,
-            num_threads=8
+            deterministic_flag=True,
+            initial_horizontal_utilization_map=None,
+            initial_vertical_utilization_map=None,
+            num_threads=1
         )
 
         result_cpu = rudy_op.forward(pin_pos.t().contiguous().view(-1))
@@ -79,8 +82,12 @@ class RudyUnittest(unittest.TestCase):
                 num_bins_x=num_bins_x,
                 num_bins_y=num_bins_y,
                 unit_horizontal_capacity=unit_horizontal_capacity,
-                unit_vertical_capacity=unit_vertical_capacity
-            )
+                unit_vertical_capacity=unit_vertical_capacity,
+                deterministic_flag=False,
+                initial_horizontal_utilization_map=None,
+                initial_vertical_utilization_map=None,
+                num_threads=1
+                )
 
             result_cuda = rudy_op_cuda.forward(pin_pos.t().contiguous().view(-1).cuda())
             print("Test on GPU. rudy map = ", result_cuda)
