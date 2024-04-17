@@ -1168,10 +1168,12 @@ __device__ void compute_wirelen_improv(const T* pos_x, const T* pos_y, const T* 
 
 //computeCandidateScore
 template <typename T>
-__device__ void compute_candidate_score(const T* pos_x, const T* pos_y, const T* pin_offset_x, const T* pin_offset_y, const T* net_bbox, const T* net_weights, const int* net_pinIdArrayX, const int* net_pinIdArrayY, const int* flat_net2pin_start_map, const int* flat_node2pin_start_map, const int* flat_node2pin_map, const int* sorted_net_map, const int* pin2net_map, const int* pin2node_map, const int* net2pincount, const T* site_xy, const T xWirelenWt, const T yWirelenWt, const T extNetCountWt, const T wirelenImprovWt, const int netShareScoreMaxNetDegree, const int wlscoreMaxNetDegree, const int* res_sig, const int res_siteId, const int res_sigIdx, T &result)
+__device__ void compute_candidate_score(const T* pos_x, const T* pos_y, const T* pin_offset_x, const T* pin_offset_y, const T* net_bbox, const T* net_weights, const T* tnet_weights, const int* net_pinIdArrayX, const int* net_pinIdArrayY, const int* net2tnet_start, const int* flat_net2pin_start_map, const int* flat_tnet2pin_map, const int* flat_node2pin_start_map, const int* flat_node2pin_map, const int* sorted_net_map, const int* pin2net_map, const int* snkpin2tnet_map, const int* pin2node_map, const int* net2pincount, const T* site_xy, const T xWirelenWt, const T yWirelenWt, const T extNetCountWt, const T wirelenImprovWt, const T timing_alpha, const T timing_beta, const int netShareScoreMaxNetDegree, const int wlscoreMaxNetDegree, const int* res_sig, const int res_siteId, const int res_sigIdx, T &result)
 {
     T netShareScore = T(0.0);
     T wirelenImprov = T(0.0);
+    T InternalTiming = T(0.0);
+    T ExternalTiming = T(0.0);
     int pins[128];
     int pinIdx = 0;
 
@@ -1217,9 +1219,20 @@ __device__ void compute_candidate_score(const T* pos_x, const T* pos_y, const T*
     int numIntNets(0), numNets(0);
     int currNetIntPins[128];
     int cNIPIdx = 0;
+    int currNetInttnets[128]; 
+    int cNItnetIdx = 0;
+    bool currNetSrcFound(false);
 
     currNetIntPins[cNIPIdx] = pins[0];
     ++cNIPIdx;
+
+    int srcPId = flat_tnet2pin_map[2*net2tnet_start[currNetId]];
+    if (srcPId == pins[0]){
+        currNetSrcFound = true;
+    } else if (snkpin2tnet_map[pins[0]] != INVALID){
+        currNetInttnets[cNItnetIdx] = snkpin2tnet_map[pins[0]];
+        ++cNItnetIdx;
+    }
 
     for (int pId = 1; pId < pinIdx; ++pId)
     {
@@ -1228,6 +1241,12 @@ __device__ void compute_candidate_score(const T* pos_x, const T* pos_y, const T*
         {
             currNetIntPins[cNIPIdx] = pins[pId];
             ++cNIPIdx;
+            if (srcPId == pins[pId]){
+                currNetSrcFound = true;
+            } else if (snkpin2tnet_map[pins[pId]] != INVALID){
+                currNetInttnets[cNItnetIdx] = snkpin2tnet_map[pins[pId]];
+                ++cNItnetIdx;
+            }
         } else
         {
             if (net2pincount[currNetId] <= netShareScoreMaxNetDegree)
@@ -1239,6 +1258,17 @@ __device__ void compute_candidate_score(const T* pos_x, const T* pos_y, const T*
             if (net2pincount[currNetId] <= wlscoreMaxNetDegree)
             {
                 compute_wirelen_improv(pos_x, pos_y, net_bbox, pin_offset_x, pin_offset_y, net_weights, site_xy, net2pincount, flat_net2pin_start_map, net_pinIdArrayX, net_pinIdArrayY, pin2node_map, xWirelenWt, yWirelenWt, currNetId, res_siteId, cNIPIdx, currNetIntPins, wirelenImprov);
+                for (int i = net2tnet_start[currNetId]; i < net2tnet_start[currNetId+1]; ++i)
+                {
+                    bool currNetSnkFound = val_in_array(currNetInttnets, cNItnetIdx, 0, i);
+                    if (currNetSrcFound && currNetSnkFound)
+                    {
+                        InternalTiming += tnet_weights[i];
+                    } else if (currNetSrcFound || currNetSnkFound)
+                    {
+                        ExternalTiming += tnet_weights[i];
+                    }
+                }
             }
             currNetId = netId;
             if (net2pincount[currNetId] > maxNetDegree)
@@ -1248,6 +1278,15 @@ __device__ void compute_candidate_score(const T* pos_x, const T* pos_y, const T*
             cNIPIdx = 0;
             currNetIntPins[cNIPIdx] = pins[pId];
             ++cNIPIdx;
+            cNItnetIdx = 0;
+            currNetSrcFound = false;
+            srcPId = flat_tnet2pin_map[2*net2tnet_start[currNetId]];
+            if (srcPId == pins[pId]){
+                currNetSrcFound = true;
+            } else if (snkpin2tnet_map[pins[pId]] != INVALID){
+                currNetInttnets[cNItnetIdx] = snkpin2tnet_map[pins[pId]];
+                ++cNItnetIdx;
+            }
         }
     }
 
@@ -1261,9 +1300,20 @@ __device__ void compute_candidate_score(const T* pos_x, const T* pos_y, const T*
     if (net2pincount[currNetId] <= wlscoreMaxNetDegree)
     {
         compute_wirelen_improv(pos_x, pos_y, net_bbox, pin_offset_x, pin_offset_y, net_weights, site_xy, net2pincount, flat_net2pin_start_map, net_pinIdArrayX, net_pinIdArrayY, pin2node_map, xWirelenWt, yWirelenWt, currNetId, res_siteId, cNIPIdx, currNetIntPins, wirelenImprov);
+        for (int i = net2tnet_start[currNetId]; i < net2tnet_start[currNetId+1]; ++i)
+        {
+            bool currNetSnkFound = val_in_array(currNetInttnets, cNItnetIdx, 0, i);
+            if (currNetSrcFound && currNetSnkFound)
+            {
+                InternalTiming += tnet_weights[i];
+            } else if (currNetSrcFound || currNetSnkFound)
+            {
+                ExternalTiming += tnet_weights[i];
+            }
+        }
     }
     netShareScore /= (T(1.0) + extNetCountWt * (numNets - numIntNets));
-    result = netShareScore + wirelenImprovWt * wirelenImprov;
+    result = netShareScore + wirelenImprovWt * wirelenImprov + timing_alpha * InternalTiming - timing_beta * ExternalTiming;
 }
 
 template <typename T>
@@ -1478,6 +1528,8 @@ __global__ void preClustering(const T *pos_x,
                               const T *pos_y,
                               const T *pin_offset_x,
                               const T *pin_offset_y,
+                              const T *tnet_weights,
+                              const int *snkpin2tnet_map,
                               const int *sorted_node_map,
                               const int *sorted_node_idx,
                               const int *flat_net2pin_map,
@@ -1491,6 +1543,7 @@ __global__ void preClustering(const T *pos_x,
                               const int *pin_typeIds,
                               const int num_nodes,
                               const T preClusteringMaxDist,
+                              const int enableTimingPreclustering,
                               int *flat_node2precluster_map,
                               int *flat_node2prclstrCount)
 {
@@ -1514,6 +1567,9 @@ __global__ void preClustering(const T *pos_x,
             int ff_insts[16];
             T ff_dists[16];
             int ffIdx = 0;
+            int ff_timing_insts[16];
+            T ff_timings[16];
+            int ff_timing_Idx = 0;
 
             for (int pinId = pinIdxBeg; pinId < pinIdxEnd; ++pinId)
             {
@@ -1531,11 +1587,104 @@ __global__ void preClustering(const T *pos_x,
                     ff_insts[ffIdx] = nodeIdx;
                     ff_dists[ffIdx] = dist;
                     ++ffIdx;
+
+                    T tnet_weight = T(0.0);
+                    if (snkpin2tnet_map[pinIdx] != INVALID)
+                    {
+                        tnet_weight = tnet_weights[snkpin2tnet_map[pinIdx]];
+                    }
+                    ff_timing_insts[ff_timing_Idx] = nodeIdx;
+                    ff_timings[ff_timing_Idx] = tnet_weight;
+                    ++ff_timing_Idx;
                 }
             }
 
+            if (ff_timing_Idx>0 && enableTimingPreclustering == 1)
+            {   
+                for (int ix = 1; ix < ff_timing_Idx; ++ix)
+                {
+                    for (int jx = 0; jx < ff_timing_Idx-1; ++jx)
+                    {
+                        if (ff_timings[jx] == ff_timings[jx+1])
+                        {
+                            if (sorted_node_map[ff_timing_insts[jx]] > sorted_node_map[ff_timing_insts[jx+1]])
+                            {
+                                int tempVal = ff_timing_insts[jx];
+                                ff_timing_insts[jx] = ff_timing_insts[jx+1];
+                                ff_timing_insts[jx+1] = tempVal;
+
+                                T timingVal = ff_timings[jx];
+                                ff_timings[jx] = ff_timings[jx+1];
+                                ff_timings[jx+1] = timingVal;
+                            }
+                        } else
+                        {
+                            if (ff_timings[jx] < ff_timings[jx+1])
+                            {
+                                int tempVal = ff_timing_insts[jx];
+                                ff_timing_insts[jx] = ff_timing_insts[jx+1];
+                                ff_timing_insts[jx+1] = tempVal;
+
+                                T timingVal = ff_timings[jx];
+                                ff_timings[jx] = ff_timings[jx+1];
+                                ff_timings[jx+1] = timingVal;
+                            }
+                        }
+                    }
+                }
+
+                int nPIdx = idx*3;
+
+                flat_node2precluster_map[nPIdx + flat_node2prclstrCount[idx]] = ff_timing_insts[0];
+                ++flat_node2prclstrCount[idx];
+
+                int fcIdx = flop2ctrlSetId_map[ff_timing_insts[0]]*3 + 1;
+                int cksr = flop_ctrlSets[fcIdx];
+
+                for (int fIdx = 1; fIdx < ffIdx; ++fIdx)
+                {
+                    int ctrlIdx = flop2ctrlSetId_map[ff_timing_insts[fIdx]]*3 + 1;
+                    int fCksr = flop_ctrlSets[ctrlIdx];
+
+                    if (fCksr == cksr)
+                    {
+                        flat_node2precluster_map[nPIdx + flat_node2prclstrCount[idx]] = ff_timing_insts[fIdx];
+                        ++flat_node2prclstrCount[idx];
+                        break;
+                    }
+                }
+
+                //Sort precluster based on instId
+                for (int ix = nPIdx+1; ix < nPIdx + flat_node2prclstrCount[idx]; ++ix)
+                {
+                    for (int jx = nPIdx; jx < nPIdx + flat_node2prclstrCount[idx]-1; ++jx)
+                    {
+                        if (sorted_node_map[flat_node2precluster_map[jx]] > sorted_node_map[flat_node2precluster_map[jx+1]])
+                        {
+                            int val = flat_node2precluster_map[jx];
+                            flat_node2precluster_map[jx] = flat_node2precluster_map[jx+1];
+                            flat_node2precluster_map[jx+1] = val;
+                        }
+                    }
+                }
+
+                for (int prcl = 0; prcl < flat_node2prclstrCount[idx]; ++prcl) // 0 is the LUT instId
+                {
+                    int fIdx = flat_node2precluster_map[nPIdx + prcl];
+                    int fID = fIdx*3;
+                    if (fIdx != idx)
+                    {
+                        for (int cl = 0; cl < flat_node2prclstrCount[idx]; ++cl)
+                        {
+                            flat_node2precluster_map[fID + cl] = flat_node2precluster_map[nPIdx + cl];
+                        }
+                        flat_node2prclstrCount[fIdx] = flat_node2prclstrCount[idx];
+                    }
+                }
+            }
+            
             //Check if ff is empty
-            if (ffIdx > 0)
+            if (ffIdx > 0 && enableTimingPreclustering == 0)
             {
                 //Sort ff_insts/ff_dists based on dist and sorted_node_map
                 for (int ix = 1; ix < ffIdx; ++ix)
@@ -1643,8 +1792,11 @@ __global__ void runDLIteration(const T* pos_x,
                                const int* node2pincount,
                                const int* net2pincount,
                                const int* pin2net_map,
+                               const int* snkpin2tnet_map,
                                const int* pin_typeIds,
+                               const int* net2tnet_start,
                                const int* flat_net2pin_start_map,
+                               const int* flat_tnet2pin_map,
                                const int* pin2node_map,
                                const int* sorted_net_map,
                                const int* sorted_node_map,
@@ -1654,6 +1806,7 @@ __global__ void runDLIteration(const T* pos_x,
                                const int* site_nbrRanges,
                                const int* site_nbrRanges_idx,
                                const T* net_weights,
+                               const T* tnet_weights,
                                const int* addr2site_map,
                                const int num_clb_sites,
                                const int minStableIter,
@@ -1668,6 +1821,8 @@ __global__ void runDLIteration(const T* pos_x,
                                const T xWirelenWt,
                                const T yWirelenWt,
                                const T wirelenImprovWt,
+                               const T timing_alpha,
+                               const T timing_beta,
                                const T extNetCountWt,
                                const int CKSR_IN_CLB,
                                const int CE_IN_CLB,
@@ -2244,7 +2399,7 @@ __global__ void runDLIteration(const T* pos_x,
                 if (candSigInSiteNextPQ == INVALID &&
                         add_inst_to_cand_impl(lut_type, flat_node2pin_start_map, flat_node2pin_map, node2pincount, net2pincount, pin2net_map, pin_typeIds, sorted_net_map, flat_node2prclstrCount, flat_node2precluster_map, flop2ctrlSetId_map, node2fence_region_map, flop_ctrlSets, instId, CKSR_IN_CLB, CE_IN_CLB, HALF_SLICE_CAPACITY, NUM_BLE_PER_SLICE, nwCand_lut, nwCand_ff, nwCand_cksr, nwCand_ce))
                 {
-                    compute_candidate_score(pos_x, pos_y, pin_offset_x, pin_offset_y, net_bbox, net_weights, net_pinIdArrayX, net_pinIdArrayY, flat_net2pin_start_map, flat_node2pin_start_map, flat_node2pin_map, sorted_net_map, pin2net_map, pin2node_map, net2pincount, site_xy, xWirelenWt, yWirelenWt, extNetCountWt, wirelenImprovWt, netShareScoreMaxNetDegree, wlscoreMaxNetDegree, nwCand_sig, nwCand_siteId, nwCand_sigIdx, nwCand_score);
+                    compute_candidate_score(pos_x, pos_y, pin_offset_x, pin_offset_y, net_bbox, net_weights, tnet_weights, net_pinIdArrayX, net_pinIdArrayY, net2tnet_start, flat_net2pin_start_map, flat_tnet2pin_map, flat_node2pin_start_map, flat_node2pin_map, sorted_net_map, pin2net_map, snkpin2tnet_map, pin2node_map, net2pincount, site_xy, xWirelenWt, yWirelenWt, extNetCountWt, wirelenImprovWt, timing_alpha, timing_beta, netShareScoreMaxNetDegree, wlscoreMaxNetDegree, nwCand_sig, nwCand_siteId, nwCand_sigIdx, nwCand_score);
 
                     int nxtId(INVALID);
 
@@ -2914,14 +3069,18 @@ __global__ void runDLIteration_kernel_2(const T* pos_x,
                    const int* node2pincount,
                    const int* net2pincount,
                    const int* pin2net_map,
+                   const int* snkpin2tnet_map,
                    const int* pin_typeIds,
+                   const int* net2tnet_start,
                    const int* flat_net2pin_start_map,
+                   const int* flat_tnet2pin_map,
                    const int* pin2node_map,
                    const int* sorted_node_map,
                    const int* sorted_net_map,
                    const int* flat_node2prclstrCount,
                    const int* flat_node2precluster_map,
                    const T* net_weights,
+                   const T* tnet_weights,
                    const int* addr2site_map,
                    const int* validIndices_curr_scl,
                    const int* sorted_clb_siteIds,
@@ -2935,6 +3094,8 @@ __global__ void runDLIteration_kernel_2(const T* pos_x,
                    const T xWirelenWt,
                    const T yWirelenWt,
                    const T wirelenImprovWt,
+                   const T timing_alpha,
+                   const T timing_beta,
                    const T extNetCountWt,
                    const int CKSR_IN_CLB,
                    const int CE_IN_CLB,
@@ -3160,7 +3321,7 @@ __global__ void runDLIteration_kernel_2(const T* pos_x,
                 if (candSigInSiteNextPQ == INVALID &&
                         add_inst_to_cand_impl(lut_type, flat_node2pin_start_map, flat_node2pin_map, node2pincount, net2pincount, pin2net_map, pin_typeIds, sorted_net_map, flat_node2prclstrCount, flat_node2precluster_map, flop2ctrlSetId_map, node2fence_region_map, flop_ctrlSets, instId, CKSR_IN_CLB, CE_IN_CLB, HALF_SLICE_CAPACITY, NUM_BLE_PER_SLICE, nwCand_lut, nwCand_ff, nwCand_cksr, nwCand_ce))
                 {
-                    compute_candidate_score(pos_x, pos_y, pin_offset_x, pin_offset_y, net_bbox, net_weights, net_pinIdArrayX, net_pinIdArrayY, flat_net2pin_start_map, flat_node2pin_start_map, flat_node2pin_map, sorted_net_map, pin2net_map, pin2node_map, net2pincount, site_xy, xWirelenWt, yWirelenWt, extNetCountWt, wirelenImprovWt, netShareScoreMaxNetDegree, wlscoreMaxNetDegree, nwCand_sig, nwCand_siteId, nwCand_sigIdx, nwCand_score);
+                    compute_candidate_score(pos_x, pos_y, pin_offset_x, pin_offset_y, net_bbox, net_weights, tnet_weights, net_pinIdArrayX, net_pinIdArrayY, net2tnet_start, flat_net2pin_start_map, flat_tnet2pin_map, flat_node2pin_start_map, flat_node2pin_map, sorted_net_map, pin2net_map, snkpin2tnet_map, pin2node_map, net2pincount, site_xy, xWirelenWt, yWirelenWt, extNetCountWt, wirelenImprovWt, timing_alpha, timing_beta, netShareScoreMaxNetDegree, wlscoreMaxNetDegree, nwCand_sig, nwCand_siteId, nwCand_sigIdx, nwCand_score);
 
                     int nxtId(INVALID);
 
@@ -3738,6 +3899,8 @@ int initNetsClstrCuda(const T *pos_x,
                       const T *pos_y,
                       const T *pin_offset_x,
                       const T *pin_offset_y,
+                      const T *tnet_weights,
+                      const int *snkpin2tnet_map,
                       const int *sorted_node_map,
                       const int *sorted_node_idx,
                       const int *sorted_net_idx,
@@ -3752,6 +3915,7 @@ int initNetsClstrCuda(const T *pos_x,
                       const int *pin_typeIds,
                       const int *net2pincount,
                       const T preClusteringMaxDist,
+                      const int enableTimingPreclustering,
                       const int num_nodes,
                       const int num_nets,
                       const int wlscoreMaxNetDegree,
@@ -3781,6 +3945,8 @@ int initNetsClstrCuda(const T *pos_x,
                                                  pos_y,
                                                  pin_offset_x,
                                                  pin_offset_y,
+                                                 tnet_weights,
+                                                 snkpin2tnet_map,
                                                  sorted_node_map,
                                                  sorted_node_idx,
                                                  flat_net2pin_map,
@@ -3794,6 +3960,7 @@ int initNetsClstrCuda(const T *pos_x,
                                                  pin_typeIds,
                                                  num_nodes,
                                                  preClusteringMaxDist,
+                                                 enableTimingPreclustering,
                                                  flat_node2precluster_map,
                                                  flat_node2prclstrCount);
 
@@ -3823,8 +3990,11 @@ int runDLIterCuda(const T* pos_x,
                   const int* node2pincount,
                   const int* net2pincount,
                   const int* pin2net_map,
+                  const int* snkpin2tnet_map,
                   const int* pin_typeIds,
+                  const int* net2tnet_start,
                   const int* flat_net2pin_start_map,
+                  const int* flat_tnet2pin_map,
                   const int* pin2node_map,
                   const int* sorted_net_map,
                   const int* sorted_node_map,
@@ -3834,6 +4004,7 @@ int runDLIterCuda(const T* pos_x,
                   const int* site_nbrRanges,
                   const int* site_nbrRanges_idx,
                   const T* net_weights,
+                  const T* tnet_weights,
                   const int* addr2site_map,
                   const int* site2addr_map,
                   const int num_sites_x,
@@ -3855,6 +4026,8 @@ int runDLIterCuda(const T* pos_x,
                   const T xWirelenWt,
                   const T yWirelenWt,
                   const T wirelenImprovWt,
+                  const T timing_alpha,
+                  const T timing_beta,
                   const T extNetCountWt,
                   const int CKSR_IN_CLB,
                   const int CE_IN_CLB,
@@ -3948,8 +4121,8 @@ int runDLIterCuda(const T* pos_x,
     //Note: order of cumsum_curr_scl is also changed but it is not used in the next steps
 
     runDLIteration_kernel_2<<<block_count, THREAD_COUNT>>>(pos_x, pos_y, pin_offset_x, pin_offset_y, net_bbox, site_xy, net_pinIdArrayX, net_pinIdArrayY,
-    node2fence_region_map, flop_ctrlSets, flop2ctrlSetId_map, lut_type, flat_node2pin_start_map, flat_node2pin_map, node2pincount, net2pincount, pin2net_map, pin_typeIds, flat_net2pin_start_map, pin2node_map, sorted_node_map, sorted_net_map, flat_node2prclstrCount, flat_node2precluster_map, net_weights, addr2site_map, validIndices_curr_scl, sorted_clb_siteIds, 
-        intMinVal, num_clb_sites, maxList, HALF_SLICE_CAPACITY, NUM_BLE_PER_SLICE, netShareScoreMaxNetDegree, wlscoreMaxNetDegree, xWirelenWt, yWirelenWt, wirelenImprovWt, extNetCountWt, CKSR_IN_CLB, CE_IN_CLB, SCL_IDX, SIG_IDX, site_nbr_idx, site_nbr, site_curr_pq_top_idx, site_curr_pq_validIdx, site_curr_pq_sig_idx, site_curr_pq_sig, site_curr_pq_impl_lut, site_curr_pq_impl_ff, site_curr_pq_impl_cksr, site_curr_pq_impl_ce,
+    node2fence_region_map, flop_ctrlSets, flop2ctrlSetId_map, lut_type, flat_node2pin_start_map, flat_node2pin_map, node2pincount, net2pincount, pin2net_map, snkpin2tnet_map, pin_typeIds, net2tnet_start, flat_net2pin_start_map, flat_tnet2pin_map, pin2node_map, sorted_node_map, sorted_net_map, flat_node2prclstrCount, flat_node2precluster_map, net_weights, tnet_weights, addr2site_map, validIndices_curr_scl, sorted_clb_siteIds, 
+        intMinVal, num_clb_sites, maxList, HALF_SLICE_CAPACITY, NUM_BLE_PER_SLICE, netShareScoreMaxNetDegree, wlscoreMaxNetDegree, xWirelenWt, yWirelenWt, wirelenImprovWt, timing_alpha, timing_beta, extNetCountWt, CKSR_IN_CLB, CE_IN_CLB, SCL_IDX, SIG_IDX, site_nbr_idx, site_nbr, site_curr_pq_top_idx, site_curr_pq_validIdx, site_curr_pq_sig_idx, site_curr_pq_sig, site_curr_pq_impl_lut, site_curr_pq_impl_ff, site_curr_pq_impl_cksr, site_curr_pq_impl_ce,
         site_curr_pq_idx, site_curr_stable, site_curr_pq_siteId, site_curr_pq_score, site_curr_scl_score, site_curr_scl_siteId, site_curr_scl_idx, site_curr_scl_validIdx, site_curr_scl_sig_idx, site_curr_scl_sig, site_curr_scl_impl_lut, site_curr_scl_impl_ff, site_curr_scl_impl_cksr, site_curr_scl_impl_ce, site_next_pq_idx, site_next_pq_validIdx, site_next_pq_top_idx, site_next_pq_score, site_next_pq_siteId, site_next_pq_sig_idx, site_next_pq_sig, site_next_pq_impl_lut, site_next_pq_impl_ff, site_next_pq_impl_cksr, site_next_pq_impl_ce, site_next_scl_score, site_next_scl_siteId, site_next_scl_idx, site_next_scl_validIdx, site_next_scl_sig_idx, site_next_scl_sig, site_next_scl_impl_lut, site_next_scl_impl_ff, site_next_scl_impl_cksr, site_next_scl_impl_ce, site_next_stable, site_det_score, inst_curr_detSite, inst_next_bestScoreImprov, inst_next_bestSite, inst_score_improv, site_score_improv);
     cudaDeviceSynchronize();
 
@@ -3991,14 +4164,14 @@ int runDLIterCuda(const T* pos_x,
 
 #define REGISTER_KERNEL_LAUNCHER(T)                                                                                \
     template int initNetsClstrCuda<T>                                                                              \
-        (const T *pos_x, const T *pos_y, const T *pin_offset_x, const T *pin_offset_y,                             \
-        const int *sorted_node_map, const int *sorted_node_idx, const int *sorted_net_idx,                         \
+        (const T *pos_x, const T *pos_y, const T *pin_offset_x, const T *pin_offset_y, const T *tnet_weights,      \
+        const int *snkpin2tnet_map, const int *sorted_node_map, const int *sorted_node_idx, const int *sorted_net_idx,  \
         const int *flat_net2pin_map, const int *flat_net2pin_start_map, const int *flop2ctrlSetId_map,             \
         const int *flop_ctrlSets, const int *node2fence_region_map, const int *node2outpinIdx_map,                 \
         const int *pin2net_map, const int *pin2node_map, const int *pin_typeIds, const int *net2pincount,          \
-        const T preClusteringMaxDist, const int num_nodes, const int num_nets, const  int WLscoreMaxNetDegre,      \
-        T *net_bbox, int *net_pinIdArrayX, int *net_pinIdArrayY, int *flat_node2precluster_map,                    \
-        int *flat_node2prclstrCount);                                                                              \
+        const T preClusteringMaxDist, const int enableTimingPreclustering, const int num_nodes, const int num_nets,        \
+        const int WLscoreMaxNetDegre, T *net_bbox, int *net_pinIdArrayX, int *net_pinIdArrayY,                     \
+        int *flat_node2precluster_map, int *flat_node2prclstrCount);                                                                              \
                                                                                                                    \
     template int runDLIterCuda<T>                                                                                  \
         (const T* pos_x, const T* pos_y, const T* pin_offset_x, const T* pin_offset_y, const T* net_bbox,          \
@@ -4006,16 +4179,19 @@ int runDLIterCuda(const T* pos_x,
         const int* spiral_accessor, const int* node2fence_region_map, const int* lut_flop_indices,                 \
         const int* flop_ctrlSets, const int* flop2ctrlSetId_map, const int* lut_type,                              \
         const int* flat_node2pin_start_map, const int* flat_node2pin_map, const int* node2pincount,                \
-        const int* net2pincount, const int* pin2net_map, const int* pin_typeIds, const int* flat_net2pin_start_map,\
+        const int* net2pincount, const int* pin2net_map, const int* snkpin2tnet_map, const int* pin_typeIds,       \
+        const int* net2tnet_start, const int* flat_net2pin_start_map, const int*flat_tnet2pin_map,                 \
         const int* pin2node_map, const int* sorted_net_map, const int* sorted_node_map,                            \
         const int* flat_node2prclstrCount, const int* flat_node2precluster_map, const int* site_nbrList,           \
-        const int* site_nbrRanges, const int* site_nbrRanges_idx, const T* net_weights, const int* addr2site_map,  \
+        const int* site_nbrRanges, const int* site_nbrRanges_idx, const T* net_weights, const T* tnet_weights,     \
+        const int* addr2site_map,                                                                                  \
         const int* site2addr_map, const int num_sites_x, const int num_sites_y, const int num_clb_sites,           \
         const int num_lutflops, const int minStableIter, const int maxList, const int HALF_SLICE_CAPACITY,         \
         const int NUM_BLE_PER_SLICE, const int minNeighbors, const int spiralBegin, const int spiralEnd,           \
         const int intMinVal, const int numGroups, const int netShareScoreMaxNetDegree,                             \
         const int wlscoreMaxNetDegree, const T maxDist, const T xWirelenWt, const T yWirelenWt,                    \
-        const T wirelenImprovWt, const T extNetCountWt, const int CKSR_IN_CLB, const int CE_IN_CLB,                \
+        const T wirelenImprovWt, const T timing_alpha, const T timing_beta, const T extNetCountWt,                 \
+        const int CKSR_IN_CLB, const int CE_IN_CLB,                                                                \
         const int SCL_IDX, const int SIG_IDX, int* site_nbr_idx, int* site_nbr, int* site_nbrGroup_idx,            \
         int* site_curr_pq_top_idx, int* site_curr_pq_sig_idx, int* site_curr_pq_sig, int* site_curr_pq_idx,        \
         int* site_curr_stable, int* site_curr_pq_siteId, int* site_curr_pq_validIdx, T* site_curr_pq_score,        \

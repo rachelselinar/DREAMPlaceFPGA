@@ -521,9 +521,9 @@ inline bool add_lut_to_cand_impl(const int* lut_type, const int* flat_node2pin_s
 
 //computeCandidateScore
 template <typename T>
-inline void compute_candidate_score(const T* pos_x, const T* pos_y, const T* pin_offset_x, const T* pin_offset_y, const T* net_bbox, const T* net_weights, const int* net_pinIdArrayX, const int* net_pinIdArrayY, const int* flat_net2pin_start_map, const int* flat_node2pin_start_map, const int* flat_node2pin_map, const int* sorted_net_map, const int* pin2net_map, const int* pin2node_map, const int* net2pincount, const T* site_xy, const int* node_names, const T xWirelenWt, const T yWirelenWt, const T extNetCountWt, const T wirelenImprovWt, const int netShareScoreMaxNetDegree, const int wlScoreMaxNetDegree, const int* res_sig, const int res_siteId, const int res_sigIdx, T &result)
+inline void compute_candidate_score(const T* pos_x, const T* pos_y, const T* pin_offset_x, const T* pin_offset_y, const T* net_bbox, const T* net_weights, const T* tnet_weights, const int* net_pinIdArrayX, const int* net_pinIdArrayY, const int* net2tnet_start, const int* flat_net2pin_start_map, const int* flat_tnet2pin_map, const int* flat_node2pin_start_map, const int* flat_node2pin_map, const int* sorted_net_map, const int* pin2net_map, const int* snkpin2tnet_map, const int* pin2node_map, const int* net2pincount, const T* site_xy, const int* node_names, const T xWirelenWt, const T yWirelenWt, const T extNetCountWt, const T wirelenImprovWt, const T timing_alpha, const T timing_beta, const int netShareScoreMaxNetDegree, const int wlScoreMaxNetDegree, const int* res_sig, const int res_siteId, const int res_sigIdx, T &result)
 {
-    T netShareScore(0.0), wirelenImprov(0.0);
+    T netShareScore(0.0), wirelenImprov(0.0), InternalTiming(0.0), ExternalTiming(0.0);
     std::vector<int> pins;
 
     for (int i = 0; i < res_sigIdx; ++i)
@@ -553,8 +553,17 @@ inline void compute_candidate_score(const T* pos_x, const T* pos_y, const T* pin
 
     int numIntNets(0), numNets(0);
     std::vector<int> currNetIntPins;
+    std::vector<int> currNetInttnets;
+    bool currNetSrcFound(false);
 
     currNetIntPins.emplace_back(pins[0]);
+    int srcPId = flat_tnet2pin_map[2*net2tnet_start[currNetId]];
+
+    if (srcPId == pins[0]){
+        currNetSrcFound = true;
+    } else if (snkpin2tnet_map[pins[0]] != INVALID){
+        currNetInttnets.emplace_back(snkpin2tnet_map[pins[0]]);
+    }
 
     for(unsigned int pIdx = 1; pIdx < pins.size(); ++pIdx)
     {
@@ -562,6 +571,11 @@ inline void compute_candidate_score(const T* pos_x, const T* pos_y, const T* pin
         if (netId == currNetId)
         {
             currNetIntPins.emplace_back(pins[pIdx]);
+            if (pins[pIdx] == srcPId){
+                currNetSrcFound = true;
+            } else if (snkpin2tnet_map[pins[pIdx]] != INVALID){
+                currNetInttnets.emplace_back(snkpin2tnet_map[pins[pIdx]]);
+            }
         } else
         {
             if (net2pincount[currNetId] <= netShareScoreMaxNetDegree)
@@ -573,6 +587,18 @@ inline void compute_candidate_score(const T* pos_x, const T* pos_y, const T* pin
             if (net2pincount[currNetId] <= wlScoreMaxNetDegree)
             {
                 compute_wirelength_improv(pos_x, pos_y, net_bbox, pin_offset_x, pin_offset_y, net_weights, net_pinIdArrayX, net_pinIdArrayY, flat_net2pin_start_map, pin2node_map, net2pincount, site_xy, xWirelenWt, yWirelenWt, currNetId, res_siteId, currNetIntPins, wirelenImprov);
+                // for all the timing arcs in the net
+                for (int i = net2tnet_start[currNetId]; i < net2tnet_start[currNetId+1]; ++i)
+                {
+                    bool currNetSnkFound = std::find(currNetInttnets.begin(), currNetInttnets.end(), i) != currNetInttnets.end();
+                    if (currNetSrcFound && currNetSnkFound)
+                    {
+                        InternalTiming += tnet_weights[i];
+                    } else if (currNetSrcFound || currNetSnkFound)
+                    {
+                        ExternalTiming += tnet_weights[i];
+                    }
+                }
             }
             currNetId = netId;
             if (net2pincount[currNetId] > maxNetDegree)
@@ -581,6 +607,14 @@ inline void compute_candidate_score(const T* pos_x, const T* pos_y, const T* pin
             }
             currNetIntPins.clear();
             currNetIntPins.emplace_back(pins[pIdx]);
+            currNetInttnets.clear();
+            currNetSrcFound = false;
+            srcPId = flat_tnet2pin_map[2*net2tnet_start[currNetId]];
+            if (srcPId == pins[pIdx]){
+                currNetSrcFound = true;
+            } else if (snkpin2tnet_map[pins[pIdx]] != INVALID){
+                currNetInttnets.emplace_back(snkpin2tnet_map[pins[pIdx]]);
+            }
         }
     }
 
@@ -593,9 +627,26 @@ inline void compute_candidate_score(const T* pos_x, const T* pos_y, const T* pin
     if (net2pincount[currNetId] <= wlScoreMaxNetDegree)
     {
         compute_wirelength_improv(pos_x, pos_y, net_bbox, pin_offset_x, pin_offset_y, net_weights, net_pinIdArrayX, net_pinIdArrayY, flat_net2pin_start_map, pin2node_map, net2pincount, site_xy, xWirelenWt, yWirelenWt, currNetId, res_siteId, currNetIntPins, wirelenImprov);
+        // for all the timing arcs in the net
+        for (int i = net2tnet_start[currNetId]; i < net2tnet_start[currNetId+1]; ++i)
+        {
+            bool currNetSnkFound = std::find(currNetInttnets.begin(), currNetInttnets.end(), i) != currNetInttnets.end();
+            if (currNetSrcFound && currNetSnkFound)
+            {
+                InternalTiming += tnet_weights[i];
+            } else if (currNetSrcFound || currNetSnkFound)
+            {
+                ExternalTiming += tnet_weights[i];
+            }
+        }
     }
     netShareScore /= (T(1.0) + extNetCountWt * (numNets - numIntNets));
-    result = netShareScore + wirelenImprovWt * wirelenImprov;
+    result = netShareScore + wirelenImprovWt * wirelenImprov + timing_alpha * InternalTiming - timing_beta * ExternalTiming;
+    // if (InternalTiming > 0.0 || ExternalTiming > 0.0)
+    // {
+    //     std::cout << "netShareScore = " << netShareScore << " wirelenImprov = " << wirelenImprov << " InternalTiming = " << InternalTiming << " ExternalTiming = " << ExternalTiming << std::endl;
+    // } 
+    
 }
 
 // compute ble score
@@ -1281,7 +1332,7 @@ inline bool compare_pq_tops(
 }
 
 template <typename T>
-inline bool createRipUpCand(const T* pos_x, const T* pos_y, const T* net_bbox, const T* pin_offset_x, const T* pin_offset_y, const T* net_weights, const T* site_xy, const T* inst_areas, const int* site2addr_map, const T* site_det_score, const int* site_det_siteId, const int* site_det_sig_idx, const int* site_det_sig, const int* site_det_impl_lut, const int* site_det_impl_ff, const int* site_det_impl_cksr, const int* site_det_impl_ce, const int* net_pinIdArrayX, const int* net_pinIdArrayY, const int* lut_type, const int* flat_node2pin_start_map, const int* flat_node2pin_map, const int* node2pincount, const int* net2pincount, const int* pin2net_map, const int* pin_typeIds, const int* sorted_net_map, const int* flat_node2prclstrCount, const int* flat_node2precluster_map, const int* flop2ctrlSetId_map, const int* node2fence_region_map, const int* flop_ctrlSets, const int* flat_net2pin_start_map, const int* pin2node_map, const int* sorted_node_map, const int* node_names, const T xWirelenWt, const T yWirelenWt, const T extNetCountWt, const T wirelenImprovWt, const int netShareScoreMaxNetDegree, const int wlScoreMaxNetDegree, const int siteId, const int instId, const int SIG_IDX, const int CKSR_IN_CLB, const int CE_IN_CLB, const int HALF_SLICE_CAPACITY, const int NUM_BLE_PER_SLICE, RipUpCand<T>& rpCand)
+inline bool createRipUpCand(const T* pos_x, const T* pos_y, const T* net_bbox, const T* pin_offset_x, const T* pin_offset_y, const T* net_weights, const T* tnet_weights, const T* site_xy, const T* inst_areas, const int* site2addr_map, const T* site_det_score, const int* site_det_siteId, const int* site_det_sig_idx, const int* site_det_sig, const int* site_det_impl_lut, const int* site_det_impl_ff, const int* site_det_impl_cksr, const int* site_det_impl_ce, const int* net_pinIdArrayX, const int* net_pinIdArrayY, const int* lut_type, const int* flat_node2pin_start_map, const int* flat_node2pin_map, const int* node2pincount, const int* net2pincount, const int* pin2net_map, const int* snkpin2tnet_map, const int* pin_typeIds, const int* sorted_net_map, const int* flat_node2prclstrCount, const int* flat_node2precluster_map, const int* flop2ctrlSetId_map, const int* node2fence_region_map, const int* flop_ctrlSets, const int* net2tnet_start, const int* flat_net2pin_start_map, const int* flat_tnet2pin_map, const int* pin2node_map, const int* sorted_node_map, const int* node_names, const T xWirelenWt, const T yWirelenWt, const T extNetCountWt, const T wirelenImprovWt, const T timing_alpha, const T timing_beta, const int netShareScoreMaxNetDegree, const int wlScoreMaxNetDegree, const int siteId, const int instId, const int SIG_IDX, const int CKSR_IN_CLB, const int CE_IN_CLB, const int HALF_SLICE_CAPACITY, const int NUM_BLE_PER_SLICE, RipUpCand<T>& rpCand)
 {
     int instPcl = instId*3;
     int sIdx = site2addr_map[siteId];
@@ -1327,7 +1378,7 @@ inline bool createRipUpCand(const T* pos_x, const T* pos_y, const T* net_bbox, c
             std::cout << "ERROR: Unable to add inst_" << node_names[instId] << " to sig" << std::endl;
         }
 
-        compute_candidate_score(pos_x, pos_y, pin_offset_x, pin_offset_y, net_bbox, net_weights, net_pinIdArrayX, net_pinIdArrayY, flat_net2pin_start_map, flat_node2pin_start_map, flat_node2pin_map, sorted_net_map, pin2net_map, pin2node_map, net2pincount, site_xy, node_names, xWirelenWt, yWirelenWt, extNetCountWt, wirelenImprovWt, netShareScoreMaxNetDegree, wlScoreMaxNetDegree, rpCand.cand.sig, rpCand.cand.siteId, rpCand.cand.sigIdx, rpCand.cand.score);
+        compute_candidate_score(pos_x, pos_y, pin_offset_x, pin_offset_y, net_bbox, net_weights, tnet_weights, net_pinIdArrayX, net_pinIdArrayY, net2tnet_start, flat_net2pin_start_map, flat_tnet2pin_map, flat_node2pin_start_map, flat_node2pin_map, sorted_net_map, pin2net_map, snkpin2tnet_map, pin2node_map, net2pincount, site_xy, node_names, xWirelenWt, yWirelenWt, extNetCountWt, wirelenImprovWt, timing_alpha, timing_beta, netShareScoreMaxNetDegree, wlScoreMaxNetDegree, rpCand.cand.sig, rpCand.cand.siteId, rpCand.cand.sigIdx, rpCand.cand.score);
 
         rpCand.score = rpCand.cand.score - site_det_score[sIdx];
 
@@ -1459,6 +1510,8 @@ int preClustering(const T *pos_x,
                   const T *pos_y,
                   const T *pin_offset_x,
                   const T *pin_offset_y,
+                  const T *tnet_weights,
+                  const int *snkpin2tnet_map,
                   const int *sorted_node_map,
                   const int *sorted_node_idx,
                   const int *flat_net2pin_start_map,
@@ -1473,6 +1526,7 @@ int preClustering(const T *pos_x,
                   const int *node_names,
                   const int num_nodes,
                   const T preClusteringMaxDist,
+                  const bool enableTimingPreclustering,
                   int *flat_node2precluster_map,
                   int *flat_node2prclstrCount,
                   int num_threads) 
@@ -1494,6 +1548,7 @@ int preClustering(const T *pos_x,
             T instLocY = pos_y[instId] + pin_offset_y[outPinId];
 
             std::vector<std::pair<int, T> > ffs;
+            std::vector<std::pair<int, T> > ffs_timing;
             //ffs.reserve(pinIdxEnd-pinIdxBeg);
 
             for (int pinId = pinIdxBeg; pinId < pinIdxEnd; ++pinId)
@@ -1510,6 +1565,12 @@ int preClustering(const T *pos_x,
                         dist <= preClusteringMaxDist)
                 {
                     ffs.emplace_back(std::make_pair(nodeIdx, dist));
+                    T tnet_weight = 0.0;
+                    if (snkpin2tnet_map[pinIdx] != INVALID)
+                    {
+                        tnet_weight = tnet_weights[snkpin2tnet_map[pinIdx]];
+                    }
+                    ffs_timing.emplace_back(std::make_pair(nodeIdx, tnet_weight));
                 }
             }
             if (ffs.empty())
@@ -1521,21 +1582,51 @@ int preClustering(const T *pos_x,
             //Get FF index with min value (without Sort FFs)
             std::sort(ffs.begin(), ffs.end(), [&sorted_node_map](const auto &a, const auto &b){ return a.second == b.second ? sorted_node_map[a.first] < sorted_node_map[b.first] : a.second < b.second; });
 
-            flat_node2precluster_map[nPIdx + flat_node2prclstrCount[instId]] = ffs[0].first;
-            ++flat_node2prclstrCount[instId];
-            int fcIdx = flop2ctrlSetId_map[ffs[0].first]*3 + 1;
-            int cksr = flop_ctrlSets[fcIdx];
-
-            for (unsigned int fIdx = 1; fIdx < ffs.size(); ++fIdx)
+            if (enableTimingPreclustering)
             {
-                int ctrlIdx = flop2ctrlSetId_map[ffs[fIdx].first]*3 + 1;
-                int fCksr = flop_ctrlSets[ctrlIdx];
-
-                if (fCksr == cksr)
+                if (ffs_timing.empty())
                 {
-                    flat_node2precluster_map[nPIdx + flat_node2prclstrCount[instId]] = ffs[fIdx].first;
-                    ++flat_node2prclstrCount[instId];
-                    break;
+                    continue;
+                }
+
+                //Get FF index with max timing weight (without Sort FFs)
+                std::sort(ffs_timing.begin(), ffs_timing.end(), [&sorted_node_map](const auto &a, const auto &b){ return a.second == b.second ? sorted_node_map[a.first] < sorted_node_map[b.first] : a.second > b.second; });
+                flat_node2precluster_map[nPIdx + flat_node2prclstrCount[instId]] = ffs_timing[0].first;
+                ++flat_node2prclstrCount[instId];
+                int fcIdx = flop2ctrlSetId_map[ffs_timing[0].first]*3 + 1;
+                int cksr = flop_ctrlSets[fcIdx];
+
+                for (unsigned int fIdx = 1; fIdx < ffs_timing.size(); ++fIdx)
+                {
+                    int ctrlIdx = flop2ctrlSetId_map[ffs_timing[fIdx].first]*3 + 1;
+                    int fCksr = flop_ctrlSets[ctrlIdx];
+
+                    if (fCksr == cksr)
+                    {
+                        flat_node2precluster_map[nPIdx + flat_node2prclstrCount[instId]] = ffs_timing[fIdx].first;
+                        ++flat_node2prclstrCount[instId];
+                        break;
+                    }
+                }
+
+            } else
+            {
+                flat_node2precluster_map[nPIdx + flat_node2prclstrCount[instId]] = ffs[0].first;
+                ++flat_node2prclstrCount[instId];
+                int fcIdx = flop2ctrlSetId_map[ffs[0].first]*3 + 1;
+                int cksr = flop_ctrlSets[fcIdx];
+
+                for (unsigned int fIdx = 1; fIdx < ffs.size(); ++fIdx)
+                {
+                    int ctrlIdx = flop2ctrlSetId_map[ffs[fIdx].first]*3 + 1;
+                    int fCksr = flop_ctrlSets[ctrlIdx];
+
+                    if (fCksr == cksr)
+                    {
+                        flat_node2precluster_map[nPIdx + flat_node2prclstrCount[instId]] = ffs[fIdx].first;
+                        ++flat_node2prclstrCount[instId];
+                        break;
+                    }
                 }
             }
 
@@ -1740,8 +1831,11 @@ int runDLIteration(const T* pos_x,
                    const int* node2pincount,
                    const int* net2pincount,
                    const int* pin2net_map,
+                   const int* snkpin2tnet_map,
                    const int* pin_typeIds,
+                   const int* net2tnet_start,
                    const int* flat_net2pin_start_map,
+                   const int* flat_tnet2pin_map,
                    const int* pin2node_map,
                    const int* sorted_node_map,
                    const int* sorted_net_map,
@@ -1751,6 +1845,7 @@ int runDLIteration(const T* pos_x,
                    const int* site_nbrRanges,
                    const int* site_nbrRanges_idx,
                    const T* net_weights,
+                   const T* tnet_weights,
                    const int* addr2site_map,
                    const int* node_names,
                    const int num_clb_sites,
@@ -1765,6 +1860,8 @@ int runDLIteration(const T* pos_x,
                    const T xWirelenWt,
                    const T yWirelenWt,
                    const T wirelenImprovWt,
+                   const T timing_alpha,
+                   const T timing_beta,
                    const T extNetCountWt,
                    const int CKSR_IN_CLB,
                    const int CE_IN_CLB,
@@ -2219,8 +2316,7 @@ int runDLIteration(const T* pos_x,
                                 !check_sig_in_site_next_pq_sig(nwCand.sig, nwCand.sigIdx, sPQ, PQ_IDX, site_next_pq_validIdx, site_next_pq_sig, site_next_pq_sig_idx, SIG_IDX) && 
                                 add_inst_to_cand_impl(lut_type, flat_node2pin_start_map, flat_node2pin_map, node2pincount, net2pincount, pin2net_map, pin_typeIds, sorted_net_map, flat_node2prclstrCount, flat_node2precluster_map, flop2ctrlSetId_map, node2fence_region_map, flop_ctrlSets, instId, CKSR_IN_CLB, CE_IN_CLB, HALF_SLICE_CAPACITY, NUM_BLE_PER_SLICE, nwCand.impl_lut, nwCand.impl_ff, nwCand.impl_cksr, nwCand.impl_ce))
                         {
-                            compute_candidate_score(pos_x, pos_y, pin_offset_x, pin_offset_y, net_bbox, net_weights, net_pinIdArrayX, net_pinIdArrayY, flat_net2pin_start_map, flat_node2pin_start_map, flat_node2pin_map, sorted_net_map, pin2net_map, pin2node_map, net2pincount, site_xy, node_names, xWirelenWt, yWirelenWt, extNetCountWt, wirelenImprovWt, netShareScoreMaxNetDegree, wlScoreMaxNetDegree, nwCand.sig, nwCand.siteId, nwCand.sigIdx, nwCand.score);
-
+                            compute_candidate_score(pos_x, pos_y, pin_offset_x, pin_offset_y, net_bbox, net_weights, tnet_weights, net_pinIdArrayX, net_pinIdArrayY, net2tnet_start, flat_net2pin_start_map, flat_tnet2pin_map, flat_node2pin_start_map, flat_node2pin_map, sorted_net_map, pin2net_map, snkpin2tnet_map, pin2node_map, net2pincount, site_xy, node_names, xWirelenWt, yWirelenWt, extNetCountWt, wirelenImprovWt, timing_alpha, timing_beta, netShareScoreMaxNetDegree, wlScoreMaxNetDegree, nwCand.sig, nwCand.siteId, nwCand.sigIdx, nwCand.score);
                             int nxtId(INVALID);
                             //find least score and replace if current score is greater
                             if (site_next_pq_idx[sIdx] < PQ_IDX)
@@ -2761,6 +2857,7 @@ int ripUp_Greedy_LG(
         const T* pin_offset_x,
         const T* pin_offset_y,
         const T* net_weights,
+        const T* tnet_weights,
         const T* net_bbox,
         const T* inst_areas,
         const T* wlPrecond,
@@ -2774,13 +2871,16 @@ int ripUp_Greedy_LG(
         const int* node2pincount,
         const int* net2pincount,
         const int* pin2net_map,
+        const int* snkpin2tnet_map,
         const int* pin2node_map,
         const int* pin_typeIds,
         const int* flop2ctrlSetId_map,
         const int* flop_ctrlSets,
         const int* flat_node2pin_start_map,
         const int* flat_node2pin_map,
+        const int* net2tnet_start,
         const int* flat_net2pin_start_map,
+        const int* flat_tnet2pin_map,
         int* flat_node2prclstrCount,
         int* flat_node2precluster_map,
         const int* sorted_node_map,
@@ -2794,6 +2894,8 @@ int ripUp_Greedy_LG(
         const T yWirelenWt,
         const T extNetCountWt,
         const T wirelenImprovWt,
+        const T timing_alpha,
+        const T timing_beta,
         const int num_nodes,
         const int num_sites_x,
         const int num_sites_y,
@@ -2898,7 +3000,7 @@ int ripUp_Greedy_LG(
                             }
                             //DBG
 
-                            compute_candidate_score(pos_x, pos_y, pin_offset_x, pin_offset_y, net_bbox, net_weights, net_pinIdArrayX, net_pinIdArrayY, flat_net2pin_start_map, flat_node2pin_start_map, flat_node2pin_map, sorted_net_map, pin2net_map, pin2node_map, net2pincount, site_xy, node_names, xWirelenWt, yWirelenWt, extNetCountWt, wirelenImprovWt, netShareScoreMaxNetDegree, wlScoreMaxNetDegree, rpCand.cand.sig, rpCand.cand.siteId, rpCand.cand.sigIdx, rpCand.cand.score);
+                            compute_candidate_score(pos_x, pos_y, pin_offset_x, pin_offset_y, net_bbox, net_weights, tnet_weights, net_pinIdArrayX, net_pinIdArrayY, net2tnet_start, flat_net2pin_start_map, flat_tnet2pin_map, flat_node2pin_start_map, flat_node2pin_map, sorted_net_map, pin2net_map, snkpin2tnet_map, pin2node_map, net2pincount, site_xy, node_names, xWirelenWt, yWirelenWt, extNetCountWt, wirelenImprovWt, timing_alpha, timing_beta, netShareScoreMaxNetDegree, wlScoreMaxNetDegree, rpCand.cand.sig, rpCand.cand.siteId, rpCand.cand.sigIdx, rpCand.cand.score);
 
                             rpCand.score = rpCand.cand.score - site_det_score[sIdx];
 
@@ -3071,7 +3173,7 @@ int ripUp_Greedy_LG(
                     std::cout << "ERROR: Could not add " << instId << " (inst_" << node_names[instId] << ") of type " << node2fence_region_map[instId] << " to site: " << stId << std::endl;
                 }
 
-                compute_candidate_score(pos_x, pos_y, pin_offset_x, pin_offset_y, net_bbox, net_weights, net_pinIdArrayX, net_pinIdArrayY, flat_net2pin_start_map, flat_node2pin_start_map, flat_node2pin_map, sorted_net_map, pin2net_map, pin2node_map, net2pincount, site_xy, node_names, xWirelenWt, yWirelenWt, extNetCountWt, wirelenImprovWt, netShareScoreMaxNetDegree, wlScoreMaxNetDegree, tCand.sig, stId, tCand.sigIdx, site_det_score[stAdId]);
+                compute_candidate_score(pos_x, pos_y, pin_offset_x, pin_offset_y, net_bbox, net_weights, tnet_weights, net_pinIdArrayX, net_pinIdArrayY, net2tnet_start, flat_net2pin_start_map, flat_tnet2pin_map, flat_node2pin_start_map, flat_node2pin_map, sorted_net_map, pin2net_map, snkpin2tnet_map, pin2node_map, net2pincount, site_xy, node_names, xWirelenWt, yWirelenWt, extNetCountWt, wirelenImprovWt, timing_alpha, timing_beta, netShareScoreMaxNetDegree, wlScoreMaxNetDegree, tCand.sig, stId, tCand.sigIdx, site_det_score[stAdId]);
 
                 for (int idx = 0; idx < flat_node2prclstrCount[instId]; ++idx)
                 {
@@ -3182,7 +3284,7 @@ int ripUp_Greedy_LG(
                                 int nwR = DREAMPLACE_STD_NAMESPACE::min(maxRad, r);
                                 end = nwR ? 2 * (nwR + 1) * nwR + 1 : 1;
                             }
-                            compute_candidate_score(pos_x, pos_y, pin_offset_x, pin_offset_y, net_bbox, net_weights, net_pinIdArrayX, net_pinIdArrayY, flat_net2pin_start_map, flat_node2pin_start_map, flat_node2pin_map, sorted_net_map, pin2net_map, pin2node_map, net2pincount, site_xy, node_names, xWirelenWt, yWirelenWt, extNetCountWt, wirelenImprovWt, netShareScoreMaxNetDegree, wlScoreMaxNetDegree, cand.sig, cand.siteId, cand.sigIdx, cand.score);
+                            compute_candidate_score(pos_x, pos_y, pin_offset_x, pin_offset_y, net_bbox, net_weights, tnet_weights, net_pinIdArrayX, net_pinIdArrayY, net2tnet_start, flat_net2pin_start_map, flat_tnet2pin_map, flat_node2pin_start_map, flat_node2pin_map, sorted_net_map, pin2net_map, snkpin2tnet_map, pin2node_map, net2pincount, site_xy, node_names, xWirelenWt, yWirelenWt, extNetCountWt, wirelenImprovWt, timing_alpha, timing_beta, netShareScoreMaxNetDegree, wlScoreMaxNetDegree, cand.sig, cand.siteId, cand.sigIdx, cand.score);
 
                             T scoreImprov = cand.score - site_det_score[siteMapAIdx];
                             if (scoreImprov > bestScoreImprov)
@@ -3403,7 +3505,7 @@ int ripUp_Greedy_LG(
                         end = nwR ? 2 * (nwR + 1) * nwR + 1 : 1;
                     }
                     //cand_score = computeCandidateScore(cand);
-                    compute_candidate_score(pos_x, pos_y, pin_offset_x, pin_offset_y, net_bbox, net_weights, net_pinIdArrayX, net_pinIdArrayY, flat_net2pin_start_map, flat_node2pin_start_map, flat_node2pin_map, sorted_net_map, pin2net_map, pin2node_map, net2pincount, site_xy, node_names, xWirelenWt, yWirelenWt, extNetCountWt, wirelenImprovWt, netShareScoreMaxNetDegree, wlScoreMaxNetDegree, cand.sig, cand.siteId, cand.sigIdx, cand.score);
+                    compute_candidate_score(pos_x, pos_y, pin_offset_x, pin_offset_y, net_bbox, net_weights, tnet_weights, net_pinIdArrayX, net_pinIdArrayY, net2tnet_start, flat_net2pin_start_map, flat_tnet2pin_map, flat_node2pin_start_map, flat_node2pin_map, sorted_net_map, pin2net_map, snkpin2tnet_map, pin2node_map, net2pincount, site_xy, node_names, xWirelenWt, yWirelenWt, extNetCountWt, wirelenImprovWt, timing_alpha, timing_beta, netShareScoreMaxNetDegree, wlScoreMaxNetDegree, cand.sig, cand.siteId, cand.sigIdx, cand.score);
 
                     T scoreImprov = cand.score - site_det_score[siteMapAIdx];
                     if (scoreImprov > bestScoreImprov)
@@ -3481,6 +3583,7 @@ int ripUp_LG(
         const T* pin_offset_x,
         const T* pin_offset_y,
         const T* net_weights,
+        const T* tnet_weights,
         const T* net_bbox,
         const T* inst_areas,
         const T* wlPrecond,
@@ -3494,13 +3597,16 @@ int ripUp_LG(
         const int* node2pincount,
         const int* net2pincount,
         const int* pin2net_map,
+        const int* snkpin2tnet_map,
         const int* pin2node_map,
         const int* pin_typeIds,
         const int* flop2ctrlSetId_map,
         const int* flop_ctrlSets,
         const int* flat_node2pin_start_map,
         const int* flat_node2pin_map,
+        const int* net2tnet_start,
         const int* flat_net2pin_start_map,
+        const int* flat_tnet2pin_map,
         int* flat_node2prclstrCount,
         int* flat_node2precluster_map,
         const int* sorted_node_map,
@@ -3513,6 +3619,8 @@ int ripUp_LG(
         const T yWirelenWt,
         const T extNetCountWt,
         const T wirelenImprovWt,
+        const T timing_alpha,
+        const T timing_beta,
         const int num_nodes,
         const int num_sites_x,
         const int num_sites_y,
@@ -3615,7 +3723,7 @@ int ripUp_LG(
                             }
                             //DBG
 
-                            compute_candidate_score(pos_x, pos_y, pin_offset_x, pin_offset_y, net_bbox, net_weights, net_pinIdArrayX, net_pinIdArrayY, flat_net2pin_start_map, flat_node2pin_start_map, flat_node2pin_map, sorted_net_map, pin2net_map, pin2node_map, net2pincount, site_xy, node_names, xWirelenWt, yWirelenWt, extNetCountWt, wirelenImprovWt, netShareScoreMaxNetDegree, wlScoreMaxNetDegree, rpCand.cand.sig, rpCand.cand.siteId, rpCand.cand.sigIdx, rpCand.cand.score);
+                            compute_candidate_score(pos_x, pos_y, pin_offset_x, pin_offset_y, net_bbox, net_weights, tnet_weights, net_pinIdArrayX, net_pinIdArrayY, net2tnet_start, flat_net2pin_start_map, flat_tnet2pin_map, flat_node2pin_start_map, flat_node2pin_map, sorted_net_map, pin2net_map, snkpin2tnet_map, pin2node_map, net2pincount, site_xy, node_names, xWirelenWt, yWirelenWt, extNetCountWt, wirelenImprovWt, timing_alpha, timing_beta, netShareScoreMaxNetDegree, wlScoreMaxNetDegree, rpCand.cand.sig, rpCand.cand.siteId, rpCand.cand.sigIdx, rpCand.cand.score);
 
                             rpCand.score = rpCand.cand.score - site_det_score[sIdx];
 
@@ -3816,7 +3924,7 @@ int ripUp_LG(
                     //exit(0);
                 }
 
-                compute_candidate_score(pos_x, pos_y, pin_offset_x, pin_offset_y, net_bbox, net_weights, net_pinIdArrayX, net_pinIdArrayY, flat_net2pin_start_map, flat_node2pin_start_map, flat_node2pin_map, sorted_net_map, pin2net_map, pin2node_map, net2pincount, site_xy, node_names, xWirelenWt, yWirelenWt, extNetCountWt, wirelenImprovWt, netShareScoreMaxNetDegree, wlScoreMaxNetDegree, tCand.sig, stId, tCand.sigIdx, site_det_score[stAdId]);
+                compute_candidate_score(pos_x, pos_y, pin_offset_x, pin_offset_y, net_bbox, net_weights, tnet_weights, net_pinIdArrayX, net_pinIdArrayY, net2tnet_start, flat_net2pin_start_map, flat_tnet2pin_map, flat_node2pin_start_map, flat_node2pin_map, sorted_net_map, pin2net_map, snkpin2tnet_map, pin2node_map, net2pincount, site_xy, node_names, xWirelenWt, yWirelenWt, extNetCountWt, wirelenImprovWt, timing_alpha, timing_beta, netShareScoreMaxNetDegree, wlScoreMaxNetDegree, tCand.sig, stId, tCand.sigIdx, site_det_score[stAdId]);
 
                 for (int idx = 0; idx < flat_node2prclstrCount[instId]; ++idx)
                 {
@@ -3924,7 +4032,7 @@ int ripUp_LG(
                                 int nwR = DREAMPLACE_STD_NAMESPACE::min(maxRad, r);
                                 end = nwR ? 2 * (nwR + 1) * nwR + 1 : 1;
                             }
-                            compute_candidate_score(pos_x, pos_y, pin_offset_x, pin_offset_y, net_bbox, net_weights, net_pinIdArrayX, net_pinIdArrayY, flat_net2pin_start_map, flat_node2pin_start_map, flat_node2pin_map, sorted_net_map, pin2net_map, pin2node_map, net2pincount, site_xy, node_names, xWirelenWt, yWirelenWt, extNetCountWt, wirelenImprovWt, netShareScoreMaxNetDegree, wlScoreMaxNetDegree, cand.sig, cand.siteId, cand.sigIdx, cand.score);
+                            compute_candidate_score(pos_x, pos_y, pin_offset_x, pin_offset_y, net_bbox, net_weights, tnet_weights, net_pinIdArrayX, net_pinIdArrayY, net2tnet_start, flat_net2pin_start_map, flat_tnet2pin_map, flat_node2pin_start_map, flat_node2pin_map, sorted_net_map, pin2net_map, snkpin2tnet_map, pin2node_map, net2pincount, site_xy, node_names, xWirelenWt, yWirelenWt, extNetCountWt, wirelenImprovWt, timing_alpha, timing_beta, netShareScoreMaxNetDegree, wlScoreMaxNetDegree, cand.sig, cand.siteId, cand.sigIdx, cand.score);
 
                             T scoreImprov = cand.score - site_det_score[siteMapAIdx];
                             if (scoreImprov > bestScoreImprov)
@@ -4079,6 +4187,7 @@ int greedy_LG(
               const T* pin_offset_x,
               const T* pin_offset_y,
               const T* net_weights,
+              const T* tnet_weights,
               const T* net_bbox,
               const T* wlPrecond,
               const T* site_xy,
@@ -4091,11 +4200,14 @@ int greedy_LG(
               const int* node2pincount,
               const int* net2pincount,
               const int* pin2net_map,
+              const int* snkpin2tnet_map,
               const int* pin2node_map,
               const int* pin_typeIds,
               const int* flop2ctrlSetId_map,
               const int* flop_ctrlSets,
+              const int* net2tnet_start,
               const int* flat_net2pin_start_map,
+              const int* flat_tnet2pin_map,
               const int* flat_node2pin_start_map,
               const int* flat_node2pin_map,
               int* flat_node2prclstrCount,
@@ -4109,6 +4221,8 @@ int greedy_LG(
               const T yWirelenWt,
               const T extNetCountWt,
               const T wirelenImprovWt,
+              const T timing_alpha,
+              const T timing_beta,
               const int num_remInsts,
               const int num_sites_x,
               const int num_sites_y,
@@ -4240,7 +4354,7 @@ int greedy_LG(
                     end = nwR ? 2 * (nwR + 1) * nwR + 1 : 1;
                 }
                 //cand_score = computeCandidateScore(cand);
-                compute_candidate_score(pos_x, pos_y, pin_offset_x, pin_offset_y, net_bbox, net_weights, net_pinIdArrayX, net_pinIdArrayY, flat_net2pin_start_map, flat_node2pin_start_map, flat_node2pin_map, sorted_net_map, pin2net_map, pin2node_map, net2pincount, site_xy, node_names, xWirelenWt, yWirelenWt, extNetCountWt, wirelenImprovWt, netShareScoreMaxNetDegree, wlScoreMaxNetDegree, candSig, candSite, candSigSize, candScore);
+                compute_candidate_score(pos_x, pos_y, pin_offset_x, pin_offset_y, net_bbox, net_weights, tnet_weights, net_pinIdArrayX, net_pinIdArrayY, net2tnet_start, flat_net2pin_start_map, flat_tnet2pin_map, flat_node2pin_start_map, flat_node2pin_map, sorted_net_map, pin2net_map, snkpin2tnet_map, pin2node_map, net2pincount, site_xy, node_names, xWirelenWt, yWirelenWt, extNetCountWt, wirelenImprovWt, timing_alpha, timing_beta, netShareScoreMaxNetDegree, wlScoreMaxNetDegree, candSig, candSite, candSigSize, candScore);
 
                 T scoreImprov = candScore - site_det_score[siteMapAIdx];
                 if (scoreImprov > bestScoreImprov)
@@ -5030,6 +5144,8 @@ void initLegalize(
               at::Tensor site_xy,
               at::Tensor pin_offset_x,
               at::Tensor pin_offset_y,
+              at::Tensor tnet_weights,
+              at::Tensor snkpin2tnet_map,
               at::Tensor sorted_net_idx,
               at::Tensor sorted_node_map,
               at::Tensor sorted_node_idx,
@@ -5060,6 +5176,7 @@ void initLegalize(
               double nbrDistIncr,
               int numGroups,
               double preClusteringMaxDist,
+              bool enableTimingPreclustering,
               int WLscoreMaxNetDegree,
               int maxList,
               int spiralBegin,
@@ -5092,6 +5209,12 @@ void initLegalize(
     CHECK_CONTIGUOUS(pin_offset_x);
     CHECK_FLAT(pin_offset_y);
     CHECK_CONTIGUOUS(pin_offset_y);
+
+    CHECK_FLAT(tnet_weights);
+    CHECK_CONTIGUOUS(tnet_weights);
+
+    CHECK_FLAT(snkpin2tnet_map);
+    CHECK_CONTIGUOUS(snkpin2tnet_map);
 
     CHECK_FLAT(sorted_net_idx);
     CHECK_CONTIGUOUS(sorted_net_idx);
@@ -5158,6 +5281,8 @@ void initLegalize(
                     DREAMPLACE_TENSOR_DATA_PTR(pos, scalar_t), DREAMPLACE_TENSOR_DATA_PTR(pos, scalar_t) + numNodes,
                     DREAMPLACE_TENSOR_DATA_PTR(pin_offset_x, scalar_t),
                     DREAMPLACE_TENSOR_DATA_PTR(pin_offset_y, scalar_t),
+                    DREAMPLACE_TENSOR_DATA_PTR(tnet_weights, scalar_t),
+                    DREAMPLACE_TENSOR_DATA_PTR(snkpin2tnet_map, int),
                     DREAMPLACE_TENSOR_DATA_PTR(sorted_node_map, int),
                     DREAMPLACE_TENSOR_DATA_PTR(sorted_node_idx, int),
                     DREAMPLACE_TENSOR_DATA_PTR(flat_net2pin_start_map, int),
@@ -5170,7 +5295,7 @@ void initLegalize(
                     DREAMPLACE_TENSOR_DATA_PTR(pin2node_map, int),
                     DREAMPLACE_TENSOR_DATA_PTR(pin_typeIds, int),
                     DREAMPLACE_TENSOR_DATA_PTR(node_names, int),
-                    num_nodes, preClusteringMaxDist,
+                    num_nodes, preClusteringMaxDist, enableTimingPreclustering,
                     DREAMPLACE_TENSOR_DATA_PTR(flat_node2precluster_map, int),
                     DREAMPLACE_TENSOR_DATA_PTR(flat_node2prclstrCount, int),
                     num_threads);
@@ -5226,8 +5351,11 @@ void runDLIter(at::Tensor pos,
                at::Tensor node2pincount,
                at::Tensor net2pincount,
                at::Tensor pin2net_map,
+               at::Tensor snkpin2tnet_map,
                at::Tensor pin_typeIds,
+               at::Tensor net2tnet_start,
                at::Tensor flat_net2pin_start_map,
+               at::Tensor flat_tnet2pin_map,
                at::Tensor pin2node_map,
                at::Tensor flat_node2prclstrCount,
                at::Tensor flat_node2precluster_map,
@@ -5237,6 +5365,7 @@ void runDLIter(at::Tensor pos,
                at::Tensor sorted_node_map,
                at::Tensor sorted_net_map,
                at::Tensor net_weights,
+               at::Tensor tnet_weights,
                at::Tensor addr2site_map,
                at::Tensor node_names,
                int num_sites_x,
@@ -5253,6 +5382,8 @@ void runDLIter(at::Tensor pos,
                double xWirelenWt,
                double yWirelenWt,
                double wirelenImprovWt,
+               double timing_alpha,
+               double timing_beta,
                double extNetCountWt,
                int CKSR_IN_CLB,
                int CE_IN_CLB,
@@ -5370,17 +5501,28 @@ void runDLIter(at::Tensor pos,
 
     CHECK_FLAT(pin2net_map);
     CHECK_CONTIGUOUS(pin2net_map);
+    CHECK_FLAT(snkpin2tnet_map);
+    CHECK_CONTIGUOUS(snkpin2tnet_map);
     CHECK_FLAT(pin_typeIds);
     CHECK_CONTIGUOUS(pin_typeIds);
 
+    CHECK_FLAT(net2tnet_start);
+    CHECK_CONTIGUOUS(net2tnet_start);
+
     CHECK_FLAT(flat_net2pin_start_map);
     CHECK_CONTIGUOUS(flat_net2pin_start_map);
+
+    CHECK_FLAT(flat_tnet2pin_map);
+    CHECK_CONTIGUOUS(flat_tnet2pin_map);
 
     CHECK_FLAT(pin2node_map);
     CHECK_CONTIGUOUS(pin2node_map);
 
     CHECK_FLAT(net_weights);
     CHECK_CONTIGUOUS(net_weights);
+
+    CHECK_FLAT(tnet_weights);
+    CHECK_CONTIGUOUS(tnet_weights);
 
     CHECK_FLAT(node_names);
     CHECK_CONTIGUOUS(node_names);
@@ -5406,8 +5548,11 @@ void runDLIter(at::Tensor pos,
                     DREAMPLACE_TENSOR_DATA_PTR(node2pincount, int),
                     DREAMPLACE_TENSOR_DATA_PTR(net2pincount, int),
                     DREAMPLACE_TENSOR_DATA_PTR(pin2net_map, int),
+                    DREAMPLACE_TENSOR_DATA_PTR(snkpin2tnet_map, int),
                     DREAMPLACE_TENSOR_DATA_PTR(pin_typeIds, int),
+                    DREAMPLACE_TENSOR_DATA_PTR(net2tnet_start, int),
                     DREAMPLACE_TENSOR_DATA_PTR(flat_net2pin_start_map, int),
+                    DREAMPLACE_TENSOR_DATA_PTR(flat_tnet2pin_map, int),
                     DREAMPLACE_TENSOR_DATA_PTR(pin2node_map, int),
                     DREAMPLACE_TENSOR_DATA_PTR(sorted_node_map, int),
                     DREAMPLACE_TENSOR_DATA_PTR(sorted_net_map, int),
@@ -5417,12 +5562,13 @@ void runDLIter(at::Tensor pos,
                     DREAMPLACE_TENSOR_DATA_PTR(site_nbrRanges, int),
                     DREAMPLACE_TENSOR_DATA_PTR(site_nbrRanges_idx, int),
                     DREAMPLACE_TENSOR_DATA_PTR(net_weights, scalar_t),
+                    DREAMPLACE_TENSOR_DATA_PTR(tnet_weights, scalar_t),
                     DREAMPLACE_TENSOR_DATA_PTR(addr2site_map, int),
                     DREAMPLACE_TENSOR_DATA_PTR(node_names, int),
                     num_clb_sites, minStableIter, maxList,
                     HALF_SLICE_CAPACITY, NUM_BLE_PER_SLICE, minNeighbors, numGroups, 
                     netShareScoreMaxNetDegree, wlScoreMaxNetDegree,
-                    xWirelenWt, yWirelenWt, wirelenImprovWt, extNetCountWt, 
+                    xWirelenWt, yWirelenWt, wirelenImprovWt, timing_alpha, timing_beta, extNetCountWt, 
                     CKSR_IN_CLB, CE_IN_CLB, SCL_IDX, PQ_IDX, SIG_IDX, num_threads,
                     DREAMPLACE_TENSOR_DATA_PTR(site_nbr_idx, int),
                     DREAMPLACE_TENSOR_DATA_PTR(site_nbr, int),
@@ -5559,6 +5705,7 @@ void ripUp_SlotAssign(at::Tensor pos,
                    at::Tensor pin_offset_x,
                    at::Tensor pin_offset_y,
                    at::Tensor net_weights,
+                   at::Tensor tnet_weights,
                    at::Tensor net_bbox,
                    at::Tensor inst_areas,
                    at::Tensor wlPrecond,
@@ -5572,13 +5719,16 @@ void ripUp_SlotAssign(at::Tensor pos,
                    at::Tensor node2pincount,
                    at::Tensor net2pincount,
                    at::Tensor pin2net_map,
+                   at::Tensor snkpin2tnet_map,
                    at::Tensor pin2node_map,
                    at::Tensor pin_typeIds,
                    at::Tensor flop2ctrlSetId_map,
                    at::Tensor flop_ctrlSets,
                    at::Tensor flat_node2pin_start_map,
                    at::Tensor flat_node2pin_map,
+                   at::Tensor net2tnet_start,
                    at::Tensor flat_net2pin_start_map,
+                   at::Tensor flat_tnet2pin_map,
                    at::Tensor flat_node2prclstrCount,
                    at::Tensor flat_node2precluster_map,
                    at::Tensor sorted_node_map,
@@ -5594,6 +5744,8 @@ void ripUp_SlotAssign(at::Tensor pos,
                    double yWirelenWt,
                    double extNetCountWt,
                    double wirelenImprovWt,
+                   double timing_alpha,
+                   double timing_beta,
                    double slotAssignFlowWeightScale,
                    double slotAssignFlowWeightIncr,
                    int NUM_BLE_PER_HALF_SLICE,
@@ -5639,6 +5791,9 @@ void ripUp_SlotAssign(at::Tensor pos,
     CHECK_FLAT(net_weights);
     CHECK_CONTIGUOUS(net_weights);
 
+    CHECK_FLAT(tnet_weights);
+    CHECK_CONTIGUOUS(tnet_weights);
+
     CHECK_FLAT(net_bbox);
     CHECK_CONTIGUOUS(net_bbox);
 
@@ -5677,6 +5832,9 @@ void ripUp_SlotAssign(at::Tensor pos,
     CHECK_FLAT(pin2net_map);
     CHECK_CONTIGUOUS(pin2net_map);
 
+    CHECK_FLAT(snkpin2tnet_map);
+    CHECK_CONTIGUOUS(snkpin2tnet_map);
+
     CHECK_FLAT(pin2node_map);
     CHECK_CONTIGUOUS(pin2node_map);
 
@@ -5693,8 +5851,13 @@ void ripUp_SlotAssign(at::Tensor pos,
     CHECK_FLAT(flat_node2pin_map);
     CHECK_CONTIGUOUS(flat_node2pin_map);
 
+    CHECK_FLAT(net2tnet_start);
+    CHECK_CONTIGUOUS(net2tnet_start);
     CHECK_FLAT(flat_net2pin_start_map);
     CHECK_CONTIGUOUS(flat_net2pin_start_map);
+    CHECK_FLAT(flat_tnet2pin_map);
+    CHECK_CONTIGUOUS(flat_tnet2pin_map);
+
     CHECK_FLAT(flat_net2pin_map);
     CHECK_CONTIGUOUS(flat_net2pin_map);
 
@@ -5720,6 +5883,7 @@ void ripUp_SlotAssign(at::Tensor pos,
                     DREAMPLACE_TENSOR_DATA_PTR(pin_offset_x, scalar_t),
                     DREAMPLACE_TENSOR_DATA_PTR(pin_offset_y, scalar_t),
                     DREAMPLACE_TENSOR_DATA_PTR(net_weights, scalar_t),
+                    DREAMPLACE_TENSOR_DATA_PTR(tnet_weights, scalar_t),
                     DREAMPLACE_TENSOR_DATA_PTR(net_bbox, scalar_t),
                     DREAMPLACE_TENSOR_DATA_PTR(inst_areas, scalar_t),
                     DREAMPLACE_TENSOR_DATA_PTR(wlPrecond, scalar_t),
@@ -5733,13 +5897,16 @@ void ripUp_SlotAssign(at::Tensor pos,
                     DREAMPLACE_TENSOR_DATA_PTR(node2pincount, int),
                     DREAMPLACE_TENSOR_DATA_PTR(net2pincount, int),
                     DREAMPLACE_TENSOR_DATA_PTR(pin2net_map, int),
+                    DREAMPLACE_TENSOR_DATA_PTR(snkpin2tnet_map, int),
                     DREAMPLACE_TENSOR_DATA_PTR(pin2node_map, int),
                     DREAMPLACE_TENSOR_DATA_PTR(pin_typeIds, int),
                     DREAMPLACE_TENSOR_DATA_PTR(flop2ctrlSetId_map, int),
                     DREAMPLACE_TENSOR_DATA_PTR(flop_ctrlSets, int),
                     DREAMPLACE_TENSOR_DATA_PTR(flat_node2pin_start_map, int),
                     DREAMPLACE_TENSOR_DATA_PTR(flat_node2pin_map, int),
+                    DREAMPLACE_TENSOR_DATA_PTR(net2tnet_start, int),
                     DREAMPLACE_TENSOR_DATA_PTR(flat_net2pin_start_map, int),
+                    DREAMPLACE_TENSOR_DATA_PTR(flat_tnet2pin_map, int),
                     DREAMPLACE_TENSOR_DATA_PTR(flat_node2prclstrCount, int),
                     DREAMPLACE_TENSOR_DATA_PTR(flat_node2precluster_map, int),
                     DREAMPLACE_TENSOR_DATA_PTR(sorted_node_map, int),
@@ -5749,7 +5916,7 @@ void ripUp_SlotAssign(at::Tensor pos,
                     DREAMPLACE_TENSOR_DATA_PTR(site2addr_map, int),
                     DREAMPLACE_TENSOR_DATA_PTR(node_names, int),
                     nbrDistEnd, xWirelenWt, yWirelenWt, extNetCountWt,
-                    wirelenImprovWt, num_nodes, num_sites_x, num_sites_y, num_clb_sites,
+                    wirelenImprovWt, timing_alpha, timing_beta, num_nodes, num_sites_x, num_sites_y, num_clb_sites,
                     spiralBegin, spiralEnd, CKSR_IN_CLB, CE_IN_CLB, HALF_SLICE_CAPACITY, 
                     NUM_BLE_PER_SLICE, netShareScoreMaxNetDegree,
                     wlScoreMaxNetDegree, ripupExpansion, greedyExpansion, SIG_IDX,

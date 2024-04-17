@@ -15,6 +15,8 @@ int initNetsClstrCuda(const T *pos_x,
                       const T *pos_y,
                       const T *pin_offset_x,
                       const T *pin_offset_y,
+                      const T *tnet_weights,
+                      const int *snkpin2tnet_map,
                       const int *sorted_node_map,
                       const int *sorted_node_idx,
                       const int *sorted_net_idx,
@@ -29,6 +31,7 @@ int initNetsClstrCuda(const T *pos_x,
                       const int *pin_typeIds,
                       const int *net2pincount,
                       const T preClusteringMaxDist,
+                      const int enableTimingPreclustering,
                       const int num_nodes,
                       const int num_nets,
                       const int wlscoreMaxNetDegree,
@@ -60,8 +63,11 @@ int runDLIterCuda(const T* pos_x,
                   const int* node2pincount,
                   const int* net2pincount,
                   const int* pin2net_map,
+                  const int* snkpin2tnet_map,
                   const int* pin_typeIds,
+                  const int* net2tnet_start,
                   const int* flat_net2pin_start_map,
+                  const int* flat_tnet2pin_map,
                   const int* pin2node_map,
                   const int* sorted_net_map,
                   const int* sorted_node_map,
@@ -71,6 +77,7 @@ int runDLIterCuda(const T* pos_x,
                   const int* site_nbrRanges,
                   const int* site_nbrRanges_idx,
                   const T* net_weights,
+                  const T* tnet_weights,
                   const int* addr2site_map,
                   const int* site2addr_map,
                   const int num_sites_x,
@@ -92,6 +99,8 @@ int runDLIterCuda(const T* pos_x,
                   const T xWirelenWt,
                   const T yWirelenWt,
                   const T wirelenImprovWt,
+                  const T timing_alpha,
+                  const T timing_beta,
                   const T extNetCountWt,
                   const int CKSR_IN_CLB,
                   const int CE_IN_CLB,
@@ -175,6 +184,8 @@ void initLegalization(
               at::Tensor pos,
               at::Tensor pin_offset_x,
               at::Tensor pin_offset_y,
+              at::Tensor tnet_weights,
+              at::Tensor snkpin2tnet_map,
               at::Tensor sorted_net_idx,
               at::Tensor sorted_node_map,
               at::Tensor sorted_node_idx,
@@ -191,6 +202,7 @@ void initLegalization(
               int num_nets,
               int num_nodes,
               double preClusteringMaxDist,
+              int enableTimingPreclustering,
               int wlscoreMaxNetDegree,
               at::Tensor net_bbox,
               at::Tensor net_pinIdArrayX,
@@ -207,6 +219,11 @@ void initLegalization(
     CHECK_CONTIGUOUS(pin_offset_x);
     CHECK_FLAT(pin_offset_y);
     CHECK_CONTIGUOUS(pin_offset_y);
+
+    CHECK_FLAT(tnet_weights);
+    CHECK_CONTIGUOUS(tnet_weights);
+    CHECK_FLAT(snkpin2tnet_map);
+    CHECK_CONTIGUOUS(snkpin2tnet_map);
 
     CHECK_FLAT(sorted_net_idx);
     CHECK_CONTIGUOUS(sorted_net_idx);
@@ -249,6 +266,8 @@ void initLegalization(
             DREAMPLACE_TENSOR_DATA_PTR(pos, scalar_t), DREAMPLACE_TENSOR_DATA_PTR(pos, scalar_t) + numNodes,
             DREAMPLACE_TENSOR_DATA_PTR(pin_offset_x, scalar_t),
             DREAMPLACE_TENSOR_DATA_PTR(pin_offset_y, scalar_t),
+            DREAMPLACE_TENSOR_DATA_PTR(tnet_weights, scalar_t),
+            DREAMPLACE_TENSOR_DATA_PTR(snkpin2tnet_map, int),
             DREAMPLACE_TENSOR_DATA_PTR(sorted_node_map, int),
             DREAMPLACE_TENSOR_DATA_PTR(sorted_node_idx, int),
             DREAMPLACE_TENSOR_DATA_PTR(sorted_net_idx, int),
@@ -262,7 +281,7 @@ void initLegalization(
             DREAMPLACE_TENSOR_DATA_PTR(pin2node_map, int),
             DREAMPLACE_TENSOR_DATA_PTR(pin_typeIds, int),
             DREAMPLACE_TENSOR_DATA_PTR(net2pincount, int),
-            preClusteringMaxDist, num_nodes, num_nets,
+            preClusteringMaxDist, enableTimingPreclustering, num_nodes, num_nets,
             wlscoreMaxNetDegree,
             DREAMPLACE_TENSOR_DATA_PTR(net_bbox, scalar_t),
             DREAMPLACE_TENSOR_DATA_PTR(net_pinIdArrayX, int),
@@ -270,6 +289,8 @@ void initLegalization(
             DREAMPLACE_TENSOR_DATA_PTR(flat_node2precluster_map, int),
             DREAMPLACE_TENSOR_DATA_PTR(flat_node2prclstrCount, int));
     });
+
+    // std::cout << "enableTimingPreclustering " << enableTimingPreclustering << std::endl;
 
 }
 
@@ -293,8 +314,11 @@ void runDLIter(at::Tensor pos,
                at::Tensor node2pincount,
                at::Tensor net2pincount,
                at::Tensor pin2net_map,
+               at::Tensor snkpin2tnet_map,
                at::Tensor pin_typeIds,
+               at::Tensor net2tnet_start,
                at::Tensor flat_net2pin_start_map,
+               at::Tensor flat_tnet2pin_map,
                at::Tensor pin2node_map,
                at::Tensor sorted_net_map,
                at::Tensor sorted_node_map,
@@ -304,6 +328,7 @@ void runDLIter(at::Tensor pos,
                at::Tensor site_nbrRanges,
                at::Tensor site_nbrRanges_idx,
                at::Tensor net_weights,
+               at::Tensor tnet_weights,
                at::Tensor addr2site_map,
                at::Tensor site2addr_map,
                int num_sites_x,
@@ -325,6 +350,8 @@ void runDLIter(at::Tensor pos,
                double xWirelenWt,
                double yWirelenWt,
                double wirelenImprovWt,
+               double timing_alpha,
+               double timing_beta,
                double extNetCountWt,
                int CKSR_IN_CLB,
                int CE_IN_CLB,
@@ -450,11 +477,17 @@ void runDLIter(at::Tensor pos,
 
     CHECK_FLAT(pin2net_map);
     CHECK_CONTIGUOUS(pin2net_map);
+    CHECK_FLAT(snkpin2tnet_map);
+    CHECK_CONTIGUOUS(snkpin2tnet_map);
     CHECK_FLAT(pin_typeIds);
     CHECK_CONTIGUOUS(pin_typeIds);
 
+    CHECK_FLAT(net2tnet_start);
+    CHECK_CONTIGUOUS(net2tnet_start);
     CHECK_FLAT(flat_net2pin_start_map);
     CHECK_CONTIGUOUS(flat_net2pin_start_map);
+    CHECK_FLAT(flat_tnet2pin_map);
+    CHECK_CONTIGUOUS(flat_tnet2pin_map);
 
     CHECK_FLAT(pin2node_map);
     CHECK_CONTIGUOUS(pin2node_map);
@@ -478,6 +511,9 @@ void runDLIter(at::Tensor pos,
 
     CHECK_FLAT(net_weights);
     CHECK_CONTIGUOUS(net_weights);
+
+    CHECK_FLAT(tnet_weights);
+    CHECK_CONTIGUOUS(tnet_weights);
 
     CHECK_FLAT(addr2site_map);
     CHECK_CONTIGUOUS(addr2site_map);
@@ -508,8 +544,11 @@ void runDLIter(at::Tensor pos,
                     DREAMPLACE_TENSOR_DATA_PTR(node2pincount, int),
                     DREAMPLACE_TENSOR_DATA_PTR(net2pincount, int),
                     DREAMPLACE_TENSOR_DATA_PTR(pin2net_map, int),
+                    DREAMPLACE_TENSOR_DATA_PTR(snkpin2tnet_map, int),
                     DREAMPLACE_TENSOR_DATA_PTR(pin_typeIds, int),
+                    DREAMPLACE_TENSOR_DATA_PTR(net2tnet_start, int),
                     DREAMPLACE_TENSOR_DATA_PTR(flat_net2pin_start_map, int),
+                    DREAMPLACE_TENSOR_DATA_PTR(flat_tnet2pin_map, int),
                     DREAMPLACE_TENSOR_DATA_PTR(pin2node_map, int),
                     DREAMPLACE_TENSOR_DATA_PTR(sorted_net_map, int),
                     DREAMPLACE_TENSOR_DATA_PTR(sorted_node_map, int),
@@ -519,6 +558,7 @@ void runDLIter(at::Tensor pos,
                     DREAMPLACE_TENSOR_DATA_PTR(site_nbrRanges, int),
                     DREAMPLACE_TENSOR_DATA_PTR(site_nbrRanges_idx, int),
                     DREAMPLACE_TENSOR_DATA_PTR(net_weights, scalar_t),
+                    DREAMPLACE_TENSOR_DATA_PTR(tnet_weights, scalar_t),
                     DREAMPLACE_TENSOR_DATA_PTR(addr2site_map, int),
                     DREAMPLACE_TENSOR_DATA_PTR(site2addr_map, int),
                     num_sites_x, num_sites_y, 
@@ -526,7 +566,7 @@ void runDLIter(at::Tensor pos,
                     HALF_SLICE_CAPACITY, NUM_BLE_PER_SLICE, minNeighbors, 
                     spiralBegin, spiralEnd, intMinVal,
                     numGroups, netShareScoreMaxNetDegree, wlscoreMaxNetDegree,
-                    maxDist, xWirelenWt, yWirelenWt, wirelenImprovWt, extNetCountWt, 
+                    maxDist, xWirelenWt, yWirelenWt, wirelenImprovWt, timing_alpha, timing_beta, extNetCountWt, 
                     CKSR_IN_CLB, CE_IN_CLB, SCL_IDX, SIG_IDX,
                     DREAMPLACE_TENSOR_DATA_PTR(site_nbr_idx, int),
                     DREAMPLACE_TENSOR_DATA_PTR(site_nbr, int),

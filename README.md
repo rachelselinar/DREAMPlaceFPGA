@@ -258,7 +258,7 @@ Here are the available options for CMake.
 ## <a name="sample"></a>Sample Benchmarks
 
 ``DREAMPlaceFPGA`` requires IO instances to be fixed and only accepts inputs in [Bookshelf](./benchmarks/sample_ispd2016_benchmarks/README) format.
-- 4 sample benchmarks for *Xilinx Ultrascale Architecture* in bookshelf format with fixed IOs are provided. Refer to [ISPD'2016 contest](http://www.ispd.cc/contests/16/FAQ.html) for more information.
+- 5 sample benchmarks for *Xilinx Ultrascale Architecture* in bookshelf format with fixed IOs are provided. Refer to [ISPD'2016 contest](http://www.ispd.cc/contests/16/FAQ.html) for more information. FPGA01 with .edf and timing constraint is provided for newer versions of Vivado and timing-driven placement. Refer to [timing_README](./timing_README.md) for more details.
 - 10 GNL designs based on *Xilinx Ultrascale+ Architecture* are provided. These benchmarks need to be converted from Interchange Format (IF) to bookshelf format before running ``DREAMPlaceFPGA``. Refer to [IF_README](./IFsupport/README.md) for more details.
 
 The sample benchmarks and designs can be found in the [benchmarks](./benchmarks)  directory.

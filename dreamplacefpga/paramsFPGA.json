@@ -239,5 +239,53 @@
 "enable_if" : {
     "descripton" : "Enable IF Writer", 
     "default" : 0
+    },
+"timing_driven_flag" : {
+    "descripton" : "Enable timing driven placement", 
+    "default" : 0
+    },
+"timing_iteration_overflow" : {
+    "descripton" : "The overflow when to start timing iteration", 
+    "default" : 0.15
+    },
+"max_num_timing_iteration" : {
+    "descripton" : "The maximum number of timing iterations", 
+    "default" : 20
+    },
+"timing_interval" : {
+    "descripton" : "The interval of timing iteration", 
+    "default" : 5
+    },
+"criticality_exponent" : {
+    "descripton" : "The exponent of criticality", 
+    "default" : 9.0
+    },
+"beta_ratio" : {
+    "descripton" : "The maximum ratio of timing arc wirelength gradients to wirelength gradients",
+    "default" : 1.1
+    },
+"inflation_ratio" : {
+    "descripton" : "The inflation ratio for routability, only changed in timing driven mode",
+    "default" : 1.0
+    },
+"enableTimingPreclustering" : {
+    "descripton" : "Enable timing driven preclustering",
+    "default" : 0
+    },
+"lg_alpha" : {
+    "descripton" : "The alpha value for timing driven LG", 
+    "default" : 0.2
+    },
+"lg_beta" : {
+    "descripton" : "The beta value for timing driven LG", 
+    "default" : 0.1
+    },
+"write_tcl_flag" : {    
+    "descripton" : "write tcl file for Vivado 2022.1 flow",
+    "default" : 0
+    },
+"write_io_placement_flag" : {    
+    "descripton" : "write tcl file for IO placement in Vivado 2022.1 flow",
+    "default" : 0
     }
 }

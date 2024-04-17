@@ -23,6 +23,7 @@ if sys.version_info[0] < 3:
 else:
     import _pickle as pickle
 import dreamplacefpga.ops.weighted_average_wirelength.weighted_average_wirelength as weighted_average_wirelength
+import dreamplacefpga.ops.timing_net_wirelength.timing_net_wirelength as timing_net_wirelength
 #import dreamplacefpga.ops.logsumexp_wirelength.logsumexp_wirelength as logsumexp_wirelength
 import dreamplacefpga.ops.electric_potential.electric_potential as electric_potential
 import dreamplacefpga.ops.rudy.rudy as rudy
@@ -36,17 +37,20 @@ class PreconditionOpFPGA:
     """Preconditioning engine is critical for convergence.
     Need to be carefully designed.
     """
-    def __init__(self, placedb, data_collections):
+    def __init__(self, placedb, data_collections, op_collections):
         self.placedb = placedb
         self.data_collections = data_collections
+        self.op_collections = op_collections
         self.iteration = 0
+        self.timing_iteration = 0
+        self.precondTiming = torch.zeros(placedb.num_nodes, device=data_collections.pos[0].device, dtype=torch.float32)
         self.movablenode2fence_region_map_clamp = data_collections.node2fence_region_map[:placedb.num_movable_nodes].clamp(max=len(placedb.region_boxes)).long()
         self.filler2fence_region_map = torch.zeros(placedb.num_filler_nodes, device=data_collections.pos[0].device, dtype=torch.long)
         for i in range(len(placedb.region_boxes)):
             filler_beg, filler_end = placedb.filler_start_map[i:i+2]
             self.filler2fence_region_map[filler_beg:filler_end] = i
 
-    def __call__(self, grad, density_weight, precondWL, update_mask=None):
+    def __call__(self, grad, density_weight, precondWL, beta, num_timing_iteration, update_mask=None):
         """Introduce alpha parameter to avoid divergence.
         It is tricky for this parameter to increase.
         """
@@ -60,7 +64,16 @@ class PreconditionOpFPGA:
                 filler_beg, filler_end = self.placedb.filler_start_map[mk:mk+2]
                 node_areas[self.placedb.num_nodes-self.placedb.num_filler_nodes+filler_beg:self.placedb.num_nodes-self.placedb.num_filler_nodes+filler_end] *= density_weight[mk]
 
-            precond = precondWL + node_areas
+            if self.timing_iteration < num_timing_iteration:
+                precondTiming = self.op_collections.precond_timing_op(beta, self.data_collections.tnet_weights)
+                self.precondTiming = precondTiming
+            elif self.timing_iteration == num_timing_iteration:
+                precondTiming = self.precondTiming
+
+            #precond = precondWL + node_areas
+            precond = precondWL + node_areas + precondTiming
+            # logging.info("precondWL: %g, precondTiming: %g, node_areas: %g" %(precondWL.sum(), precondTiming.sum(), node_areas.sum()))
+
             #Use alpha to avoid divergence
             #precond = precondWL + self.alpha * node_areas
 
@@ -83,6 +96,7 @@ class PreconditionOpFPGA:
                     grad[1, self.placedb.num_nodes-self.placedb.num_filler_nodes:].masked_fill_(filler_mask, 0)
                     grad = grad.view(-1)
             self.iteration += 1
+            self.timing_iteration = num_timing_iteration
 
         return grad
 
@@ -157,6 +171,11 @@ class PlaceObjFPGA(nn.Module):
         self.op_collections.wirelength_op, self.op_collections.update_gamma_op = self.build_weighted_average_wl(
             params, placedb, self.data_collections, self.op_collections.pin_pos_op)
 
+        # build timing net op
+        self.op_collections.tnet_wirelength_op = self.build_tnet_wl(params, placedb, self.data_collections, self.op_collections.pin_pos_op)
+        self.beta = 0.0
+        self.num_timing_iteration = 0
+
         self.op_collections.density_op = self.build_electric_potential(
             params,
             placedb,
@@ -170,7 +189,7 @@ class PlaceObjFPGA(nn.Module):
 
         self.op_collections.update_density_weight_op = self.build_update_density_weight(params, placedb)
 
-        self.op_collections.precondition_op = self.build_precondition(params, placedb, self.data_collections)
+        self.op_collections.precondition_op = self.build_precondition(params, placedb, self.data_collections, self.op_collections)
 
         self.op_collections.noise_op = self.build_noise(params, placedb, self.data_collections)
 
@@ -208,6 +227,8 @@ class PlaceObjFPGA(nn.Module):
         """
         wirelength = self.op_collections.wirelength_op(pos)
 
+        tnet_wirelength = self.op_collections.tnet_wirelength_op(pos)
+
         density = self.op_collections.fence_region_density_merged_op(pos)
 
         if self.init_density is None:
@@ -221,8 +242,10 @@ class PlaceObjFPGA(nn.Module):
 
         density = density*(1+self.quad_penalty_coeff * density)
 
-        result = wirelength + self.density_weight_u.dot(density)
+        result = wirelength + self.density_weight_u.dot(density) + self.beta * tnet_wirelength
         #logging.info("result: %g" %(result))
+        # logging.info("WL cost: %g, density cost: %g, timing cost: %g " %(wirelength, self.density_weight_u.dot(density), self.beta * tnet_wirelength))
+
 
         return result
 
@@ -240,7 +263,7 @@ class PlaceObjFPGA(nn.Module):
         obj = self.obj_fn(pos)
         obj.backward()
 
-        self.op_collections.precondition_op(pos.grad, self.density_weight, self.precondWL, self.update_mask)
+        self.op_collections.precondition_op(pos.grad, self.density_weight, self.precondWL, self.beta, self.num_timing_iteration, self.update_mask)
 
         return obj, pos.grad
 
@@ -256,6 +279,7 @@ class PlaceObjFPGA(nn.Module):
         @param pos locations of cells
         """
         wirelength = self.op_collections.wirelength_op(pos)
+        tnet_wirelength = self.beta * self.op_collections.tnet_wirelength_op(pos)
 
         if pos.grad is not None:
             pos.grad.zero_()
@@ -267,8 +291,15 @@ class PlaceObjFPGA(nn.Module):
         density.backward()
         density_grad = pos.grad.clone()
 
+        pos.grad.zero_()
+        tnet_wirelength.backward()
+        tnet_wirelength_grad = pos.grad.clone()
+
         wirelength_grad_norm = wirelength_grad.norm(p=1)
         density_grad_norm = density_grad.norm(p=1)
+        tnet_wirelength_grad_norm = tnet_wirelength_grad.norm(p=1)
+
+        # logging.info("wirelength grad norm: %g, tnet_wirelength grad norm: %g" % (wirelength_grad_norm, tnet_wirelength_grad_norm))
 
         pos.grad.zero_()
 
@@ -287,6 +318,35 @@ class PlaceObjFPGA(nn.Module):
         #print("learning rate = %g"%((x_k - x_k_1).norm(p=2) / (g_k - g_k_1).norm(p=2)))
 
         return (x_k - x_k_1).norm(p=2) / (g_k - g_k_1).norm(p=2)
+    
+    def build_tnet_wl(self, params, placedb, data_collections, pin_pos_op):
+        """
+        @brief build the op to compute timing net wirelength
+        @param params parameters
+        @param placedb placement database
+        @param data_collections a collection of data and variables required for constructing ops
+        @param pin_pos_op the op to compute pin locations according to cell locations
+        """
+        tnet_wirelength_for_pin_op = timing_net_wirelength.TimingNetWirelength(
+            flat_tnetpin=data_collections.flat_tnet2pin_map, 
+            tnet_weights=data_collections.tnet_weights, 
+            pin_mask=data_collections.pin_mask_ignore_fixed_macros,
+            gamma=self.gamma, 
+            net_bounding_box_min=data_collections.net_bounding_box_min,
+            net_bounding_box_max=data_collections.net_bounding_box_max,
+            num_threads=params.num_threads,
+            xl=placedb.xl, 
+            yl=placedb.yl, 
+            xh=placedb.xh,  
+            yh=placedb.yh,
+            deterministic_flag=params.deterministic_flag,
+            algorithm='merged')
+
+        # wirelength for position
+        def build_tnet_wirelength_op(pos):
+            return tnet_wirelength_for_pin_op(pin_pos_op(pos))
+
+        return build_tnet_wirelength_op
 
     def build_weighted_average_wl(self, params, placedb, data_collections, pin_pos_op):
         """
@@ -358,6 +418,42 @@ class PlaceObjFPGA(nn.Module):
             fence_regions=fence_regions,
             node2fence_region_map=data_collections.node2fence_region_map,
             placedb=placedb)
+    
+    def initialize_timing_beta(self, params, placedb, num_timing_iteration):
+        """
+        @brief initialize timing weight
+        @param params parameters
+        @param placedb placement database
+        """
+        self.num_timing_iteration = num_timing_iteration
+
+        #Updated timing betas
+        wirelength = self.op_collections.wirelength_op(self.data_collections.pos[0])
+        tnet_wirelength = self.op_collections.tnet_wirelength_op(self.data_collections.pos[0])
+
+        if self.data_collections.pos[0].grad is not None:
+            self.data_collections.pos[0].grad.zero_()
+        
+        wirelength.backward()
+        wirelength_grad_norm = self.data_collections.pos[0].grad.norm(p=1)
+     
+        self.data_collections.pos[0].grad.zero_()
+
+        tnet_wirelength.backward()
+        tnet_wirelength_grad_norm = self.data_collections.pos[0].grad.norm(p=1)
+
+        # initial_beta_ratio = params.init_beta
+        initial_beta_ratio = 0.1
+        # beta_ratio = initial_beta_ratio + params.beta_step * (num_timing_iteration - 1)
+        beta_ratio = initial_beta_ratio + 0.1 * (num_timing_iteration - 1)
+
+        if beta_ratio > params.beta_ratio:
+            beta_ratio = params.beta_ratio
+
+        if tnet_wirelength_grad_norm != 0:
+            self.beta = beta_ratio * wirelength_grad_norm / tnet_wirelength_grad_norm
+    
+        # logging.info("beta = %g, wirelength_grad_norm = %g, tnet_wirelength_grad_norm = %g" % (self.beta, wirelength_grad_norm, tnet_wirelength_grad_norm))
 
     def initialize_density_weight(self, params, placedb):
         """
@@ -624,7 +720,7 @@ class PlaceObjFPGA(nn.Module):
 
         return noise_op
 
-    def build_precondition(self, params, placedb, data_collections):
+    def build_precondition(self, params, placedb, data_collections, op_collections):
         """
         @brief preconditioning to gradient
         @param params parameters
@@ -652,7 +748,7 @@ class PlaceObjFPGA(nn.Module):
 
         #return precondition_op
 
-        return PreconditionOpFPGA(placedb, data_collections)
+        return PreconditionOpFPGA(placedb, data_collections, op_collections)
 
     def build_route_utilization_map(self, params, placedb, data_collections):
         """
@@ -809,7 +905,8 @@ class PlaceObjFPGA(nn.Module):
             area_adjust_stop_ratio=params.area_adjust_stop_ratio,
             route_area_adjust_stop_ratio=params.route_area_adjust_stop_ratio,
             pin_area_adjust_stop_ratio=params.pin_area_adjust_stop_ratio,
-            unit_pin_capacity=data_collections.unit_pin_capacity)
+            unit_pin_capacity=data_collections.unit_pin_capacity,
+            inflation_ratio=params.inflation_ratio)
 
         def build_adjust_node_area_op(pos, resource_areas, route_utilization_map, pin_utilization_map):
             return adjust_node_area_op(

@@ -192,6 +192,18 @@ class PlaceDB : public BookshelfParser::BookshelfDataBase
         std::vector<double> const& pinOffsetY() const {return pin_offset_y;}
         std::vector<double>& pinOffsetY() {return pin_offset_y;}
 
+        std::vector<index_type> const& tnet2NetMap() const {return tnet2net_map;}
+        std::vector<index_type>& tnet2NetMap() {return tnet2net_map;}
+
+        std::vector<index_type> const& net2TNetStartMap() const {return net2tnet_start_map;}
+        std::vector<index_type>& net2TNetStartMap() {return net2tnet_start_map;}
+
+        std::vector<index_type> const& flatTNet2PinMap() const {return flat_tnet2pin_map;}
+        std::vector<index_type>& flatTNet2PinMap() {return flat_tnet2pin_map;}
+
+        std::vector<index_type> const& snkPin2TNetMap() const {return snkpin2tnet_map;}
+        std::vector<index_type>& snkPin2TNetMap() {return snkpin2tnet_map;}
+
         std::vector<LibCell> const& libCells() const {return m_vLibCell;}
         std::vector<LibCell>& libCells() {return m_vLibCell;}
         LibCell const& libCell(index_type id) const {return m_vLibCell.at(id);}
@@ -318,6 +330,12 @@ class PlaceDB : public BookshelfParser::BookshelfDataBase
         string2index_map_type fixed_node_name2id_map;
         string2index_map_type node_name2id_map;
         string2index_map_type net_name2id_map;
+
+        // Timing net 
+        std::vector<index_type> tnet2net_map;
+        std::vector<index_type> net2tnet_start_map;
+        std::vector<index_type> flat_tnet2pin_map;
+        std::vector<index_type> snkpin2tnet_map;
 
         std::vector<double> dspSiteXYs;
         std::vector<double> ramSiteXYs;

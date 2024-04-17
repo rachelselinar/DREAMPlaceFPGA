@@ -83,6 +83,11 @@ void PyPlaceDB::set(PlaceDB const& db)
     pin2node_map = pybind11::cast(std::move(db.pin2NodeMap()));
     pin2nodeType_map = pybind11::cast(std::move(db.pin2NodeTypeMap()));
 
+    tnet2net_map = pybind11::cast(std::move(db.tnet2NetMap()));
+    net2tnet_start_map = pybind11::cast(std::move(db.net2TNetStartMap()));
+    flat_tnet2pin_map = pybind11::cast(std::move(db.flatTNet2PinMap()));
+    snkpin2tnet_map = pybind11::cast(std::move(db.snkPin2TNetMap()));
+
     //num_terminals = db.numFixed(); //IOs
     //num_movable_nodes = db.numMovable();  // Movable cells
     //num_physical_nodes = num_terminals + num_movable_nodes;
