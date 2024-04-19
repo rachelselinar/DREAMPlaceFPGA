@@ -103,7 +103,8 @@ class AdjustNodeArea(nn.Module):
         area_adjust_stop_ratio=0.01,
         route_area_adjust_stop_ratio=0.01,
         pin_area_adjust_stop_ratio=0.05,
-        unit_pin_capacity=0.0):
+        unit_pin_capacity=0.0,
+        inflation_ratio=1.0):
         super(AdjustNodeArea, self).__init__()
         self.flat_node2pin_start_map = flat_node2pin_start_map
         self.flat_node2pin_map = flat_node2pin_map
@@ -157,6 +158,8 @@ class AdjustNodeArea(nn.Module):
             num_bins_y=pin_num_bins_y,
             unit_pin_capacity=unit_pin_capacity)
 
+        self.inflation_ratio = inflation_ratio
+
         # placement area excluding fixed cells
         self.total_place_area = total_place_area
         # placement area excluding movable and fixed cells
@@ -203,7 +206,7 @@ class AdjustNodeArea(nn.Module):
                 route_utilization_map_clamp = route_utilization_map.pow(self.route_opt_adjust_exponent).clamp_(
                         min=self.min_route_opt_adjust_rate,
                         max=self.max_route_opt_adjust_rate)
-                route_opt_area = self.compute_node_area_route(pos, node_size_x, node_size_y, route_utilization_map_clamp)
+                route_opt_area = self.inflation_ratio*self.compute_node_area_route(pos, node_size_x, node_size_y, route_utilization_map_clamp)
             # compute pin density optimized area
             if adjust_pin_area_flag:
                 pin_opt_area = self.compute_node_area_pin(pos, node_size_x, node_size_y,

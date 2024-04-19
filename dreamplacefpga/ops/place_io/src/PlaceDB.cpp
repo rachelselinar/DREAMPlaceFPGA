@@ -246,9 +246,13 @@ void PlaceDB::add_bookshelf_net(BookshelfParser::Net const& n) {
     net_names.emplace_back(n.net_name);
 
     std::vector<index_type> netPins;
+    std::vector<index_type> SourcePins;
+    std::vector<index_type> SinkPins;
+
     if (flat_net2pin_start_map.size() == 0)
     {
         flat_net2pin_start_map.emplace_back(0);
+        net2tnet_start_map.emplace_back(0);
     }
 
     for (unsigned i = 0, ie = vNetPin.size(); i < ie; ++i) 
@@ -258,6 +262,7 @@ void PlaceDB::add_bookshelf_net(BookshelfParser::Net const& n) {
 
         pin_names.emplace_back(netPin.pin_name);
         pin2net_map.emplace_back(netId);
+        snkpin2tnet_map.emplace_back(-1);
 
         string2index_map_type::iterator found = node_name2id_map.find(netPin.node_name);
         std::string nodeType;
@@ -299,14 +304,41 @@ void PlaceDB::add_bookshelf_net(BookshelfParser::Net const& n) {
         }
 
         switch(pinTypeId)
-        {
-            case 2: //CLK
+        {   
+            case 0: //Output
                 {
+                    // Skip IO pins for timing nets
+                    if (pin2nodeType_map[pinId] != 4)
+                    {
+                        SourcePins.emplace_back(pinId);
+                    }
+                    break;
+                }
+            case 1: //Input
+                {   
+                    // Skip IO pins for timing nets
+                    if (pin2nodeType_map[pinId] != 4)
+                    {
+                        SinkPins.emplace_back(pinId);
+                    }
+                    break;
+                }
+            case 2: //CLK
+                {   
+                    if (pin2nodeType_map[pinId] != 4)
+                    {
+                        SinkPins.emplace_back(pinId);
+                    }
                     pType = "CK";
                     break;
                 }
             case 3: //CTRL
-                {
+                {   
+                    if (pin2nodeType_map[pinId] != 4)
+                    {
+                        SinkPins.emplace_back(pinId);
+                    }
+                    
                     if (netPin.pin_name.find("CE") != std::string::npos)
                     {
                         pType = "CE";
@@ -341,6 +373,22 @@ void PlaceDB::add_bookshelf_net(BookshelfParser::Net const& n) {
     ////DBG
     //std::cout << "Successfully added net: " << n.net_name << " with " << n.vNetPin.size() << " pins" << std::endl;
     ////DBG
+
+    for ( unsigned i = 0, ie = SourcePins.size(); i < ie; ++i)
+    {
+        for ( unsigned j = 0, je = SinkPins.size(); j < je; ++j)
+        {   
+            if(netPins.size() > 3000){
+                break;
+            }
+            flat_tnet2pin_map.emplace_back(SourcePins[i]);
+            flat_tnet2pin_map.emplace_back(SinkPins[j]);
+            snkpin2tnet_map[SinkPins[j]] = tnet2net_map.size();
+            tnet2net_map.emplace_back(netId);
+        }
+    }
+    net2tnet_start_map.emplace_back(tnet2net_map.size());
+
 }
 void PlaceDB::resize_sites(int xSize, int ySize)
 {

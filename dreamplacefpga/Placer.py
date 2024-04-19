@@ -21,6 +21,7 @@ from Params import *
 from PlaceDB import *
 from NonLinearPlace import *
 from IFWriter import * 
+from Timer import *
 import pdb 
 
 def placeFPGA(params):
@@ -38,8 +39,16 @@ def placeFPGA(params):
     placedb(params) #Call function
     #logging.info("Reading database takes %.2f seconds" % (time.time()-start))
 
+    if params.write_io_placement_flag:
+        placedb.writeIOPlacement(params, 'place_io_cells.tcl')
+
+    # Initialize timer
+    timer = None
+    if params.timing_driven_flag:
+        timer = Timer(params, placedb)
+
     # Random Initial Placement 
-    placer = NonLinearPlaceFPGA(params, placedb)
+    placer = NonLinearPlaceFPGA(params, placedb, timer)
     #logging.info("non-linear placement initialization takes %.2f seconds" % (time.time()-tt))
     metrics = placer(params, placedb)
     logging.info("Placement completed in %.2f seconds" % (time.time()-start))
@@ -70,7 +79,10 @@ def placeFPGA(params):
         final_out_file = os.path.join(path, "%s.final.%s" % (params.design_name(), params.solution_file_suffix()))
         placedb.writeFinalSolution(params, final_out_file)
         logging.info("Detailed Placement not run")
-    
+
+    if params.write_tcl_flag:
+        placedb.writeTcl(params, 'place_cells.tcl')
+
     logging.info("Completed Placement in %.3f seconds" % (time.time()-start))
 
     if params.enable_if == 1:

@@ -96,6 +96,10 @@ struct PyPlaceDB
     int routing_grid_yl; 
     int routing_grid_xh; 
     int routing_grid_yh;
+    pybind11::list tnet2net_map; ///< array of 1D array, each row stores net id
+    pybind11::list net2tnet_start_map; ///< starting index of each net in tnet2net_map
+    pybind11::list flat_tnet2pin_map; ///< flatten version of tnet2pin_map
+    pybind11::list snkpin2tnet_map; ///< array of 1D array, each row stores tnet id
     int xl; 
     int yl; 
     int xh; 

@@ -31,13 +31,13 @@ class NonLinearPlaceFPGA (BasicPlaceFPGA):
     @brief Nonlinear placement engine. 
     It takes parameters and placement database and runs placement flow. 
     """
-    def __init__(self, params, placedb):
+    def __init__(self, params, placedb, timer=None):
         """
         @brief initialization. 
         @param params parameters 
         @param placedb placement database 
         """
-        super(NonLinearPlaceFPGA, self).__init__(params, placedb)
+        super(NonLinearPlaceFPGA, self).__init__(params, placedb, timer)
 
     def __call__(self, params, placedb):
         """
@@ -324,6 +324,9 @@ class NonLinearPlaceFPGA (BasicPlaceFPGA):
                     adjust_pin_area_flag = params.adjust_pin_area_flag
                     num_area_adjust = 0
 
+                if params.timing_driven_flag:
+                    num_timing_iteration = 0
+
                 Llambda_flat_iteration = 0
 
                 ### self-adaptive divergence check
@@ -373,6 +376,34 @@ class NonLinearPlaceFPGA (BasicPlaceFPGA):
                         if Llambda_stop_criterion(placedb, Lgamma_step, Llambda_density_weight_step, Llambda_metrics):
                             break 
 
+                        # timing 
+                        if params.timing_driven_flag and num_timing_iteration < params.max_num_timing_iteration and Llambda_metrics[-1][-1].overflow[0:2].max() < params.timing_iteration_overflow and iteration % params.timing_interval == 0:
+                            num_timing_iteration += 1
+ 
+                            cur_pos = self.pos[0].data.clone().cpu().numpy()
+
+                            # compute congestion threshold
+                            route_utilization_map = self.op_collections.route_utilization_map_op(self.pos[0]).data.clone().cpu().numpy()
+                            pin_utilization_map = self.op_collections.pin_utilization_map_op(self.pos[0]).data.clone().cpu().numpy()
+                            sorted_route_utilization = np.sort(route_utilization_map.ravel()[np.flatnonzero(route_utilization_map)])
+                            sorted_pin_utilization = np.sort(pin_utilization_map.ravel()[np.flatnonzero(pin_utilization_map)])
+                            route_utilization_thresh_5 = sorted_route_utilization[int(0.95 * len(sorted_route_utilization))]
+                            pin_utilization_thresh_5 = sorted_pin_utilization[int(0.95 * len(sorted_pin_utilization))]
+
+                            # Report timing step.
+                            tt = time.time()
+                            pin_pos = self.op_collections.pin_pos_op(model.data_collections.pos[0])
+
+                            upd_tnet_wts_criticality = self.op_collections.timing_op.update_timing(pin_pos, route_utilization_map, pin_utilization_map, route_utilization_thresh_5, pin_utilization_thresh_5)
+                            self.data_collections.tnet_weights.data.copy_(upd_tnet_wts_criticality[:placedb.num_tnets])
+                            self.data_collections.tnet_criticality.data.copy_(upd_tnet_wts_criticality[placedb.num_tnets:])
+                            
+                            logging.info("net-weight update step %.3f ms" % \
+                                ((time.time() - tt) * 1000))
+                            logging.info("the timing iteration %d" % num_timing_iteration)
+                            logging.info('maximum net-weight: %.3f' % (torch.max(self.data_collections.tnet_weights)))
+                            logging.info('minimal net-weight: %.3f' % (torch.min(self.data_collections.tnet_weights)))
+                            model.initialize_timing_beta(params, placedb, num_timing_iteration)
 
                         if params.routability_opt_flag and num_area_adjust < params.max_num_area_adjust and Llambda_metrics[-1][-1].overflow[0:2].max() < params.node_area_adjust_overflow: 
                             pos = model.data_collections.pos[0]
@@ -701,11 +732,28 @@ class NonLinearPlaceFPGA (BasicPlaceFPGA):
                         self.data_collections.original_pin_offset_x)
                     self.data_collections.pin_offset_y.copy_(
                         self.data_collections.original_pin_offset_y)
-        #else: 
-        #    cur_metric = EvalMetricsFPGA(iteration)
-        #    all_metrics.append(cur_metric)
-        #    cur_metric.evaluate(placedb, {"hpwl" : self.op_collections.hpwl_op}, self.pos[0])
-        #    logging.info(cur_metric)
+            
+            if params.timing_driven_flag:
+                cur_pos = self.pos[0].data.clone().cpu().numpy()
+                logging.info("------Timing report at the end of Global Placement------")
+                
+                # compute congestion threshold values
+                route_utilization_map = self.op_collections.route_utilization_map_op(self.pos[0]).data.clone().cpu().numpy()
+                pin_utilization_map = self.op_collections.pin_utilization_map_op(self.pos[0]).data.clone().cpu().numpy()
+                sorted_route_utilization = np.sort(route_utilization_map.ravel()[np.flatnonzero(route_utilization_map)])
+                sorted_pin_utilization = np.sort(pin_utilization_map.ravel()[np.flatnonzero(pin_utilization_map)])
+                route_utilization_thresh_5 = sorted_route_utilization[int(0.95 * len(sorted_route_utilization))]
+                pin_utilization_thresh_5 = sorted_pin_utilization[int(0.95 * len(sorted_pin_utilization))]
+
+                upd_tnet_wts_criticality = self.op_collections.timing_op.update_timing(self.op_collections.pin_pos_op(model.data_collections.pos[0]), route_utilization_map, pin_utilization_map, route_utilization_thresh_5, pin_utilization_thresh_5)
+                self.data_collections.tnet_weights.data.copy_(upd_tnet_wts_criticality[:placedb.num_tnets])
+                self.data_collections.tnet_criticality.data.copy_(upd_tnet_wts_criticality[placedb.num_tnets:])
+        
+        # else: 
+        #     cur_metric = EvalMetricsFPGA(iteration)
+        #     all_metrics.append(cur_metric)
+        #     cur_metric.evaluate(placedb, {"hpwl" : self.op_collections.hpwl_op}, self.pos[0])
+        #     logging.info(cur_metric)
 
         # dump global placement solution for legalization 
         if params.dump_global_place_solution_flag: 
@@ -828,6 +876,20 @@ class NonLinearPlaceFPGA (BasicPlaceFPGA):
             cur_metric.evaluate(placedb, {"hpwl" : self.op_collections.hpwl_op}, self.pos[0])
             logging.info(cur_metric)
             iteration += 1
+
+            if params.timing_driven_flag:
+                logging.info("------Timing report at the end of LUT/FF Legalization------")
+
+                # compute congestion threshold values
+                route_utilization_map = self.op_collections.route_utilization_map_op(self.pos[0]).data.clone().cpu().numpy()
+                pin_utilization_map = self.op_collections.pin_utilization_map_op(self.pos[0]).data.clone().cpu().numpy()
+                sorted_route_utilization = np.sort(route_utilization_map.ravel()[np.flatnonzero(route_utilization_map)])
+                sorted_pin_utilization = np.sort(pin_utilization_map.ravel()[np.flatnonzero(pin_utilization_map)])
+                route_utilization_thresh_5 = sorted_route_utilization[int(0.95 * len(sorted_route_utilization))]
+                pin_utilization_thresh_5 = sorted_pin_utilization[int(0.95 * len(sorted_pin_utilization))]
+
+                upd_tnet_wts_criticality = self.op_collections.timing_op.update_timing(self.op_collections.pin_pos_op(model.data_collections.pos[0]), route_utilization_map, pin_utilization_map, route_utilization_thresh_5, pin_utilization_thresh_5)
+
 
         # plot placement 
         #if params.plot_flag: 

@@ -1,6 +1,6 @@
 ##
 # @file   lut_ff_legalization.py
-# @author Rachel Selina (DREAMPlaceFPGA-PL) 
+# @author Rachel Selina (DREAMPlaceFPGA-PL) Zhili Xiong (Timing)
 # @date   Apr 2022
 #
 
@@ -19,11 +19,11 @@ if configure.compile_configurations["CUDA_FOUND"] == "TRUE":
     import dreamplacefpga.ops.lut_ff_legalization.lut_ff_legalization_cuda as lut_ff_legalization_cuda
 
 class LegalizeCLB(nn.Module):
-    def __init__(self, lutFlopIndices, nodeNames, flop2ctrlSet, flop_ctrlSet, pin2node, pin2net, flat_net2pin, 
-        flat_net2pin_start, flat_node2pin, flat_node2pin_start, node2fence, pin_types, lut_type, 
-        net_wts, avg_lut_area, avg_ff_area, inst_areas, pin_offset_x, pin_offset_y, site_types, 
-        site_xy, node_size_x, node_size_y, node2outpin, net2pincount, node2pincount, spiral_accessor, 
-        num_nets, num_movable_nodes, num_nodes, num_sites_x, num_sites_y, xWirelenWt, yWirelenWt, 
+    def __init__(self, lutFlopIndices, nodeNames, flop2ctrlSet, flop_ctrlSet, pin2node, pin2net, snkpin2tnet, net2tnet_start, 
+        flat_tnet2pin_map, flat_net2pin, flat_net2pin_start, flat_node2pin, flat_node2pin_start, node2fence, 
+        pin_types, lut_type, net_wts, tnet_wts, avg_lut_area, avg_ff_area, inst_areas, pin_offset_x, pin_offset_y, 
+        site_types, site_xy, node_size_x, node_size_y, node2outpin, net2pincount, node2pincount, spiral_accessor, 
+        num_nets, num_movable_nodes, num_nodes, num_sites_x, num_sites_y, xWirelenWt, yWirelenWt, lg_alpha, lg_beta, enableTimingPreclustering,
         nbrDistEnd, num_threads, device):
 
         super(LegalizeCLB, self).__init__()
@@ -39,6 +39,9 @@ class LegalizeCLB(nn.Module):
         self.flop_ctrlSets=flop_ctrlSet
         self.pin2node_map=pin2node
         self.pin2net_map=pin2net
+        self.snkpin2tnet_map=snkpin2tnet
+        self.net2tnet_start=net2tnet_start
+        self.flat_tnet2pin_map=flat_tnet2pin_map
         self.flat_net2pin_map=flat_net2pin
         self.flat_net2pin_start_map=flat_net2pin_start
         self.flat_node2pin_map=flat_node2pin
@@ -48,6 +51,7 @@ class LegalizeCLB(nn.Module):
         self.pin_typeIds=pin_types
         self.lut_type=lut_type
         self.net_wts=net_wts
+        self.tnet_wts=tnet_wts
         self.avg_lut_area=avg_lut_area
         self.avg_ff_area=avg_ff_area
         self.inst_areas=inst_areas
@@ -80,6 +84,9 @@ class LegalizeCLB(nn.Module):
         self.WLscoreMaxNetDegree = 100
         self.extNetCountWt = 0.3
         self.wirelenImprovWt = 0.1
+        self.lg_alpha = lg_alpha
+        self.lg_beta = lg_beta
+        self.enableTimingPreclustering = enableTimingPreclustering 
 
         #Architecture specific values
         self.CKSR_IN_CLB = 2
@@ -238,13 +245,17 @@ class LegalizeCLB(nn.Module):
         spiralBegin = 0
         spiralEnd_maxD = 2 * (maxD + 1) * maxD + 1
 
+        if self.tnet_wts.max() == 0 or self.tnet_wts.max() > 20:
+            self.enableTimingPreclustering = 0
+            self.lg_alpha = 0.0
+            self.lg_beta = 0.0
+
         if pos.is_cuda:
-            lut_ff_legalization_cuda.initLegalization(pos, self.pin_offset_x, self.pin_offset_y, 
-                sorted_net_idx, sorted_node_map, sorted_node_idx, self.flat_net2pin_map, 
-                self.flat_net2pin_start_map, self.flop2ctrlSetId_map, self.flop_ctrlSets, 
-                self.node2fence_region_map, self.node2outpinIdx_map, self.pin2net_map, self.pin2node_map,
+            lut_ff_legalization_cuda.initLegalization(pos, self.pin_offset_x, self.pin_offset_y, self.tnet_wts, self.snkpin2tnet_map,
+                sorted_net_idx, sorted_node_map, sorted_node_idx, self.flat_net2pin_map, self.flat_net2pin_start_map, self.flop2ctrlSetId_map, 
+                self.flop_ctrlSets, self.node2fence_region_map, self.node2outpinIdx_map, self.pin2net_map, self.pin2node_map,
                 self.pin_typeIds, self.net2pincount, self.num_nets, self.num_nodes,
-                preClusteringMaxDist, self.WLscoreMaxNetDegree, self.net_bbox, self.net_pinIdArrayX,
+                preClusteringMaxDist, self.enableTimingPreclustering, self.WLscoreMaxNetDegree, self.net_bbox, self.net_pinIdArrayX,
                 self.net_pinIdArrayY, self.flat_node2precluster_map, self.flat_node2prclstrCount)
 
             cpu_site_nbrList = torch.flatten(self.site_nbrList).cpu()
@@ -283,7 +294,7 @@ class LegalizeCLB(nn.Module):
         else:
             lut_ff_legalization_cpp.initLegalize(
                 pos, wlPrecond, torch.flatten(self.site_xy), self.pin_offset_x, self.pin_offset_y,
-                sorted_net_idx, sorted_node_map, sorted_node_idx, self.flat_net2pin_map, 
+                self.tnet_wts, self.snkpin2tnet_map, sorted_net_idx, sorted_node_map, sorted_node_idx, self.flat_net2pin_map, 
                 self.flat_net2pin_start_map, self.flop2ctrlSetId_map, self.flop_ctrlSets, 
                 self.node2fence_region_map, self.node2outpinIdx_map, self.pin2net_map, self.pin2node_map,
                 self.pin_typeIds, self.net2pincount, torch.flatten(self.site_types), 
@@ -291,7 +302,7 @@ class LegalizeCLB(nn.Module):
                 self.nodeNames, self.num_nets, self.num_nodes,
                 self.num_sites_x, self.num_sites_y, self.num_clb_sites, self.num_threads, 
                 self.SCL_IDX, self.nbrDistEnd, 
-                self.nbrDistBeg, self.nbrDistIncr, self.numGroups, preClusteringMaxDist,
+                self.nbrDistBeg, self.nbrDistIncr, self.numGroups, preClusteringMaxDist, self.enableTimingPreclustering,
                 self.WLscoreMaxNetDegree, self.maxList, spiralBegin, spiralEnd_maxD, self.net_bbox,
                 self.net_pinIdArrayX, self.net_pinIdArrayY, self.flat_node2precluster_map,
                 self.flat_node2prclstrCount, self.site_nbrRanges, self.site_nbrRanges_idx, self.site_nbrList,
@@ -324,13 +335,13 @@ class LegalizeCLB(nn.Module):
                 self.net_pinIdArrayY, torch.flatten(self.site_xy), torch.flatten(self.spiral_accessor), torch.flatten(self.site_types), 
                 self.node2fence_region_map, self.lut_flop_indices, 
                 self.flop_ctrlSets, self.flop2ctrlSetId_map, self.lut_type, self.flat_node2pin_start_map, self.flat_node2pin_map,
-                self.node2pincount, self.net2pincount, self.pin2net_map, self.pin_typeIds, self.flat_net2pin_start_map, 
+                self.node2pincount, self.net2pincount, self.pin2net_map, self.snkpin2tnet_map, self.pin_typeIds, self.net2tnet_start, self.flat_net2pin_start_map, self.flat_tnet2pin_map,
                 self.pin2node_map, sorted_net_map, sorted_node_map, self.flat_node2prclstrCount, torch.flatten(self.flat_node2precluster_map),
-                torch.flatten(self.site_nbrList), torch.flatten(self.site_nbrRanges), self.site_nbrRanges_idx, self.net_wts, self.addr2site_map, self.site2addr_map, self.num_sites_x, self.num_sites_y,
+                torch.flatten(self.site_nbrList), torch.flatten(self.site_nbrRanges), self.site_nbrRanges_idx, self.net_wts, self.tnet_wts, self.addr2site_map, self.site2addr_map, self.num_sites_x, self.num_sites_y,
                 self.num_clb_sites, self.num_lutflops, minStableIter, self.maxList, self.HALF_SLICE_CAPACITY, self.NUM_BLE_PER_SLICE, minNeighbors,
                 spiralBegin, spiralEnd, self.int_min_val,
                 self.numGroups, self.netShareScoreMaxNetDegree, self.WLscoreMaxNetDegree, maxDist, self.xWirelenWt, self.yWirelenWt, 
-                self.wirelenImprovWt, self.extNetCountWt, self.CKSR_IN_CLB, self.CE_IN_CLB, self.SCL_IDX, self.SIG_IDX,
+                self.wirelenImprovWt, self.lg_alpha, self.lg_beta, self.extNetCountWt, self.CKSR_IN_CLB, self.CE_IN_CLB, self.SCL_IDX, self.SIG_IDX,
                 self.site_nbr_idx, self.site_nbr, self.site_nbrGroup_idx, self.site_curr_pq_top_idx, self.site_curr_pq_sig_idx, 
                 self.site_curr_pq_sig, self.site_curr_pq_idx, self.site_curr_stable, self.site_curr_pq_siteId, 
                 self.site_curr_pq_validIdx, self.site_curr_pq_score, self.site_curr_pq_impl_lut, self.site_curr_pq_impl_ff, 
@@ -348,13 +359,13 @@ class LegalizeCLB(nn.Module):
                 self.inst_next_bestScoreImprov, self.inst_next_bestSite, activeStatus, illegalStatus, self.inst_score_improv, self.site_score_improv, sorted_clb_siteIds)
 
         else:
-            lut_ff_legalization_cpp.runDLIter(pos, self.pin_offset_x, self.pin_offset_y, self.net_bbox, self.net_pinIdArrayX, self.net_pinIdArrayY,
+            lut_ff_legalization_cpp.runDLIter(pos, self.pin_offset_x, self.pin_offset_y, self.net_bbox, self.net_pinIdArrayX, self.net_pinIdArrayY, 
                 torch.flatten(self.site_types), torch.flatten(self.site_xy), self.node2fence_region_map, self.flop_ctrlSets, self.flop2ctrlSetId_map, self.lut_type,
-                self.flat_node2pin_start_map, self.flat_node2pin_map, self.node2pincount, self.net2pincount, self.pin2net_map, self.pin_typeIds, 
-                self.flat_net2pin_start_map, self.pin2node_map, self.flat_node2prclstrCount, torch.flatten(self.flat_node2precluster_map), torch.flatten(self.site_nbrList),
-                torch.flatten(self.site_nbrRanges), self.site_nbrRanges_idx, sorted_node_map, sorted_net_map, self.net_wts, self.addr2site_map,
+                self.flat_node2pin_start_map, self.flat_node2pin_map, self.node2pincount, self.net2pincount, self.pin2net_map, self.snkpin2tnet_map, self.pin_typeIds, self.net2tnet_start, 
+                self.flat_net2pin_start_map, self.flat_tnet2pin_map, self.pin2node_map, self.flat_node2prclstrCount, torch.flatten(self.flat_node2precluster_map), torch.flatten(self.site_nbrList),
+                torch.flatten(self.site_nbrRanges), self.site_nbrRanges_idx, sorted_node_map, sorted_net_map, self.net_wts, self.tnet_wts, self.addr2site_map,
                 self.nodeNames, self.num_sites_x, self.num_sites_y, self.num_clb_sites, minStableIter, self.maxList, self.HALF_SLICE_CAPACITY, self.NUM_BLE_PER_SLICE,
-                minNeighbors, self.numGroups, self.netShareScoreMaxNetDegree, self.WLscoreMaxNetDegree, self.xWirelenWt, self.yWirelenWt, self.wirelenImprovWt, self.extNetCountWt,
+                minNeighbors, self.numGroups, self.netShareScoreMaxNetDegree, self.WLscoreMaxNetDegree, self.xWirelenWt, self.yWirelenWt, self.wirelenImprovWt, self.lg_alpha, self.lg_beta, self.extNetCountWt,
                 self.CKSR_IN_CLB, self.CE_IN_CLB, self.SCL_IDX, self.PQ_IDX, self.SIG_IDX, self.num_nodes, self.num_threads, self.site_nbr_idx, self.site_nbr, self.site_nbrGroup_idx,
                 self.site_curr_pq_top_idx, self.site_curr_pq_sig_idx, self.site_curr_pq_sig, self.site_curr_pq_idx, self.site_curr_pq_validIdx, self.site_curr_stable,
                 self.site_curr_pq_siteId, self.site_curr_pq_score, self.site_curr_pq_impl_lut, self.site_curr_pq_impl_ff, self.site_curr_pq_impl_cksr, self.site_curr_pq_impl_ce,
@@ -431,17 +442,17 @@ class LegalizeCLB(nn.Module):
             cpu_node_y = updYloc.cpu()
             cpu_node_z = updZloc.cpu()
 
-            lut_ff_legalization_cpp.ripUp_SlotAssign(pos.cpu(), self.pin_offset_x.cpu(), self.pin_offset_y.cpu(), self.net_wts.cpu(),
+            lut_ff_legalization_cpp.ripUp_SlotAssign(pos.cpu(), self.pin_offset_x.cpu(), self.pin_offset_y.cpu(), self.net_wts.cpu(), self.tnet_wts.cpu(),
                 self.net_bbox.cpu(), self.inst_areas.cpu(), wlPrecond.cpu(), torch.flatten(self.site_xy).cpu(),
                 self.net_pinIdArrayX.cpu(), self.net_pinIdArrayY.cpu(), torch.flatten(self.spiral_accessor).cpu(),
                 self.node2fence_region_map.cpu(), self.lut_type.cpu(), torch.flatten(self.site_types).cpu(), self.node2pincount.cpu(),
-                self.net2pincount.cpu(), self.pin2net_map.cpu(), self.pin2node_map.cpu(), self.pin_typeIds.cpu(),
+                self.net2pincount.cpu(), self.pin2net_map.cpu(), self.snkpin2tnet_map.cpu(), self.pin2node_map.cpu(), self.pin_typeIds.cpu(),
                 self.flop2ctrlSetId_map.cpu(), self.flop_ctrlSets.cpu(), self.flat_node2pin_start_map.cpu(),
-                self.flat_node2pin_map.cpu(), self.flat_net2pin_start_map.cpu(), self.flat_node2prclstrCount.cpu(), 
+                self.flat_node2pin_map.cpu(), self.net2tnet_start.cpu(), self.flat_net2pin_start_map.cpu(), self.flat_tnet2pin_map.cpu(), self.flat_node2prclstrCount.cpu(), 
                 torch.flatten(self.flat_node2precluster_map).cpu(), sorted_remNode_map.cpu(), sorted_remNode_idx.cpu(), sorted_net_map.cpu(),
                 self.node2outpinIdx_map.cpu(), self.flat_net2pin_map.cpu(), 
                 self.addr2site_map.cpu(), self.site2addr_map.cpu(), self.nodeNames.cpu(),
-                self.nbrDistEnd, self.xWirelenWt, self.yWirelenWt, self.extNetCountWt, self.wirelenImprovWt, slotAssignFlowWeightScale,
+                self.nbrDistEnd, self.xWirelenWt, self.yWirelenWt, self.extNetCountWt, self.wirelenImprovWt, self.lg_alpha, self.lg_beta, slotAssignFlowWeightScale,
                 slotAssignFlowWeightIncr, self.NUM_BLE_PER_HALF_SLICE, num_remInsts, self.num_sites_x, self.num_sites_y, self.num_clb_sites, spiralBegin,
                 self.spiral_accessor.shape[0], self.CKSR_IN_CLB, self.CE_IN_CLB, self.HALF_SLICE_CAPACITY, self.NUM_BLE_PER_SLICE,
                 self.netShareScoreMaxNetDegree, self.WLscoreMaxNetDegree, ripupExpansion, greedyExpansion, self.SIG_IDX, self.num_threads,
@@ -461,14 +472,14 @@ class LegalizeCLB(nn.Module):
             updYloc.data.copy_(cpu_node_y.data)
             updZloc.data.copy_(cpu_node_z.data)
         else:
-            lut_ff_legalization_cpp.ripUp_SlotAssign(pos, self.pin_offset_x, self.pin_offset_y, self.net_wts, self.net_bbox, self.inst_areas, wlPrecond,
+            lut_ff_legalization_cpp.ripUp_SlotAssign(pos, self.pin_offset_x, self.pin_offset_y, self.net_wts, self.tnet_wts, self.net_bbox, self.inst_areas, wlPrecond,
                 torch.flatten(self.site_xy), self.net_pinIdArrayX, self.net_pinIdArrayY, torch.flatten(self.spiral_accessor), 
                 self.node2fence_region_map, self.lut_type, torch.flatten(self.site_types), self.node2pincount, self.net2pincount,
-                self.pin2net_map, self.pin2node_map, self.pin_typeIds, self.flop2ctrlSetId_map, self.flop_ctrlSets, self.flat_node2pin_start_map,
-                self.flat_node2pin_map, self.flat_net2pin_start_map, self.flat_node2prclstrCount, torch.flatten(self.flat_node2precluster_map),
+                self.pin2net_map, self.snkpin2tnet_map, self.pin2node_map, self.pin_typeIds, self.flop2ctrlSetId_map, self.flop_ctrlSets, self.flat_node2pin_start_map,
+                self.flat_node2pin_map, self.net2tnet_start, self.flat_net2pin_start_map, self.flat_tnet2pin_map, self.flat_node2prclstrCount, torch.flatten(self.flat_node2precluster_map),
                 sorted_remNode_map, sorted_remNode_idx, sorted_net_map, self.node2outpinIdx_map, self.flat_net2pin_map, 
                 self.addr2site_map, self.site2addr_map, self.nodeNames,
-                self.nbrDistEnd, self.xWirelenWt, self.yWirelenWt, self.extNetCountWt, self.wirelenImprovWt, slotAssignFlowWeightScale,
+                self.nbrDistEnd, self.xWirelenWt, self.yWirelenWt, self.extNetCountWt, self.wirelenImprovWt, self.lg_alpha, self.lg_beta, slotAssignFlowWeightScale,
                 slotAssignFlowWeightIncr, self.NUM_BLE_PER_HALF_SLICE, num_remInsts, self.num_sites_x, self.num_sites_y, self.num_clb_sites, spiralBegin,
                 self.spiral_accessor.shape[0], self.CKSR_IN_CLB, self.CE_IN_CLB, self.HALF_SLICE_CAPACITY, self.NUM_BLE_PER_SLICE,
                 self.netShareScoreMaxNetDegree, self.WLscoreMaxNetDegree, ripupExpansion, greedyExpansion, self.SIG_IDX, self.num_threads,

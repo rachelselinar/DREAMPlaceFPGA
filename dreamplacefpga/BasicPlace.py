@@ -24,9 +24,11 @@ import dreamplacefpga.ops.electric_potential.electric_overflow as electric_overf
 import dreamplacefpga.ops.draw_place.draw_place as draw_place
 import dreamplacefpga.ops.pin_pos.pin_pos as pin_pos
 import dreamplacefpga.ops.precondWL.precondWL as precondWL
+import dreamplacefpga.ops.precondTiming.precondTiming as precondTiming
 import dreamplacefpga.ops.demandMap.demandMap as demandMap
 import dreamplacefpga.ops.sortNode2Pin.sortNode2Pin as sortNode2Pin
 import dreamplacefpga.ops.lut_ff_legalization.lut_ff_legalization as lut_ff_legalization
+import dreamplacefpga.ops.timing.timing as timing
 import pdb
 
 datatypes = {
@@ -145,6 +147,13 @@ class PlaceDataCollectionFPGA(object):
                 #self.net_weights = torch.Tensor().to(device)
             self.net_weights = torch.from_numpy(placedb.net_weights).to(device)
 
+            self.flat_tnet2pin_map = torch.from_numpy(placedb.flat_tnet2pin_map).to(device)
+            self.tnet_weights = torch.from_numpy(placedb.tnet_weights).to(device)
+            self.tnet_criticality = torch.from_numpy(placedb.tnet_criticality).to(device)
+            self.tnet2net_map = torch.from_numpy(placedb.tnet2net_map).to(device)
+            self.snkpin2tnet_map = torch.from_numpy(placedb.snkpin2tnet_map).to(device)
+            self.net2tnet_start_map = torch.from_numpy(placedb.net2tnet_start_map).to(device)
+
             # regions
             self.region_boxes = [torch.tensor(region).to(device) for region in placedb.region_boxes]
             self.flat_region_boxes = torch.from_numpy(
@@ -204,6 +213,7 @@ class PlaceOpCollectionFPGA(object):
         self.density_op = None
         self.update_density_weight_op = None
         self.precondition_op = None
+        self.precond_timing_op = None
         self.noise_op = None
         self.draw_place_op = None
         self.route_utilization_map_op = None
@@ -213,13 +223,14 @@ class PlaceOpCollectionFPGA(object):
         self.adjust_node_area_op = None
         self.sort_node2pin_op = None
         self.lut_ff_legalization_op = None
+        self.timing_op = None
 
 class BasicPlaceFPGA(nn.Module):
     """
     @brief Base placement class. 
     All placement engines should be derived from this class. 
     """
-    def __init__(self, params, placedb):
+    def __init__(self, params, placedb, timer):
         """
         @brief initialization
         @param params parameter 
@@ -348,7 +359,13 @@ class BasicPlaceFPGA(nn.Module):
 
         #Legalization
         self.op_collections.lut_ff_legalization_op = self.build_lut_ff_legalization(params, placedb, self.data_collections, self.device)
- 
+
+        # Timing-driven
+        self.op_collections.timing_op = self.build_timing_op(params, placedb, self.data_collections, timer)
+
+        # Timing nets preconditioner
+        self.op_collections.precond_timing_op = self.build_precondTiming(params, placedb, self.data_collections, self.device)
+
         # draw placement
         self.op_collections.draw_place_op = self.build_draw_placement(params, placedb)
 
@@ -488,6 +505,28 @@ class BasicPlaceFPGA(nn.Module):
             device=device,
             num_threads=params.num_threads)
 
+    def build_precondTiming(self, params, placedb, data_collections, device):
+        """
+        @brief compute timing precondtioner
+        @param params parameters
+        @param placedb placement database
+        @param data_collections a collection of all data and variables required for constructing the ops
+        @param device cpu or cuda
+        """
+        return precondTiming.PrecondTiming(
+            flat_tnet2pin=data_collections.flat_tnet2pin_map,
+            pin2node_map=data_collections.pin2node_map,
+            num_tnets=len(data_collections.tnet2net_map),
+            num_nodes=placedb.num_nodes, 
+            num_movable_nodes=placedb.num_physical_nodes, 
+            device=device,
+            num_threads=params.num_threads,
+            xl=placedb.xl,
+            yl=placedb.yl,
+            xh=placedb.xh,
+            yh=placedb.yh,
+            deterministic_flag=params.deterministic_flag)
+
     def build_sortNode2Pin(self, params, placedb, data_collections, device):
         """
         @brief sort instance node2pin mapping
@@ -562,6 +601,9 @@ class BasicPlaceFPGA(nn.Module):
             flop_ctrlSet=data_collections.flop_ctrlSets,
             pin2node=data_collections.pin2node_map,
             pin2net=data_collections.pin2net_map,
+            snkpin2tnet=data_collections.snkpin2tnet_map,
+            net2tnet_start=data_collections.net2tnet_start_map,
+            flat_tnet2pin_map=data_collections.flat_tnet2pin_map,
             flat_net2pin=data_collections.flat_net2pin_map,
             flat_net2pin_start=data_collections.flat_net2pin_start_map,
             flat_node2pin=data_collections.flat_node2pin_map,
@@ -570,6 +612,7 @@ class BasicPlaceFPGA(nn.Module):
             pin_types=data_collections.pin_typeIds,
             lut_type=data_collections.lut_type,
             net_wts=net_wts,
+            tnet_wts=data_collections.tnet_weights,
             avg_lut_area=avgLUTArea,
             avg_ff_area=avgFFArea,
             inst_areas=inst_areas,
@@ -590,9 +633,28 @@ class BasicPlaceFPGA(nn.Module):
             num_sites_y=placedb.num_sites_y,
             xWirelenWt=placedb.xWirelenWt,
             yWirelenWt=placedb.yWirelenWt,
+            lg_alpha=params.lg_alpha,
+            lg_beta=params.lg_beta,
+            enableTimingPreclustering=params.enableTimingPreclustering,
             nbrDistEnd=placedb.nbrDistEnd,
             num_threads=params.num_threads,
             device=device)
+
+    def build_timing_op(self, params, placedb, data_collections, timer=None):
+        """
+        @brief build the operator for timing analysis and feedbacks.
+        @param placedb the placement database
+        @param timer the timer object used in timing-driven mode
+        """
+        timing_feedback = timing.TimingFeedback(
+            timer=timer, 
+            tnet2net=data_collections.tnet2net_map, 
+            tnet_criticality=data_collections.tnet_criticality, 
+            tnet_weights=data_collections.tnet_weights,
+            criticality_exp=params.criticality_exponent, 
+            device=self.device)
+        
+        return timing_feedback
 
     def build_draw_placement(self, params, placedb):
         """

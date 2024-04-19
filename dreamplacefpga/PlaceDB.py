@@ -103,6 +103,14 @@ class PlaceDBFPGA (object):
         self.num_terminals = 0# number of IOs, essentially fixed instances
         self.net_weights = None # weights for each net
 
+        # create database for timing-driven placement
+        self.tnet2net_map = [] # map timing net to net
+        self.net2tnet_start_map = [] # starting point for net2tnet_map
+        self.flat_tnet2pin_map = [] # flattend version of tnet2pin_map
+        self.snkpin2tnet_map = [] # map sink pin to timing net
+        self.tnet_weights = [] # weights for each timing net
+        self.tnet_criticality = [] # criticality for each timing net
+
         self.xl = None 
         self.yl = None 
         self.xh = None 
@@ -166,6 +174,12 @@ class PlaceDBFPGA (object):
     @property
     def num_nets(self):
         return len(self.net2pin_map)
+    """
+    @return number of timing nets
+    """
+    @property
+    def num_tnets(self):
+        return len(self.tnet2net_map)
     """
     @return number of pins 
     """
@@ -310,6 +324,13 @@ class PlaceDBFPGA (object):
         self.routing_grid_xh = float(pydb.routing_grid_xh)
         self.routing_grid_yh = float(pydb.routing_grid_yh)
 
+        self.tnet2net_map = np.array(pydb.tnet2net_map, dtype=np.int32)
+        self.net2tnet_start_map = np.array(pydb.net2tnet_start_map, dtype=np.int32) 
+        self.flat_tnet2pin_map = np.array(pydb.flat_tnet2pin_map, dtype=np.int32)
+        self.snkpin2tnet_map = np.array(pydb.snkpin2tnet_map, dtype=np.int32)
+        self.tnet_weights = np.array(np.zeros(len(self.tnet2net_map)), dtype=self.dtype) 
+        self.tnet_criticality = np.array(np.zeros(len(self.tnet2net_map)), dtype=self.dtype)
+
         self.xl = float(pydb.xl)
         self.yl = float(pydb.yl)
         self.xh = float(pydb.xh)
@@ -320,6 +341,177 @@ class PlaceDBFPGA (object):
         self.num_routing_layers = 1
         self.unit_horizontal_capacity = 0.95 * params.unit_horizontal_capacity
         self.unit_vertical_capacity = 0.95 * params.unit_vertical_capacity
+
+        self.loc2site_map = self.create_loc2site_map()
+
+    def create_loc2site_map(self):
+        """
+        @brief create a loc2site_map for a given placedb
+        this map is used to convert x, y, z location in bookshelf to the site names, and it's UltraScale-only
+        """
+        loc2site_map = {}
+
+        dsp_cnt = 0
+        bram_cnt = 0
+        IO_cols = []
+
+        dsp_y_num = self. num_sites_y / 2.5
+        bram_y_num = self. num_sites_y / 5
+
+        slice_x = 0
+        # initialize loc2site_map
+        for i in range(self.num_sites_x):
+            slice_flag = False
+            for j in range(self.num_sites_y):
+                # LUT/FF
+                if self.site_type_map[i, j] == 1: 
+                    slice_flag = True
+                    slice_y = j
+                    #  16 is the num of LUT/FF in a SLICE
+                    for k in range(0, 16):
+                        loc2site_map[i, j, k] = "SLICE_X" + str(slice_x) + "Y" + str(slice_y)
+
+                # DSP
+                elif self.site_type_map[i, j] == 2:
+                    site_x = int(dsp_cnt / dsp_y_num)
+                    site_y = int(dsp_cnt - site_x * dsp_y_num)
+                    loc2site_map[i, j, 0] = "DSP48E2_X" + str(site_x) + "Y" + str(site_y)
+                    dsp_cnt += 1
+                # BRAM
+                elif self.site_type_map[i, j] == 3:
+                    site_x = int(bram_cnt / bram_y_num)
+                    site_y = int(bram_cnt - site_x * bram_y_num)
+                    loc2site_map[i, j, 0] = "RAMB36_X" + str(site_x) + "Y" + str(site_y)
+                    bram_cnt += 1
+                # IO
+                elif self.site_type_map[i, j] == 4:
+                    if i not in IO_cols:
+                        IO_cols.append(i)
+
+            if slice_flag == True:
+                slice_x += 1
+
+        IOB_col = []
+        BUFGCE_col = []
+        for col in IO_cols:
+            if col != 0 and col != self.num_sites_x - 1:
+                if col not in IOB_col and col not in BUFGCE_col:
+                    IOB_col.append(col) 
+                    BUFGCE_col.append(col+1)
+
+        io_loc2site_map = self.get_io_sites(IOB_col, BUFGCE_col)
+
+        for loc, site_name in io_loc2site_map.items():
+            loc2site_map[loc] = io_loc2site_map[loc]
+
+        return loc2site_map
+
+    def get_io_sites(self, IOB_col, BUFGCE_col):
+        """ Get io sites.
+        To convert the x, y, z location in bookshelf to the IO site names "IOB_XxxYxx", "BUFGCE_XxxYxx", this is UltraScale-only.
+        """
+        io_sitemap = {}
+  
+        z_indices = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 1, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 0]
+        x_indices = IOB_col
+
+        site_x = 0
+        site_y = 0
+        for x in x_indices:
+            for y in range(0, int(self.num_sites_y/30)):
+                for z in z_indices:
+                    key = (x, y*30, z)
+                    io_sitemap[key] = 'IOB_X' + str(site_x) + 'Y' + str(site_y)
+                    site_y += 1
+
+            site_x += 1
+            site_y = 0
+
+        # Odd points 
+        io_sitemap[x_indices[1], 0, 12] = 'IOB_X1Y0'
+        io_sitemap[x_indices[1], 0, 17] = 'IOB_X1Y1' 
+        io_sitemap[x_indices[1], 0, 16] = 'IOB_X1Y2'
+        io_sitemap[x_indices[1], 0, 21] = 'IOB_X1Y3'
+        io_sitemap[x_indices[1], 0, 20] = 'IOB_X1Y4'
+        io_sitemap[x_indices[1], 0, 25] = 'IOB_X1Y10'
+        io_sitemap[x_indices[1], 0, 24] = 'IOB_X1Y11'
+        io_sitemap[x_indices[1], 0, 29] = 'IOB_X1Y12' 
+        io_sitemap[x_indices[1], 0, 28] = 'IOB_X1Y13'
+        io_sitemap[x_indices[1], 0, 33] = 'IOB_X1Y14'
+        io_sitemap[x_indices[1], 0, 32] = 'IOB_X1Y15'
+        io_sitemap[x_indices[1], 0, 37] = 'IOB_X1Y16'
+        io_sitemap[x_indices[1], 0, 36] = 'IOB_X1Y17'
+        io_sitemap[x_indices[1], 0, 41] = 'IOB_X1Y18'
+        io_sitemap[x_indices[1], 0, 9] = 'IOB_X1Y19'
+        io_sitemap[x_indices[1], 0, 40] = 'IOB_X1Y20'
+        io_sitemap[x_indices[1], 0, 45] = 'IOB_X1Y21'
+        io_sitemap[x_indices[1], 0, 44] = 'IOB_X1Y22'
+        io_sitemap[x_indices[1], 0, 49] = 'IOB_X1Y23'
+        io_sitemap[x_indices[1], 0, 48] = 'IOB_X1Y24'
+        io_sitemap[x_indices[1], 0, 13] = 'IOB_X1Y25'
+        io_sitemap[x_indices[1], 30, 5] = 'IOB_X1Y26'
+
+        # BUFGCE sites
+        buf_z_max = 120
+        buf_x_indices = BUFGCE_col
+
+        buf_x = 0
+        buf_y = 0
+        for x in buf_x_indices:
+            for z in range(0, buf_z_max):
+                key = (x, 0, z)
+                io_sitemap[key] = 'BUFGCE_X' + str(buf_x) + 'Y' + str(buf_y)
+                buf_y += 1
+
+            buf_x += 1
+            buf_y = 0
+
+        return io_sitemap
+
+    def map_bel(self, node_z, node_type):
+        """
+        @brief map from z location to BEL name, this is UltraScale-only
+        """
+        if node_type[:3] == "LUT":
+            switcher = {
+                0: "A5LUT",
+                1: "A6LUT",
+                2: "B5LUT",
+                3: "B6LUT",
+                4: "C5LUT",
+                5: "C6LUT",
+                6: "D5LUT",
+                7: "D6LUT",
+                8: "E5LUT",
+                9: "E6LUT",
+                10:"F5LUT",
+                11:"F6LUT",
+                12:"G5LUT",
+                13:"G6LUT",
+                14:"H5LUT",
+                15:"H6LUT",
+            }
+            return switcher[node_z]
+        elif node_type[:4] == "FDRE":
+            switcher = {
+                0: "AFF",
+                1: "AFF2",
+                2: "BFF",
+                3: "BFF2",
+                4: "CFF",
+                5: "CFF2",
+                6: "DFF",
+                7: "DFF2",
+                8: "EFF",
+                9: "EFF2",
+                10:"FFF",
+                11:"FFF2",
+                12:"GFF",
+                13:"GFF2",
+                14:"HFF",
+                15:"HFF2",
+            }
+            return switcher[node_z]
 
     def print_node(self, node_id):
         """
@@ -599,6 +791,67 @@ class PlaceDBFPGA (object):
                     node_z[i]
                     )
         with open(pl_file, "w") as f:
+            f.write(content)
+        logging.info("write placement solution takes %.3f seconds" % (time.time()-tt))
+    
+    def writeIOPlacement(self, params, tcl_file):
+        """
+        @brief write fixed IO placement as io_placements.tcl file
+        for Vivado2022.1, the bookshelf format is not supported, so we need to write a tcl file to place fixed IOs
+        @param tcl_file .tcl file
+        """
+        tt = time.time()
+        logging.info("writing to %s" % (tcl_file))
+
+        node_x = self.node_x
+        node_y = self.node_y
+        node_z = self.node_z
+
+        content = ""
+        str_node_names = self.node_names
+        content += "place_cell {\\\n"
+        for i in range(self.num_physical_nodes): 
+            if self.node2fence_region_map[i] == 4:
+                content += "\t %s %s \\\n" % (
+                        str_node_names[i],
+                        self.loc2site_map[node_x[i], node_y[i], node_z[i]],
+                        )
+        content += '}\n'
+        with open(tcl_file, "w") as f:
+            f.write(content)
+        logging.info("write fixed IO placements takes %.3f seconds" % (time.time()-tt))
+    
+    def writeTcl(self, params, tcl_file):
+        """
+        @brief write placement solution as place_cells.tcl file
+        @param tcl_file .tcl file
+        """
+
+        tt = time.time()
+        logging.info("writing to %s" % (tcl_file))
+
+        node_x = self.node_x
+        node_y = self.node_y
+        node_z = self.node_z
+
+        content = ""
+        content += "place_cell {\\\n"
+        str_node_names = self.node_names
+        for i in range(self.num_physical_nodes):
+            if self.node2fence_region_map[i] < 2:
+                content += "\t%s %s/%s \\\n" % (
+                        str_node_names[i],
+                        self.loc2site_map[int(node_x[i]), int(node_y[i]), int(node_z[i])],
+                        self.map_bel(node_z[i], self.node_types[i])
+                        )
+            else:
+                content += "\t%s %s \\\n" % (
+                        str_node_names[i],
+                        self.loc2site_map[int(node_x[i]), int(node_y[i]), int(node_z[i])],
+                        )
+
+        content += '}\n'
+        with open(tcl_file, "w") as f:
             f.write(content)
         logging.info("write placement solution takes %.3f seconds" % (time.time()-tt))
 
