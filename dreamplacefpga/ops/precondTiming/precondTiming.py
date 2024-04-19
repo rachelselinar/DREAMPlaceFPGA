@@ -2,7 +2,8 @@
 # @file   precondTiming.py
 # @author Zhili Xiong(DREAMPlaceFPGA)
 # @date   June 2023
-#
+# @brief  Preconditioner for timing term
+##
 
 import torch
 from torch.autograd import Function
