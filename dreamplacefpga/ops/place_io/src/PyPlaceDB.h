@@ -16,10 +16,12 @@
 #include "PlaceDB.h"
 #include "Iterators.h"
 #include "utility/src/torch.h"
+#include "InterchangeDriver.h"
 
 DREAMPLACE_BEGIN_NAMESPACE
 
 bool readBookshelf(PlaceDB& db, std::string const& auxPath);
+bool readInterchange(PlaceDB& db, std::string const& filename);
 
 /// database for python 
 struct PyPlaceDB

@@ -7,6 +7,8 @@ set(INCLUDE_DIRS
   ${LIMBO_SOURCE_DIR}
   ${Boost_INCLUDE_DIRS}
   ${ZLIB_INCLUDE_DIRS}
+  ${IF_SOURCE_DIR}
+  ${capnp_INCLUDE_DIRS}
   )
 
 set(LINK_LIBS 
@@ -23,6 +25,10 @@ set(LINK_LIBS
   # end targets in Limbo 
   OpenMP::OpenMP_CXX
   ${ZLIB_LIBRARIES}
+  CapnProto::kj
+  CapnProto::kj-gzip
+  CapnProto::kj-async
+  CapnProto::capnpc
   )
 
 if(CAIRO_FOUND)
@@ -44,6 +50,8 @@ add_pytorch_extension(${TARGET_NAME}_cpp
   src/Params.cpp  
   src/PlaceDB.cpp  
   src/BookshelfWriter.cpp
+  src/InterchangeDriver.cpp
+  src/InterchangeDataBase.cpp
   src/PyPlaceDB.cpp  
   src/PybindPlaceDB.cpp  
   src/PybindPyPlaceDB.cpp  

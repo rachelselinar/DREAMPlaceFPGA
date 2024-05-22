@@ -12,6 +12,8 @@
 #include <limbo/parsers/bookshelf/bison/BookshelfDriver.h> // bookshelf parser 
 #include <limbo/string/String.h>
 
+#include "InterchangeDriver.h" // interchange format parser
+
 #include "Node.h"
 #include "Net.h"
 #include "Pin.h"
@@ -34,6 +36,7 @@ struct clk_region
 };
 
 class PlaceDB : public BookshelfParser::BookshelfDataBase
+                , public DREAMPLACE_NAMESPACE::InterchangeDataBase
 {
     public:
         typedef Object::coordinate_type coordinate_type;
@@ -260,6 +263,9 @@ class PlaceDB : public BookshelfParser::BookshelfDataBase
         virtual void add_ctrl_pin(std::string& pName);
         virtual void set_bookshelf_design(std::string& name);
         virtual void bookshelf_end(); 
+
+        ///==== Interchange Callbacks ====
+        
 
         /// write placement solutions 
         virtual bool write(std::string const& filename) const;
