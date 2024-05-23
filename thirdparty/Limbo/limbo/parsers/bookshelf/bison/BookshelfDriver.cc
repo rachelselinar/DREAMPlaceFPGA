@@ -508,7 +508,33 @@ bool read(BookshelfDataBase& db, const std::string& auxFile)
     //    if (!flag)
     //        return false;
     //}
-    for (auto file : {driverAux.libFile(), driverAux.sclFile(), driverAux.nodeFile(), driverAux.plFile(), driverAux.netFile()})
+
+    // This is for interchange format debugging, might remove bookshelf files from .aux one by one
+    std::vector<std::string> input_bookshelf_files = {};
+
+    if (driverAux.libFile() != "")
+    {
+        input_bookshelf_files.emplace_back(driverAux.libFile());
+    }
+    if (driverAux.sclFile() != "")
+    {
+        input_bookshelf_files.emplace_back(driverAux.sclFile());
+    }
+    if (driverAux.nodeFile() != "")
+    {
+        input_bookshelf_files.emplace_back(driverAux.nodeFile());
+    }
+    if (driverAux.plFile() != "")
+    {
+        input_bookshelf_files.emplace_back(driverAux.plFile());
+    }
+    if (driverAux.netFile() != "")
+    {
+        input_bookshelf_files.emplace_back(driverAux.netFile());
+    }
+
+    // for (auto file : {driverAux.libFile(), driverAux.sclFile(), driverAux.nodeFile(), driverAux.plFile(), driverAux.netFile()})
+    for (auto file : input_bookshelf_files)
     {
         std::string path = auxPath + "/" + file;
         std::cout << "Parsing File " << path << std::endl;

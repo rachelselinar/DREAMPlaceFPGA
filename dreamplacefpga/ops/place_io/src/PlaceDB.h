@@ -265,7 +265,6 @@ class PlaceDB : public BookshelfParser::BookshelfDataBase
         virtual void bookshelf_end(); 
 
         ///==== Interchange Callbacks ====
-        
 
         /// write placement solutions 
         virtual bool write(std::string const& filename) const;

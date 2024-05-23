@@ -16,8 +16,15 @@ class PlaceIOFunction(Function):
         @brief read design and store in placement database
         """
         args = params.aux_input
+        raw_db = None
         if "aux_input" in params.__dict__ and params.aux_input:
-            return place_io_cpp.forward(args)
+            partial_db = place_io_cpp.forward(args)
+
+        if "interchange_device" in params.__dict__ and params.interchange_device:
+            device_file = params.interchange_device
+            return place_io_cpp.forward_interchange(partial_db, device_file)
+        else:
+            return partial_db
 
     @staticmethod
     def pydb(raw_db): 

@@ -15,18 +15,18 @@ DREAMPLACE_BEGIN_NAMESPACE
 /// @brief parse FPGA interchange format
 class InterchangeDriver
 {   
-    public:
-        /// construct a new parser 
-        /// @param db reference to database 
-        InterchangeDriver(InterchangeDataBase& db);
-        /**
-        * @param filename	input file name
-        * @return		true if successfully parsed
-        */
-        bool parse_device(std::string const& filename); 
-        bool parse_logical_netlist(std::string const& filename);
+public:
+    /// construct a new parser 
+    /// @param db reference to database 
+    InterchangeDriver(InterchangeDataBase& db);
+    /**
+    * @param filename	input file name
+    * @return		true if successfully parsed
+    */
+    bool parse_device(std::string const& filename); 
+    bool parse_logical_netlist(std::string const& filename);
 
-        InterchangeDataBase& m_db;   
+    InterchangeDataBase& m_db;   
 };
 
 DREAMPLACE_END_NAMESPACE

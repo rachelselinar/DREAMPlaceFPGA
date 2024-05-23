@@ -102,9 +102,10 @@ PlaceDB place_io_forward(pybind11::str const& auxPath)
     return db; 
 }
 
-PlaceDB place_io_forward_interchange(pybind11::str const& filename)
-{
-    DREAMPLACE_NAMESPACE::PlaceDB db; 
+
+//TODO: Don't call this function unless functions in interchange parser are all tested
+PlaceDB place_io_forward_interchange(PlaceDB& db, pybind11::str const& filename)
+{   
     bool flag;
     flag = DREAMPLACE_NAMESPACE::readInterchange(db, filename);
     return db;
