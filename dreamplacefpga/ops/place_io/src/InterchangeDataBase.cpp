@@ -11,13 +11,19 @@ DREAMPLACE_BEGIN_NAMESPACE
 
 void InterchangeDataBase::resize_sites(int xSize, int ySize)
 {
-    std::cerr << "Bookshelf has " << xSize << " x " << ySize << " sites" << std::endl; 
+    std::cerr << "Interchange has " << xSize << " x " << ySize << " sites" << std::endl; 
     interchange_user_cbk_reminder(__func__); 
 }
 
 void InterchangeDataBase::site_info_update(int xloc, int yloc, int val)
 {
-    std::cerr << "Bookshelf has site (" << xloc << ", " << yloc << ") of type " << val << std::endl; 
+    std::cerr << "Interchange has site (" << xloc << ", " << yloc << ") of type " << val << std::endl; 
+    interchange_user_cbk_reminder(__func__); 
+}
+
+void InterchangeDataBase::add_lib_cell(std::string const& name)
+{
+    std::cerr << "Interchange has cell " << name << std::endl; 
     interchange_user_cbk_reminder(__func__); 
 }
 

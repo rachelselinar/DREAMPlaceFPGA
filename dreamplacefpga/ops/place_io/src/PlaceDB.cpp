@@ -50,7 +50,7 @@ void PlaceDB::add_bookshelf_node(std::string& name, std::string& type)
       m_numFF += 1;
       ++num_movable_nodes;
     }
-    else if (limbo::iequals(type, "LUT0"))
+    else if (limbo::iequals(type, "LUT0") || limbo::iequals(type, "GND") || limbo::iequals(type, "VCC"))
     {
       node_name2id_map.insert(std::make_pair(name, mov_node_names.size()));
       mov_node_names.emplace_back(name);

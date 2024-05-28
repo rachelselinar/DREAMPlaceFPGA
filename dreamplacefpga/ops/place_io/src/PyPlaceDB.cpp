@@ -31,10 +31,13 @@ bool readBookshelf(PlaceDB& db, std::string const& auxPath)
     return true;
 }
 
-bool readInterchange(PlaceDB& db, std::string const& filename)
+bool readInterchange(PlaceDB& db, std::string const& deviceFile, std::string const& netlistFile)
 {   
-    DREAMPLACE_NAMESPACE::InterchangeDriver driver(db);
-    bool flag = driver.parse_device(filename);
+    // DREAMPLACE_NAMESPACE::InterchangeDriver driver(db);
+    // bool flag = driver.parse_device(filename);
+    bool flag1 = DREAMPLACE_NAMESPACE::readDevice(db, deviceFile);
+
+    bool flag2 = DREAMPLACE_NAMESPACE::readNetlist(db, netlistFile);
     // std::cout << "Reading Interchange file: " << filename << std::endl;
     return true;
 }

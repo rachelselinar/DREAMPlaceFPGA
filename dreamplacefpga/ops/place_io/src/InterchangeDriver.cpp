@@ -6,44 +6,30 @@
  */
 
 #include "InterchangeDriver.h"
-#include <map>
-#include <fstream>
-#include <fcntl.h>
-#include <kj/compat/gzip.h>
-#include <kj/std/iostream.h>
-#include <capnp/serialize.h>
-#include <capnp/message.h>
-#include <interchange/DeviceResources.capnp.h>
-#include <interchange/LogicalNetlist.capnp.h>
 
 DREAMPLACE_BEGIN_NAMESPACE
 
 InterchangeDriver::InterchangeDriver(InterchangeDataBase& db)
             : m_db(db)
 {
+    m_vInterchangeFiles.clear(); ///< store FPGA interchange files
+    m_deviceFile.clear(); 
+    m_netlistFile.clear();
+    m_net.reset();
+    maxY = 0;
+    numGridX = 0;
+    numGridY = 0;
 }
 
-bool InterchangeDriver::parse_device(std::string const& filename)
-{   
-    int fd = open(filename.c_str(), O_RDONLY);
-    kj::FdInputStream fdInput(fd);
-    kj::GzipInputStream gzipInput(fdInput);
-    capnp::InputStreamMessageReader messageReader(gzipInput, {1024L*1024L*1024L*64L, 64});
-    DeviceResources::Device::Reader deviceRoot = messageReader.getRoot<DeviceResources::Device>();
-    
-    // Test print out the device name
-    std::cout << "Parsing interchange for device : " << deviceRoot.getName().cStr() << std::endl;
-
+void InterchangeDriver::setTileToSiteType(DeviceResources::Device::Reader const& deviceRoot)
+{
     auto strings = deviceRoot.getStrList();
     auto tileTypes = deviceRoot.getTileTypeList();
     auto siteTypes = deviceRoot.getSiteTypeList();
-    
-    std::map<std::pair<int, int>, int> tile2SiteTypeId; //Map a tile (col, row) location to a site type index
-    std::map<std::pair<int, int>, int> sliceTile2Y; //Record a tile (col, row) location that has slice site to siteY
-
     auto tiles = deviceRoot.getTileList();
-    int maxY = 0;
-    for (int i=0; i < tiles.size(); i++){
+
+    for (int i = 0; i < tiles.size(); i++)
+    {
         auto tile = tiles[i];
         auto tileType = tileTypes[tile.getType()];
         int row = tile.getRow(); // the row order is reversed in tile location
@@ -51,7 +37,8 @@ bool InterchangeDriver::parse_device(std::string const& filename)
         std::pair<int, int> tileLoc = std::make_pair(col, row);
 
         auto sites = tile.getSites();
-        for (int j=0; j < sites.size(); j++){
+        for (int j = 0; j < sites.size(); j++)
+        {
             auto site = sites[j];
             auto tileSiteTypes = tileType.getSiteTypes();
             int siteTypeIdx = tileSiteTypes[site.getType()].getPrimaryType();
@@ -86,16 +73,19 @@ bool InterchangeDriver::parse_device(std::string const& filename)
             }
         }
     }
-    
-    int xIdx = 0, yIdx = 0, numGridX = 0, numGridY = 0;
+}
+
+void InterchangeDriver::setSiteMap()
+{
+    int xIdx = 0, yIdx = 0;
     int numSitesCol = 0;
-    std::map<std::pair<int, int>, int> siteMap;
+
     // Add IO padding for the first and last column, this is ONLY for the ISPD'16 benchmarks
     bool ioPadding = true; 
     if (ioPadding)
     {
         // Add IO padding for the first column
-        for (int i=0; i < int((maxY+1)/60); i++)
+        for (int i = 0; i < int((maxY+1)/60); i++)
         {
             yIdx = int(60.0*i);
             siteMap.insert(std::make_pair(std::make_pair(xIdx, yIdx), 4));
@@ -175,39 +165,244 @@ bool InterchangeDriver::parse_device(std::string const& filename)
     if (ioPadding)
     {
         // Add IO padding for the last column
-        for (int i=0; i < int((maxY+1)/60); i++)
+        for (int i = 0; i < int((maxY+1)/60); i++)
         {
             yIdx = int(60.0*i);
             siteMap.insert(std::make_pair(std::make_pair(xIdx, yIdx), 4));
         }
     }
     numGridX = xIdx+1;
-    
-    ////////////////////////// call functions for building database /////////////////////////////////
+}
+
+void InterchangeDriver::addSiteMapToDateBase()
+{
     m_db.resize_sites(numGridX, numGridY);
-    // std::cout << "numGridX: " << numGridX << ", numGridY: "  << numGridY << std::endl; 
-    for (auto it = siteMap.begin(); it != siteMap.end(); it++){
+    for (auto it = siteMap.begin(); it != siteMap.end(); it++)
+    {
         std::pair<int, int> loc = it->first;
         m_db.site_info_update(loc.first, loc.second, it->second);
-        // std::cout << "x: " << loc.first << ", y: "  << loc.second << ", type:"<< it->second << std::endl;
     }
+}
+
+void InterchangeDriver::addLibCellsToDataBase(LogicalNetlist::Netlist::Reader const& netlistRoot)
+{
+    auto strings = netlistRoot.getStrList();
+    auto libCells = netlistRoot.getCellDecls();
+    auto cellPorts = netlistRoot.getPortList();
+
+    for (int i = 0; i < libCells.size(); i++)
+    {
+        auto libCell = libCells[i];
+        auto Ports = libCell.getPorts();
+
+        std::string cellTypeName = strings[libCell.getName()].cStr();
+        
+        m_db.add_lib_cell(cellTypeName);
+        std::vector<std::string> busNames;
+        int cellTypeId = cellType2BusNames.size();
+
+        for (int j = 0; j < Ports.size(); j++)
+        {   
+            auto portIdx = Ports[j];
+            std::string portName = strings[cellPorts[portIdx].getName()].cStr();
+            auto portDir = cellPorts[portIdx].getDir();
+
+            //Address the bus ports
+            if (cellPorts[portIdx].isBus())
+            {
+                auto busStart = cellPorts[portIdx].getBus().getBusStart();
+                auto busEnd = cellPorts[portIdx].getBus().getBusEnd();
+                std::vector<int> busIndices(std::abs(int(busStart-busEnd))+1);
+                
+                if (busStart > busEnd) 
+                {   
+                    std::iota(busIndices.rbegin(), busIndices.rend(), busEnd);
+                } else {
+                    std::iota(busIndices.begin(), busIndices.end(), busStart);
+                }
+
+                for (int k = 0; k < busIndices.size(); k++)
+                {
+                    std::string busName = portName + '[' + std::to_string(busIndices[k]) + ']';
+                    busNames.emplace_back(busName);
+                    
+                    switch (portDir) 
+                    {
+                        case LogicalNetlist::Netlist::Direction::INPUT:
+                        {
+                            m_db.add_input_pin(busName);
+                            break;
+                        }
+                        case LogicalNetlist::Netlist::Direction::OUTPUT:
+                        {
+                            m_db.add_output_pin(busName);
+                            break;
+                        }
+                        case LogicalNetlist::Netlist::Direction::INOUT:
+                        {
+                            m_db.add_input_pin(busName);
+                            m_db.add_output_pin(busName);
+                            break;
+                        }
+                    }
+                }
+
+                // for ports that are not bus
+            } else {
+                busNames.emplace_back("");
+                switch (portDir) 
+                    {
+                        case LogicalNetlist::Netlist::Direction::INPUT:
+                        {   
+                            if (limbo::iequals(portName, "CLK") || limbo::iequals(portName, "C"))
+                            {
+                                m_db.add_clk_pin(portName);
+                            } else if (limbo::iequals(portName, "R") || limbo::iequals(portName, "CE")){
+                                m_db.add_ctrl_pin(portName);
+                            } else {
+                                m_db.add_input_pin(portName);
+                            }
+                            break;
+                        }
+                        case LogicalNetlist::Netlist::Direction::OUTPUT:
+                        {
+                            m_db.add_output_pin(portName);
+                            break;
+                        }
+                        case LogicalNetlist::Netlist::Direction::INOUT:
+                        {
+                            m_db.add_input_pin(portName);
+                            m_db.add_output_pin(portName);
+                            break;
+                        }
+                    }
+            }
+        } 
+        cellType2BusNames.emplace_back(busNames);
+        cellType2Index.insert(make_pair(cellTypeName, cellTypeId));
+        
+    }
+}
+
+void InterchangeDriver::addNodesToDataBase(LogicalNetlist::Netlist::Reader const& netlistRoot)
+{
+    auto strings = netlistRoot.getStrList();
+    auto instList = netlistRoot.getInstList();
+    auto libCells = netlistRoot.getCellDecls();
+
+    for (int i = 0; i < instList.size(); i++)
+    {
+        auto inst = instList[i];
+        std::string instName = strings[inst.getName()].cStr();
+        std::string instTypeName = strings[libCells[inst.getCell()].getName()].cStr();
+
+        m_db.add_bookshelf_node(instName, instTypeName);
+    }
+    
+}
+
+void InterchangeDriver::addNetsToDataBase(LogicalNetlist::Netlist::Reader const& netlistRoot)
+{
+    auto strings = netlistRoot.getStrList();
+    auto cellList = netlistRoot.getCellList();
+    auto instList = netlistRoot.getInstList();
+    auto libCells = netlistRoot.getCellDecls();
+    auto cellPorts = netlistRoot.getPortList();
+
+    for (int i = 0; i < cellList.size(); i++)
+    {
+        auto cell = cellList[i];
+        auto cellInsts = cell.getInsts();
+        auto cellNets = cell.getNets();
+
+        for (int j = 0; j < cellNets.size(); j++)
+        {
+            auto net = cellNets[j];
+            std::string netName = strings[net.getName()].cStr();
+
+            hashspace::unordered_map<std::string, int>::iterator fnd = netName2Index.find(netName);
+            if (fnd == netName2Index.end()) // SKIP if the net is already in the database
+            {
+                int netId(netNames.size());
+                netName2Index.insert(std::make_pair(netName, netId));
+                netNames.emplace_back(netName);
+
+                m_net.net_name = netName;
+                m_net.vNetPin.clear();
+
+                auto netPorts = net.getPortInsts();
+                for (int k = 0; k < netPorts.size(); k++)
+                { 
+                    auto port = netPorts[k];
+                    std::string portName = strings[cellPorts[port.getPort()].getName()].cStr();
+                    
+                    if (port.isInst())
+                    {
+                        auto inst = instList[port.getInst()];
+                        std::string cellName = strings[inst.getName()].cStr();
+                        std::string cellTypeName = strings[libCells[inst.getCell()].getName()].cStr();
+
+                        if (port.getBusIdx().isIdx())
+                        {
+                            if (port.isExtPort())
+                            {   
+                                m_net.vNetPin.push_back(BookshelfParser::NetPin(cellName, netName));
+                               
+                            } else {
+                                int cellTypeId = cellType2Index.at(cellTypeName);
+                                std::string busName = cellType2BusNames.at(cellTypeId).at(port.getBusIdx().getIdx());
+                                m_net.vNetPin.push_back(BookshelfParser::NetPin(cellName, busName));
+                                
+                            }
+
+                        } else {
+                            m_net.vNetPin.push_back(BookshelfParser::NetPin(cellName, portName));
+                        }
+                    }
+                    
+                }
+
+                m_db.add_bookshelf_net(m_net);
+                m_net.reset();
+            }
+               
+        }
+    }
+}
+
+bool readDevice(InterchangeDataBase& db, std::string const& deviceFile)
+{
+    int fd = open(deviceFile.c_str(), O_RDONLY);
+    kj::FdInputStream fdInput(fd);
+    kj::GzipInputStream gzipInput(fdInput);
+    capnp::InputStreamMessageReader messageReader(gzipInput, {1024L*1024L*1024L*64L, 64});
+    DeviceResources::Device::Reader deviceRoot = messageReader.getRoot<DeviceResources::Device>();
+
+    InterchangeDriver driver(db);
+    driver.setTileToSiteType(deviceRoot);
+    driver.setSiteMap();
+    driver.addSiteMapToDateBase();
 
     return true;
 }
 
-bool InterchangeDriver::parse_logical_netlist(std::string const& filename)
+bool readNetlist(InterchangeDataBase& db, std::string const& netlistFile)
 {
-    int fd = open(filename.c_str(), O_RDONLY);
+    int fd = open(netlistFile.c_str(), O_RDONLY);
     kj::FdInputStream fdInput(fd);
     kj::GzipInputStream gzipInput(fdInput);
     capnp::InputStreamMessageReader messageReader(gzipInput, {1024L*1024L*1024L*64L, 64});
-    LogicalNetlist::Netlist::Reader NetlistRoot = messageReader.getRoot<LogicalNetlist::Netlist>();
+    LogicalNetlist::Netlist::Reader netlistRoot = messageReader.getRoot<LogicalNetlist::Netlist>();
 
-    std::cout << "Logical Netlist Name: " << NetlistRoot.getName().cStr() << std::endl;
-    auto strings = NetlistRoot.getStrList();
-    auto cells = NetlistRoot.getCellDecls();
+    InterchangeDriver driver(db);
+    driver.addLibCellsToDataBase(netlistRoot);
+    driver.addNodesToDataBase(netlistRoot);
+    driver.addNetsToDataBase(netlistRoot);
+
+    db.bookshelf_end(); 
 
     return true;
+    
 }
 
 

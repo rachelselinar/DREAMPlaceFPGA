@@ -18,13 +18,12 @@ class PlaceIOFunction(Function):
         args = params.aux_input
         raw_db = None
         if "aux_input" in params.__dict__ and params.aux_input:
-            partial_db = place_io_cpp.forward(args)
+            return place_io_cpp.forward(args)
 
-        if "interchange_device" in params.__dict__ and params.interchange_device:
-            device_file = params.interchange_device
-            return place_io_cpp.forward_interchange(partial_db, device_file)
         else:
-            return partial_db
+            device_file = params.interchange_device
+            netlist_file = params.interchange_netlist
+            return place_io_cpp.forward_interchange(device_file, netlist_file)
 
     @staticmethod
     def pydb(raw_db): 
