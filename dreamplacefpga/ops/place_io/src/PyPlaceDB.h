@@ -21,7 +21,7 @@
 DREAMPLACE_BEGIN_NAMESPACE
 
 bool readBookshelf(PlaceDB& db, std::string const& auxPath);
-bool readInterchange(PlaceDB& db, std::string const& filename);
+bool readInterchange(PlaceDB& db, std::string const& deviceFile, std::string const& netlistFile);
 
 /// database for python 
 struct PyPlaceDB
