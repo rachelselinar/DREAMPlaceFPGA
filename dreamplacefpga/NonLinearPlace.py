@@ -749,11 +749,24 @@ class NonLinearPlaceFPGA (BasicPlaceFPGA):
                 self.data_collections.tnet_weights.data.copy_(upd_tnet_wts_criticality[:placedb.num_tnets])
                 self.data_collections.tnet_criticality.data.copy_(upd_tnet_wts_criticality[placedb.num_tnets:])
         
-        # else: 
-        #     cur_metric = EvalMetricsFPGA(iteration)
-        #     all_metrics.append(cur_metric)
-        #     cur_metric.evaluate(placedb, {"hpwl" : self.op_collections.hpwl_op}, self.pos[0])
-        #     logging.info(cur_metric)
+        else: 
+            place_file=params.place_sol
+            with open (place_file,  "r") as f:
+                for line in f:
+                    tokens = line.split()
+                    if len(tokens) > 0:
+                        nodeId = placedb.node_name2id_map[tokens[0]]
+                        self.data_collections.node_x[nodeId].data.fill_(float(tokens[1]))
+                        self.data_collections.node_y[nodeId].data.fill_(float(tokens[2]))
+                        self.data_collections.node_z[nodeId].data.fill_(int(tokens[3]))
+            self.pos[0][:placedb.num_physical_nodes].data.copy_(self.data_collections.node_x)
+            self.pos[0][placedb.num_nodes:placedb.num_nodes+placedb.num_physical_nodes].data.copy_(self.data_collections.node_y)
+            logging.info("Read Placement solution from %s" % (place_file))
+            
+            cur_metric = EvalMetricsFPGA(iteration)
+            all_metrics.append(cur_metric)
+            cur_metric.evaluate(placedb, {"hpwl" : self.op_collections.hpwl_op}, self.pos[0])
+            logging.info(cur_metric)
 
         # dump global placement solution for legalization 
         if params.dump_global_place_solution_flag: 

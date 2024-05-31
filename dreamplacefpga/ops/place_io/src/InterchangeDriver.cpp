@@ -12,21 +12,18 @@ DREAMPLACE_BEGIN_NAMESPACE
 InterchangeDriver::InterchangeDriver(InterchangeDataBase& db)
             : m_db(db)
 {
-    m_vInterchangeFiles.clear(); ///< store FPGA interchange files
-    m_deviceFile.clear(); 
-    m_netlistFile.clear();
     m_net.reset();
-    maxY = 0;
+    maxSiteY = 0;
     numGridX = 0;
     numGridY = 0;
 }
 
-void InterchangeDriver::setTileToSiteType(DeviceResources::Device::Reader const& deviceRoot)
+void InterchangeDriver::setTileToSiteType()
 {
-    auto strings = deviceRoot.getStrList();
-    auto tileTypes = deviceRoot.getTileTypeList();
-    auto siteTypes = deviceRoot.getSiteTypeList();
-    auto tiles = deviceRoot.getTileList();
+    auto strings = interchangeDeviceRoot.getStrList();
+    auto tileTypes = interchangeDeviceRoot.getTileTypeList();
+    auto siteTypes = interchangeDeviceRoot.getSiteTypeList();
+    auto tiles = interchangeDeviceRoot.getTileList();
 
     for (int i = 0; i < tiles.size(); i++)
     {
@@ -50,7 +47,7 @@ void InterchangeDriver::setTileToSiteType(DeviceResources::Device::Reader const&
             if ((siteTypeName.find("SLICEL") != std::string::npos) || (siteTypeName.find("SLICEM") != std::string::npos))
             {
                 int siteY = std::stoi(siteName.substr(siteName.find("Y")+1));
-                maxY = (siteY > maxY)? siteY : maxY;
+                maxSiteY = (siteY > maxSiteY)? siteY : maxSiteY;
                 sliceTile2Y.insert(std::make_pair(tileLoc, siteY));
                 tile2SiteTypeId.insert(std::make_pair(tileLoc, 1));
             } else if (siteTypeName.find("DSP48") != std::string::npos)
@@ -85,7 +82,7 @@ void InterchangeDriver::setSiteMap()
     if (ioPadding)
     {
         // Add IO padding for the first column
-        for (int i = 0; i < int((maxY+1)/60); i++)
+        for (int i = 0; i < int((maxSiteY+1)/60); i++)
         {
             yIdx = int(60.0*i);
             siteMap.insert(std::make_pair(std::make_pair(xIdx, yIdx), 4));
@@ -165,7 +162,7 @@ void InterchangeDriver::setSiteMap()
     if (ioPadding)
     {
         // Add IO padding for the last column
-        for (int i = 0; i < int((maxY+1)/60); i++)
+        for (int i = 0; i < int((maxSiteY+1)/60); i++)
         {
             yIdx = int(60.0*i);
             siteMap.insert(std::make_pair(std::make_pair(xIdx, yIdx), 4));
@@ -184,11 +181,12 @@ void InterchangeDriver::addSiteMapToDateBase()
     }
 }
 
-void InterchangeDriver::addLibCellsToDataBase(LogicalNetlist::Netlist::Reader const& netlistRoot)
-{
-    auto strings = netlistRoot.getStrList();
-    auto libCells = netlistRoot.getCellDecls();
-    auto cellPorts = netlistRoot.getPortList();
+void InterchangeDriver::addLibCellsToDataBase()
+{   
+    //// prepare data from logical netlist root for lib cells
+    auto strings = interchangeNetlistRoot.getStrList();
+    auto libCells = interchangeNetlistRoot.getCellDecls();
+    auto cellPorts = interchangeNetlistRoot.getPortList();
 
     for (int i = 0; i < libCells.size(); i++)
     {
@@ -247,7 +245,7 @@ void InterchangeDriver::addLibCellsToDataBase(LogicalNetlist::Netlist::Reader co
                     }
                 }
 
-                // for ports that are not bus
+            // for ports that are not bus
             } else {
                 busNames.emplace_back("");
                 switch (portDir) 
@@ -284,11 +282,12 @@ void InterchangeDriver::addLibCellsToDataBase(LogicalNetlist::Netlist::Reader co
     }
 }
 
-void InterchangeDriver::addNodesToDataBase(LogicalNetlist::Netlist::Reader const& netlistRoot)
-{
-    auto strings = netlistRoot.getStrList();
-    auto instList = netlistRoot.getInstList();
-    auto libCells = netlistRoot.getCellDecls();
+void InterchangeDriver::addNodesToDataBase()
+{   
+    //// prepare data from logical netlist root for nodes
+    auto strings = interchangeNetlistRoot.getStrList();
+    auto instList = interchangeNetlistRoot.getInstList();
+    auto libCells = interchangeNetlistRoot.getCellDecls();
 
     for (int i = 0; i < instList.size(); i++)
     {
@@ -301,13 +300,14 @@ void InterchangeDriver::addNodesToDataBase(LogicalNetlist::Netlist::Reader const
     
 }
 
-void InterchangeDriver::addNetsToDataBase(LogicalNetlist::Netlist::Reader const& netlistRoot)
+void InterchangeDriver::addNetsToDataBase()
 {
-    auto strings = netlistRoot.getStrList();
-    auto cellList = netlistRoot.getCellList();
-    auto instList = netlistRoot.getInstList();
-    auto libCells = netlistRoot.getCellDecls();
-    auto cellPorts = netlistRoot.getPortList();
+    //// prepare data from logical netlist root for nets
+    auto strings = interchangeNetlistRoot.getStrList();
+    auto cellList = interchangeNetlistRoot.getCellList();
+    auto instList = interchangeNetlistRoot.getInstList();
+    auto libCells = interchangeNetlistRoot.getCellDecls();
+    auto cellPorts = interchangeNetlistRoot.getPortList();
 
     for (int i = 0; i < cellList.size(); i++)
     {
@@ -370,39 +370,59 @@ void InterchangeDriver::addNetsToDataBase(LogicalNetlist::Netlist::Reader const&
     }
 }
 
-bool readDevice(InterchangeDataBase& db, std::string const& deviceFile)
+bool InterchangeDriver::parse_device(DeviceResources::Device::Reader const& deviceRoot)
 {
-    int fd = open(deviceFile.c_str(), O_RDONLY);
-    kj::FdInputStream fdInput(fd);
-    kj::GzipInputStream gzipInput(fdInput);
-    capnp::InputStreamMessageReader messageReader(gzipInput, {1024L*1024L*1024L*64L, 64});
-    DeviceResources::Device::Reader deviceRoot = messageReader.getRoot<DeviceResources::Device>();
+    interchangeDeviceRoot = deviceRoot;
 
-    InterchangeDriver driver(db);
-    driver.setTileToSiteType(deviceRoot);
-    driver.setSiteMap();
-    driver.addSiteMapToDateBase();
+    this->setTileToSiteType();
+    this->setSiteMap();
+    this->addSiteMapToDateBase();
 
     return true;
 }
 
-bool readNetlist(InterchangeDataBase& db, std::string const& netlistFile)
+bool InterchangeDriver::parse_netlist(LogicalNetlist::Netlist::Reader const& netlistRoot)
 {
-    int fd = open(netlistFile.c_str(), O_RDONLY);
-    kj::FdInputStream fdInput(fd);
-    kj::GzipInputStream gzipInput(fdInput);
-    capnp::InputStreamMessageReader messageReader(gzipInput, {1024L*1024L*1024L*64L, 64});
-    LogicalNetlist::Netlist::Reader netlistRoot = messageReader.getRoot<LogicalNetlist::Netlist>();
+    interchangeNetlistRoot = netlistRoot;
 
-    InterchangeDriver driver(db);
-    driver.addLibCellsToDataBase(netlistRoot);
-    driver.addNodesToDataBase(netlistRoot);
-    driver.addNetsToDataBase(netlistRoot);
-
-    db.bookshelf_end(); 
+    this->addLibCellsToDataBase();
+    this->addNodesToDataBase();
+    this->addNetsToDataBase();
 
     return true;
-    
+}
+
+bool readDeviceNetlist(InterchangeDataBase& db, std::string const& deviceFile, std::string const& netlistFile)
+{
+    InterchangeDriver driver(db);
+
+    if (deviceFile.empty() || netlistFile.empty())
+    {   
+        std::cerr << "Error: device file or netlist file is not specified." << std::endl;
+        return false;
+    }
+
+    int fd_device = open(deviceFile.c_str(), O_RDONLY);
+    kj::FdInputStream fdInputDevice(fd_device);
+    kj::GzipInputStream gzipInputDevice(fdInputDevice);
+    capnp::InputStreamMessageReader deviceReader(gzipInputDevice, {1024L*1024L*1024L*64L, 64});
+    DeviceResources::Device::Reader deviceRoot = deviceReader.getRoot<DeviceResources::Device>();
+
+    std::cout << "Parsing device file " << deviceFile << std::endl;
+    driver.parse_device(deviceRoot);
+
+    int fd_netlist = open(netlistFile.c_str(), O_RDONLY);
+    kj::FdInputStream fdInputNetlist(fd_netlist);
+    kj::GzipInputStream gzipInputNetlist(fdInputNetlist);
+    capnp::InputStreamMessageReader netlistReader(gzipInputNetlist, {1024L*1024L*1024L*64L, 64});
+    LogicalNetlist::Netlist::Reader netlistRoot = netlistReader.getRoot<LogicalNetlist::Netlist>();
+
+    std::cout << "Parsing netlist file " << netlistFile << std::endl;
+    driver.parse_netlist(netlistRoot);
+
+    db.bookshelf_end(); // Finalize the database
+
+    return true;
 }
 
 

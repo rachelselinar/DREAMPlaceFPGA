@@ -33,12 +33,18 @@ bool readBookshelf(PlaceDB& db, std::string const& auxPath)
 
 bool readInterchange(PlaceDB& db, std::string const& deviceFile, std::string const& netlistFile)
 {   
-    // DREAMPLACE_NAMESPACE::InterchangeDriver driver(db);
-    // bool flag = driver.parse_device(filename);
-    bool flag1 = DREAMPLACE_NAMESPACE::readDevice(db, deviceFile);
+    if (!deviceFile.empty() & !netlistFile.empty())
+    {
+        bool flag = DREAMPLACE_NAMESPACE::readDeviceNetlist(db, deviceFile, netlistFile);
 
-    bool flag2 = DREAMPLACE_NAMESPACE::readNetlist(db, netlistFile);
-    // std::cout << "Reading Interchange file: " << filename << std::endl;
+        if (!flag)
+        {
+            dreamplacePrint(kERROR, "Interchange file parsing failed\n");
+            return false;
+        }
+    }
+    else dreamplacePrint(kWARN, "Missing Interchange file\n");
+
     return true;
 }
 

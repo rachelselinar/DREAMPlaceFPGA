@@ -88,10 +88,9 @@ def placeFPGA(params):
     if params.enable_if == 1:
         tt = time.time()
         logging.info("Start writing solution to Interchange Format(IF)")
-        part_name = params.part_name
         schema_dir = os.path.join(os.path.dirname(__file__), '../thirdparty/fpga-interchange-schema/interchange')
-        db2phys = db_to_physicalnetlist(placedb, schema_dir, part_name)  
-        phys_netlist = db2phys.build_physicalnetlist(placedb, final_out_file)
+        db2phys = db_to_physicalnetlist(placedb, schema_dir, params.interchange_device)
+        phys_netlist = db2phys.build_physicalnetlist(placedb)
         # tcl_generator().write_tcl(phys_netlist)
         if_writer = IFWriter(schema_dir)
         physical_netlist = if_writer.build_IF(phys_netlist)

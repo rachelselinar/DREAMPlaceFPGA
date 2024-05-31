@@ -151,8 +151,18 @@ class Params:
         """
         @brief speculate the design name for dumping out intermediate solutions 
         """
-        design_name = os.path.basename(self.aux_input).replace(".aux", "").replace(".AUX", "")
+        if self.aux_input == "":
+            design_name = "design"
+        else:
+            design_name = os.path.basename(self.aux_input).replace(".aux", "").replace(".AUX", "")
         return design_name 
+    
+    def part_name(self):
+        """
+        @brief speculate the device name for dumping out intermediate solutions 
+        """
+        part_name = os.path.basename(self.interchange_device).replace(".device", "").replace(".DEVICE", "")
+        return part_name
 
     def solution_file_suffix(self): 
         """

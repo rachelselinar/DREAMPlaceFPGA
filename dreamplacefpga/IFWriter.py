@@ -39,7 +39,6 @@ class IFWriter():
     def __init__(self, schema_dir):
         """ initialize and compile PhysicalNetlist.capnp """
         import_path = [os.path.dirname(os.path.dirname(capnp.__file__))]
-        # import_path.append(os.path.join(schema_dir, '../../schema'))
         import_path.append('IFsupport')
         self.physical_netlist_capnp = capnp.load(os.path.join(schema_dir, 'PhysicalNetlist.capnp'), imports=import_path)
         self.strList = []
@@ -657,8 +656,9 @@ class PhysicalNetlist:
     self.add_site_instance()
     self.add_physical_cell()
     """
-    def __init__(self, part):
-        self.part = part
+    def __init__(self, part_name):
+        """ Initialize PhysicalNetlist object. """
+        self.part = part_name
         self.placements = []
         self.nets = []
         self.physCells = {}
@@ -1142,7 +1142,7 @@ class DeviceResources:
     get_site_type(self)
     get_packages
     """
-    def __init__(self, schema_dir, part_name):
+    def __init__(self, schema_dir, device_file):
         """ Read and compile device resources for part assigned by part_name
         
         """
@@ -1152,8 +1152,13 @@ class DeviceResources:
         import_path.append('IFsupport')
         self.device_resources_capnp = capnp.load(os.path.join(schema_dir, 'DeviceResources.capnp'), imports=import_path)
         
-        device_file = os.path.join('IFsupport', part_name)
-        with open(device_file + '.device', 'rb') as in_f:
+        # device_file = os.path.join('IFsupport', part_name)
+        # with open(device_file + '.device', 'rb') as in_f:
+
+        with open(device_file, 'rb') as in_f:
+            if (in_f is None):
+                logging.error("Cannot open device file %s" % device_file)
+                sys.exit(1)
             f_comp = gzip.GzipFile(fileobj = in_f, mode='rb')
 
             with self.device_resources_capnp.Device.from_bytes(f_comp.read(), traversal_limit_in_words=NO_TRAVERSAL_LIMIT, nesting_limit=NESTING_LIMIT) as message:
@@ -1416,63 +1421,10 @@ class DeviceResources:
 
 
 class db_to_physicalnetlist():
-    def __init__(self, placedb, schema_dir, part_name):
-        self.part = part_name
+    def __init__(self, placedb, schema_dir, device_file):
+        self.part = os.path.basename(device_file).replace(".device", "").replace(".DEVICE", "")
         self.schema_dir = schema_dir
-        self.sitemap = {}
-        # self.SLICE = {}
-        self.DSP = []
-        self.BRAM = []
-        self.IO = []
-        bram_y_num = placedb. num_sites_y / 5
-        dsp_y_num = placedb. num_sites_y / 2.5
-
-
-        slice_index_x = 0
-        # initialize sitemap
-        for i in range(placedb.num_sites_x):
-            slice_flag = False
-            # slice_index_y = 0
-            for j in range(placedb.num_sites_y):
-                # LUT/FF
-                if placedb.site_type_map[i, j] == 1: 
-                    slice_flag = True
-                    for k in range(0, 16):
-                        self.sitemap[i, j, k] = "SLICE_X" + str(slice_index_x) + "Y" + str(j)
-                    # slice_index_y += 1
-                # DSP
-                elif placedb.site_type_map[i, j] == 2:
-                    self.DSP.append((i, j))
-                    idx = len(self.DSP) - 1
-                    index_x = int(idx / dsp_y_num)
-                    index_y = int(idx - index_x * dsp_y_num)
-                    self.sitemap[i, j, 0] = "DSP48E2_X" + str(index_x) + "Y" + str(index_y)
-                # BRAM
-                elif placedb.site_type_map[i, j] == 3:
-                    self.BRAM.append((i, j))
-                    idx = len(self.BRAM) - 1
-                    index_x = int(idx / bram_y_num)
-                    index_y = int(idx - index_x * bram_y_num)
-                    self.sitemap[i, j, 0] = "RAMB36_X" + str(index_x) + "Y" + str(index_y)
-                # IO
-                elif placedb.site_type_map[i, j] == 4:
-                    self.IO.append((i, j))
-
-            if slice_flag:
-                slice_index_x += 1
-
-            # if slice_index_x == 90:
-            #     print(i)
-
-        IOB_col = []
-        BUFGCE_col = []
-        for loc in self.IO:
-            x, y = loc
-            if x != 0 and x != placedb.num_sites_x - 1:
-                if x not in IOB_col and x not in BUFGCE_col:
-                    IOB_col.append(x) 
-                    BUFGCE_col.append(x+1)
-
+        self.sitemap = placedb.loc2site_map
 
         self.Site_LUTs = {}
         self.shared_LUT = []
@@ -1487,9 +1439,7 @@ class db_to_physicalnetlist():
         # map from node name to site name
         self.node_site_map = {}
 
-        self.device_resource = DeviceResources(self.schema_dir, part_name)
-
-
+        self.device_resource = DeviceResources(self.schema_dir, device_file)
 
         sitetypes_prefix = ['SLICEM', 'SLICEL', 'HPIOB', 'HRIO', 'BUFGCE', 'RAMB36', 'DSP48E2']
         sitetypes = []
@@ -1497,8 +1447,6 @@ class db_to_physicalnetlist():
             for prefix in sitetypes_prefix:
                 if prefix in site_type_name:
                     sitetypes.append(site_type_name)
-
-        # print(sitetypes)
         
         self.routing_graphs = {}
         self.site_in = {}
@@ -1826,7 +1774,7 @@ class db_to_physicalnetlist():
                 node_type = placedb.node_types[node_id]
 
                 # ignore the pseudo VCC, GND nodes
-                if node_type == 'LUT0': 
+                if placedb.node2fence_region_map[node_id] == 0 and placedb.lut_type[node_id] == 0:
                     if node_name == 'VCC':
                         vcc_nets.append(net_name)
                     else:
@@ -1835,7 +1783,6 @@ class db_to_physicalnetlist():
                     continue
 
                 site_name = self.node_site_map[node_name]
-
 
                 # net_roots
                 site_obj = self.site_instances[site_name]
@@ -1953,13 +1900,9 @@ class db_to_physicalnetlist():
                     stubs=vcc_stubs,
                     stubNodes=[],
                     net_type=PhysicalNetType.Vcc)
-        
-        
 
-    def build_physicalnetlist(self, placedb, out_file):
+    def build_physicalnetlist(self, placedb):
         phys_netlist = PhysicalNetlist(self.part)
-
-        # cell_prop_map = self.logical_netlist.cell_prop_map
         
         mappings = self.device_resource.yield_cell_bel_mappings()
         site_type_map = self.device_resource.site_type_map
@@ -1973,104 +1916,56 @@ class db_to_physicalnetlist():
             cell = mapping.cell
             pinmap[cell] = mapping.common_pins
             parameter_pinmap[cell] = mapping.parameter_pins
+        
+        for i in range(placedb.num_physical_nodes):
+            node_name = placedb.node_names[i]
+            node_type = placedb.node_types[i]
 
-        with open(out_file, 'r') as fin:
-            for line in fin:
-                node_name, x, y, z = line.split()
-                x = int(x)
-                y = int(y)
-                z = int(z)
-                node_id = placedb.node_name2id_map[node_name]
-                node_type = placedb.node_types[node_id]
+            x = int(placedb.node_x[i])
+            y = int(placedb.node_y[i])
+            z = int(placedb.node_z[i])
 
-                # ignore the pseudo VCC, GND nodes
-                if node_type == 'LUT0':
-                    continue
+            # ignore the pseudo VCC, GND nodes
+            if placedb.node2fence_region_map[i] == 0 and placedb.lut_type[i] == 0:
+                continue
 
-                self.node_placement[node_name] = [] 
+            self.node_placement[node_name] = []
 
-                if node_type in macro_inst:
-                    LUT6_2_flag = False
-                    for inst in macro_inst[node_type]:
-                        cell_type = macro_inst[node_type][inst]
-                        cell_name = node_name + "/" + inst
-                        site_name = self.sitemap[x, y, z]
-                            
-                        if site_type_map[site_name][:5] == 'SLICE' and LUT6_2_flag == False:
-                            bel_name = self.Map_bel(z-1, node_type)
-                            LUT6_2_flag = True
-                        elif LUT6_2_flag == True:
-                            bel_name = self.Map_bel(z, node_type)
-                        else:
-                            bel_name = cell_type
-
-                        self.node_site_map[node_name] = site_name
-
-                        # build siteinst obj
-                        if site_name not in self.site_instances:
-                            site_instance  = SiteInst(site_name)
-                            self.site_instances[site_name] = site_instance
-
-
-                        # For site instances
-                        if site_name not in phys_netlist.siteInsts:
-                            site_type = site_type_map[site_name]
-                            phys_netlist.add_site_instance(site_name, site_type) 
-
-                            self.site_instances[site_name] = SiteInst(site_name)
-
-                        else:
-                            site_type = phys_netlist.siteInsts[site_name]
-
-                        # add cell instance
-                        cellplacement = Cellplacement(cell_name, cell_type, site_name, bel_name)
-                        self.node_placement[node_name].append(cellplacement)
-
-                        # add pins for cell instance
-                        for key, value in pinmap[cell_type][site_type, bel_name].items():
-                            belpin = key
-                            cellpin = value
-                            if cellpin == "GND": 
-                                continue
-                            elif node_type == 'DSP48E2':
-                                if belpin in self.dsp_bel_pins[bel_name]:
-                                    cellplacement.add_pins(cellpin, belpin)
-                                else:
-                                    break
-                            else:
-                                cellplacement.add_pins(cellpin, belpin)
-                        phys_netlist.add_cellplacement(cellplacement)
-
-                        self.site_instances[site_name].add_cells(node_name, cellplacement)                            
-
-                # primary insts
-                else: 
-                    cell_type = node_type
-                    cell_name = node_name
+            if node_type in macro_inst:
+                LUT6_2_flag = False
+                for inst in macro_inst[node_type]:
+                    cell_type = macro_inst[node_type][inst]
+                    cell_name = node_name + "/" + inst
                     site_name = self.sitemap[x, y, z]
-                    bel_name = self.Map_bel(z, node_type)
+                            
+                    if site_type_map[site_name][:5] == 'SLICE' and LUT6_2_flag == False:
+                        bel_name = self.Map_bel(z-1, node_type)
+                        LUT6_2_flag = True
+                    elif LUT6_2_flag == True:
+                        bel_name = self.Map_bel(z, node_type)
+                    else:
+                        bel_name = cell_type
+
                     self.node_site_map[node_name] = site_name
 
+                    # build siteinst obj
                     if site_name not in self.site_instances:
                         site_instance  = SiteInst(site_name)
                         self.site_instances[site_name] = site_instance
 
-
                     # For site instances
                     if site_name not in phys_netlist.siteInsts:
-                        if cell_type == "RAMB36E2":
-                            site_type = alt_site_type_map[site_name]
-                        else:
-                            site_type = site_type_map[site_name]
-                        phys_netlist.add_site_instance(site_name, site_type)
+                        site_type = site_type_map[site_name]
+                        phys_netlist.add_site_instance(site_name, site_type) 
+
+                        self.site_instances[site_name] = SiteInst(site_name)
+
                     else:
                         site_type = phys_netlist.siteInsts[site_name]
-
 
                     # add cell instance
                     cellplacement = Cellplacement(cell_name, cell_type, site_name, bel_name)
                     self.node_placement[node_name].append(cellplacement)
-                    self.site_instances[site_name].add_cells(node_name, cellplacement)
 
                     # add pins for cell instance
                     for key, value in pinmap[cell_type][site_type, bel_name].items():
@@ -2078,47 +1973,92 @@ class db_to_physicalnetlist():
                         cellpin = value
                         if cellpin == "GND": 
                             continue
+                        elif node_type == 'DSP48E2':
+                            if belpin in self.dsp_bel_pins[bel_name]:
+                                cellplacement.add_pins(cellpin, belpin)
+                            else:
+                                break
                         else:
                             cellplacement.add_pins(cellpin, belpin)
 
-
-                    if cell_type == 'RAMB36E2':
-                        para_belcell = {}
-                        para_map = {}
-                        para_map['DOA_REG'] = '1'
-                        para_map['WRITE_WIDTH_A'] = '1'
-                        para_map['WRITE_WIDTH_B'] = '72'
-                        para_map['DOB_REG'] = '1'
-
-
-                        for prop_key, prop_value in para_map.items():           
-                            for key, value in parameter_pinmap[cell_type][site_type, bel_name, prop_key, prop_value].items():
-                                belpin = key
-                                cellpin = value
-                                
-                                #   hardcode this need to find a clean way 
-                                if belpin == 'DINBDIN1':
-                                    cellpin = 'DINBDIN[1]'
-
-                                if cellpin == "GND" or cellpin == "VCC": 
-                                    continue
-                                elif belpin not in para_belcell:
-                                    para_belcell[belpin] = cellpin
-                                    cellplacement.add_pins(cellpin, belpin)
-                                    
-
                     phys_netlist.add_cellplacement(cellplacement)
 
-                    if site_name[:5] == 'SLICE':
-                        if site_name not in self.Site_LUTs:
-                            in_site_luts = []
-                            if cell_type[:3] == 'LUT':
-                                in_site_luts.append(cellplacement)
-                            self.Site_LUTs[site_name] = in_site_luts
-                        else:
-                            if cell_type[:3] == 'LUT':
-                                self.Site_LUTs[site_name].append(cellplacement)
+                    self.site_instances[site_name].add_cells(node_name, cellplacement)                            
+
+            # primary insts
+            else: 
+                cell_type = node_type
+                cell_name = node_name
+                site_name = self.sitemap[x, y, z]
+                bel_name = self.Map_bel(z, node_type)
+                self.node_site_map[node_name] = site_name
+
+                if site_name not in self.site_instances:
+                    site_instance  = SiteInst(site_name)
+                    self.site_instances[site_name] = site_instance
+
+
+                # For site instances
+                if site_name not in phys_netlist.siteInsts:
+                    if cell_type == "RAMB36E2":
+                        site_type = alt_site_type_map[site_name]
+                    else:
+                        site_type = site_type_map[site_name]
+                    phys_netlist.add_site_instance(site_name, site_type)
+                else:
+                    site_type = phys_netlist.siteInsts[site_name]
+
+
+                # add cell instance
+                cellplacement = Cellplacement(cell_name, cell_type, site_name, bel_name)
+                self.node_placement[node_name].append(cellplacement)
+                self.site_instances[site_name].add_cells(node_name, cellplacement)
+
+                # add pins for cell instance
+                for key, value in pinmap[cell_type][site_type, bel_name].items():
+                    belpin = key
+                    cellpin = value
+                    if cellpin == "GND": 
+                        continue
+                    else:
+                        cellplacement.add_pins(cellpin, belpin)
+
+                if cell_type == 'RAMB36E2':
+                    para_belcell = {}
+                    para_map = {}
+                    para_map['DOA_REG'] = '1'
+                    para_map['WRITE_WIDTH_A'] = '1'
+                    para_map['WRITE_WIDTH_B'] = '72'
+                    para_map['DOB_REG'] = '1'
+
+
+                    for prop_key, prop_value in para_map.items():           
+                        for key, value in parameter_pinmap[cell_type][site_type, bel_name, prop_key, prop_value].items():
+                            belpin = key
+                            cellpin = value
                                 
+                            # hardcode this need to find a clean way 
+                            if belpin == 'DINBDIN1':
+                                cellpin = 'DINBDIN[1]'
+
+                            if cellpin == "GND" or cellpin == "VCC": 
+                                continue
+                            elif belpin not in para_belcell:
+                                para_belcell[belpin] = cellpin
+                                cellplacement.add_pins(cellpin, belpin)
+                                    
+
+                phys_netlist.add_cellplacement(cellplacement)
+
+                if site_name[:5] == 'SLICE':
+                    if site_name not in self.Site_LUTs:
+                        in_site_luts = []
+                        if cell_type[:3] == 'LUT':
+                            in_site_luts.append(cellplacement)
+                        self.Site_LUTs[site_name] = in_site_luts
+                    else:
+                        if cell_type[:3] == 'LUT':
+                            self.Site_LUTs[site_name].append(cellplacement)                  
 
         self.prevent_pin_overlap(placedb, phys_netlist)
 

@@ -32,12 +32,14 @@ class InterchangeDataBase
         /// @brief add cell control pin
         virtual void add_ctrl_pin(std::string& pName);
         /// @brief add node as bookshelf format 
-        virtual void add_bookshelf_node(std::string& name, std::string& type); //TODO: modify this function for interchange
-        /// @brief add node as bookshelf format 
-        virtual void add_bookshelf_net(BookshelfParser::Net const& n); //TODO: modify this function for interchange
+        /// @Zhili TODO: Is it necessary to modify these 3 function for interchange?
+        virtual void add_bookshelf_node(std::string& name, std::string& type); 
+        /// @brief add net as bookshelf format 
+        virtual void add_bookshelf_net(BookshelfParser::Net const& n); 
+        /// @brief a callback when a bookshelf file reaches to the end 
+        virtual void bookshelf_end(); 
 
-        virtual void bookshelf_end() = 0;
-        private:
+    private:
         /// @brief remind users to define some optional callback functions at runtime 
         /// @param str message including the information to the callback function in the reminder 
         void interchange_user_cbk_reminder(const char* str) const;
