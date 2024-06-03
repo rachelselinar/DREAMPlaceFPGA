@@ -202,7 +202,7 @@ void PyPlaceDB::set(PlaceDB const& db)
 
     for (unsigned int i = 0, ie = db.siteRows(); i < ie; ++i)
     {
-        pybind11::list rowVals, lg_rowXY; 
+        pybind11::list rowVals, rowNames, lg_rowXY;
         for (unsigned int j = 0, je = db.siteCols(); j < je; ++j)
         {
             pybind11::list siteXY, lg_Site;
@@ -253,8 +253,10 @@ void PyPlaceDB::set(PlaceDB const& db)
                     }
             }
             rowVals.append(db.siteVal(i,j));
+            rowNames.append(db.siteName(i,j));
         }
         site_type_map.append(rowVals);
+        site_name_map.append(rowNames);
         lg_siteXYs.append(lg_rowXY);
     }
 

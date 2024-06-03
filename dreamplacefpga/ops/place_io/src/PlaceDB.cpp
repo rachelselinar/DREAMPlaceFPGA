@@ -394,10 +394,15 @@ void PlaceDB::resize_sites(int xSize, int ySize)
 {
     m_dieArea.set(0, 0, xSize, ySize);
     m_siteDB.resize(xSize, std::vector<index_type>(ySize, 0));
+    m_siteNameDB.resize(xSize, std::vector<std::string>(ySize, ""));
 }
 void PlaceDB::site_info_update(int x, int y, int val)
 {
     m_siteDB[x][y] = val;
+}
+void PlaceDB::add_site_name(int x, int y, std::string const& name)
+{
+    m_siteNameDB[x][y] = name;
 }
 void PlaceDB::resize_clk_regions(int xReg, int yReg)
 {

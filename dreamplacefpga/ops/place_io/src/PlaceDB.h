@@ -217,6 +217,8 @@ class PlaceDB : public BookshelfParser::BookshelfDataBase
         std::size_t siteCols() const {return m_siteDB[0].size();}
         index_type const& siteVal(index_type xloc, index_type yloc) const {return m_siteDB.at(xloc).at(yloc);}
         index_type& siteVal(index_type xloc, index_type yloc) {return m_siteDB.at(xloc).at(yloc);}
+        std::string const& siteName(index_type xloc, index_type yloc) const {return m_siteNameDB.at(xloc).at(yloc);}
+        std::string& siteName(index_type xloc, index_type yloc) {return m_siteNameDB.at(xloc).at(yloc);}
 
         /// be careful to use die area because it is larger than the actual rowBbox() which is the placement area 
         /// it is safer to use rowBbox()
@@ -265,12 +267,14 @@ class PlaceDB : public BookshelfParser::BookshelfDataBase
         virtual void bookshelf_end(); 
 
         ///==== Interchange Callbacks ====
+        virtual void add_site_name(int x, int y, std::string const& name);
 
         /// write placement solutions 
         virtual bool write(std::string const& filename) const;
         virtual bool write(std::string const& filename, float const* x = NULL, float const* y = NULL, index_type const* z = NULL) const;
 
         std::vector<std::vector<index_type> > m_siteDB; //FPGA Site Information
+        std::vector<std::vector<std::string> > m_siteNameDB; //FPGA Site Name Information
         std::vector<clk_region> m_clkRegionDB; //FPGA clkRegion Information
         std::vector<std::string> m_clkRegions; //FPGA clkRegion Names 
         int m_clkRegX;

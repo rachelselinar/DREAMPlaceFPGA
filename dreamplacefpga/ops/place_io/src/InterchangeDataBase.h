@@ -21,6 +21,8 @@ class InterchangeDataBase
         virtual void resize_sites(int, int);
         ///@brief update site information
         virtual void site_info_update(int, int, int);
+        ///@brief update site name 
+        virtual void add_site_name(int, int, std::string const&);
         /// @brief add library cell by name
         virtual void add_lib_cell(std::string const& name);
         /// @brief add cell input pin

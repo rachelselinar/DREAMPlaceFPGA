@@ -77,6 +77,7 @@ struct PyPlaceDB
     int num_sites_x; ///< number of sites in horizontal direction (FPGA)
     int num_sites_y; ///< number of sites in vertical direction (FPGA)
     pybind11::list site_type_map; ///< 2D array, site type of each site (FPGA)
+    pybind11::list site_name_map; ///< 2D array, site name of each site (FPGA), except IO sites
     pybind11::list lg_siteXYs; ///< 2D array, site XYs for CLB at center (FPGA)
     //pybind11::list regions; ///< array of 1D array, each region contains rectangles 
     pybind11::list dspSiteXYs; ///< 1D array of DSP sites (FPGA)

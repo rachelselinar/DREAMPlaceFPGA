@@ -58,16 +58,13 @@ protected:
     DeviceResources::Device::Reader interchangeDeviceRoot;
     LogicalNetlist::Netlist::Reader interchangeNetlistRoot;
 
-    /// Map a tile (col, row) location to a site type index
-    std::map<std::pair<int, int>, int> tile2SiteTypeId; 
-    /// Record a tile (col, row) location that has slice site to siteY
-    std::map<std::pair<int, int>, int> sliceTile2Y; 
-    /// Map a site (x, y) location to a site type
     boost::unordered_map<std::pair<int, int>, int> siteMap;
-    /// Map a location (x, y, z) to a valid Vivado site name
-    // boost::unordered_map<std::tuple<int, int, int>, std::string> loc2SiteName;
+    // std::map<std::pair<int, int>, int> siteMap;
+    boost::unordered_map<std::pair<int, int>, std::string> siteNameMap;
 
-    std::vector<std::vector<std::string>> col2SiteNames; /// Column to site names
+    std::vector<std::vector<std::string>> tile2SiteNames; /// Tile to site names
+    std::vector<std::pair<int, int>> tile2ColRow; /// Tile to col and row
+    std::vector<int> tile2SiteTypeId; /// Tile to site type id
 
     int maxSiteY; /// Max Y location for SLICE sites 
     int maxTileRow; /// Max num of tile rows

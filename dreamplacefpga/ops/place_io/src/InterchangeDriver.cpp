@@ -6,6 +6,7 @@
  */
 
 #include "InterchangeDriver.h"
+#include "utility/src/Msg.h"
 
 DREAMPLACE_BEGIN_NAMESPACE
 
@@ -32,7 +33,10 @@ void InterchangeDriver::setTileToSiteType()
         int row = tile.getRow(); // the row order is reversed in tile location
         int col = tile.getCol();
         std::pair<int, int> tileLoc = std::make_pair(col, row);
-
+        tile2ColRow.emplace_back(tileLoc);
+        std::vector<std::string> siteNames;
+        tile2SiteTypeId.emplace_back(0);
+ 
         auto sites = tile.getSites();
         for (int j = 0; j < sites.size(); j++)
         {
@@ -48,34 +52,46 @@ void InterchangeDriver::setTileToSiteType()
             {
                 int siteY = std::stoi(siteName.substr(siteName.find("Y")+1));
                 maxSiteY = (siteY > maxSiteY)? siteY : maxSiteY;
-                sliceTile2Y.insert(std::make_pair(tileLoc, siteY));
-                tile2SiteTypeId.insert(std::make_pair(tileLoc, 1));
+                tile2SiteTypeId[i] = 1;
+                siteNames.emplace_back(siteName);
+
             } else if (siteTypeName.find("DSP48") != std::string::npos)
             {
-                tile2SiteTypeId.insert(std::make_pair(tileLoc, 2)); 
+                tile2SiteTypeId[i] = 2;
+                siteNames.emplace_back(siteName);
             } else if (siteTypeName.find("RAMBFIFO36") != std::string::npos)
             {
-                tile2SiteTypeId.insert(std::make_pair(tileLoc, 3));
+                tile2SiteTypeId[i] = 3;
+                siteNames.emplace_back(siteName);
             // "HPIOB" and "HRIO" are from Ultrascale, 
             // "HPIOB_M", "HPIOB_S" and "HPIOB_SNGL" are from Ultrascale+.
             } else if (limbo::iequals(siteTypeName, "HPIOB") || limbo::iequals(siteTypeName, "HRIO") || \
                 limbo::iequals(siteTypeName, "HPIOB_M") || limbo::iequals(siteTypeName, "HPIOB_S") || \
                 limbo::iequals(siteTypeName, "HPIOB_SNGL"))
             {
-                tile2SiteTypeId.insert(std::make_pair(tileLoc, 4));
+                tile2SiteTypeId[i] = 4;
+                siteNames.emplace_back(siteName);
             // Make BUFGCE a different type due to different site size, merge to IO type in m_db
             } else if ( limbo::iequals(siteTypeName, "BUFGCE"))
             {
-                tile2SiteTypeId.insert(std::make_pair(tileLoc, 5));
-            }
+                tile2SiteTypeId[i] = 5;
+                siteNames.emplace_back(siteName);
+            } 
         }
+        tile2SiteNames.emplace_back(siteNames);
     }
+
 }
 
 void InterchangeDriver::setSiteMap()
 {
-    int xIdx = 0, yIdx = 0;
-    int numSitesCol = 0;
+    int xIdx = 0, yIdx = 0, xIdx_temp = 0, numTilePerCol = 0;
+
+    /// sort the tiles based on the col order and reversed row order
+    std::vector<int> SortedTileIndices(tile2ColRow.size());
+    std::iota(SortedTileIndices.begin(), SortedTileIndices.end(), 0);
+    std::sort(SortedTileIndices.begin(), SortedTileIndices.end(), 
+        [&](int i, int j) {return tile2ColRow[i].first == tile2ColRow[j].first? tile2ColRow[i].second > tile2ColRow[j].second : tile2ColRow[i].first < tile2ColRow[j].first;});
 
     // Add IO padding for the first and last column, this is ONLY for the ISPD'16 benchmarks
     bool ioPadding = true; 
@@ -86,64 +102,89 @@ void InterchangeDriver::setSiteMap()
         {
             yIdx = int(60.0*i);
             siteMap.insert(std::make_pair(std::make_pair(xIdx, yIdx), 4));
+            siteNameMap.insert(std::make_pair(std::make_pair(xIdx, yIdx), "padding"));
         }
     }
-    xIdx++;
 
+    int lastCol = -1;
     // Add sites based on cols
-    int lastCol = (tile2SiteTypeId.begin()->first).first;
-    for (auto it = tile2SiteTypeId.begin(); it != tile2SiteTypeId.end(); it++)
+    for (int i = 0; i < SortedTileIndices.size(); i++)
     {
-        std::pair<int, int> loc = it->first;
-        int col = loc.first;
-        int row = loc.second;
-        int siteTypeId = it->second;
+        int tileId = SortedTileIndices[i];
+        int col = tile2ColRow[tileId].first;
+        int row = tile2ColRow[tileId].second;
+        int siteTypeId = tile2SiteTypeId[tileId];
+        std::vector<std::string> siteNames = tile2SiteNames[tileId];
 
-        if (col!= lastCol)
+        if (siteTypeId == 0) {continue;}
+
+        if(col != lastCol)
         {
-            xIdx++;
-            numSitesCol = 0;
+            xIdx = (xIdx_temp > xIdx)? xIdx_temp+1 : xIdx+1;
+            numTilePerCol = 0;
         }
-      
+
+        xIdx_temp = xIdx;
         switch(siteTypeId)
         {
             case 1: //SLICEL/SLICEM
                 {   
-                    // For Ultrascale+, slices sometimes don't occupy a full column
-                    yIdx = sliceTile2Y.at(loc);
-                    siteMap.insert(std::make_pair(std::make_pair(xIdx, yIdx), 1));
-                    numSitesCol++;
+                    int lastSLICEX = -1;
+                    // sort siteName base on SITEX
+                    std::sort(siteNames.begin(), siteNames.end(), 
+                        [&](std::string a, std::string b) {return std::stoi(a.substr(a.find("X")+1)) < std::stoi(b.substr(b.find("X")+1));});
+
+                    for (int k = 0; k < siteNames.size(); k++)
+                    {   
+                        std::string siteName = siteNames[k];
+                        int SLICEY = std::stoi(siteName.substr(siteName.find("Y")+1));
+                        int SLICEX = std::stoi(siteName.substr(siteName.find("X")+1, siteName.find("Y")-siteName.find("X")-1));
+                        yIdx = SLICEY;
+                        if (SLICEX != lastSLICEX && lastSLICEX != -1) {xIdx_temp++;}
+                        siteMap.insert(std::make_pair(std::make_pair(xIdx_temp, yIdx), 1));
+                        siteNameMap.insert(std::make_pair(std::make_pair(xIdx_temp, yIdx), siteName));
+                        lastSLICEX = SLICEX;
+                    }
                     break;
                 }
             case 2: //DSP
                 {   
-                    for (int k=0; k < 2; k++)
+                    for (int k = 0; k < siteNames.size(); k++)
                     {
-                        yIdx = int(2.5*numSitesCol);
+                        std::string siteName = siteNames[k];
+                        int DSPY = std::stoi(siteName.substr(siteName.find("Y")+1));
+                        yIdx = int(2.5*DSPY);
                         siteMap.insert(std::make_pair(std::make_pair(xIdx, yIdx), 2));
-                        numSitesCol++;
+                        siteNameMap.insert(std::make_pair(std::make_pair(xIdx, yIdx), siteName));
                     }
                     break;
                 }
             case 3: //BRAM
                 {
-                    yIdx = int(5.0*numSitesCol);
-                    siteMap.insert(std::make_pair(std::make_pair(xIdx, yIdx), 3));
-                    numSitesCol++;
+                    for (int k = 0; k < siteNames.size(); k++)
+                    {
+                        std::string siteName = siteNames[k];
+                        int BRAMY = std::stoi(siteName.substr(siteName.find("Y")+1));
+                        yIdx = int(5.0*BRAMY);
+                        siteMap.insert(std::make_pair(std::make_pair(xIdx, yIdx), 3));
+                        siteNameMap.insert(std::make_pair(std::make_pair(xIdx, yIdx), siteName));
+                    }
                     break;
                 }
             case 4: //IOB
                 {   
-                    yIdx = int(30.0*numSitesCol);
+                    yIdx = int(30.0*numTilePerCol);
                     siteMap.insert(std::make_pair(std::make_pair(xIdx, yIdx), 4));
-                    numSitesCol++;
+                    siteNameMap.insert(std::make_pair(std::make_pair(xIdx, yIdx), "IOB"));
+                    numTilePerCol++;
                     break;
                 }
             case 5: //BUFGCE
-                {
-                    yIdx = int(60.0*numSitesCol);
+                {   
+                    yIdx = int(60.0*numTilePerCol);
                     siteMap.insert(std::make_pair(std::make_pair(xIdx, yIdx), 4));
-                    numSitesCol++;
+                    siteNameMap.insert(std::make_pair(std::make_pair(xIdx, yIdx), "BUFGCE"));
+                    numTilePerCol++;
                     break;
                 }
             default:
@@ -152,13 +193,11 @@ void InterchangeDriver::setSiteMap()
                 }
         }
 
-        // Update last col number
         lastCol = col;
-        if (numSitesCol > numGridY) {numGridY = numSitesCol;}
     }
 
+    xIdx = (xIdx_temp > xIdx)? xIdx_temp+1 : xIdx+1;
     // Add IO padding for the first and last column, this is ONLY for the ISPD'16 benchmarks
-    xIdx++;
     if (ioPadding)
     {
         // Add IO padding for the last column
@@ -166,18 +205,21 @@ void InterchangeDriver::setSiteMap()
         {
             yIdx = int(60.0*i);
             siteMap.insert(std::make_pair(std::make_pair(xIdx, yIdx), 4));
+            siteNameMap.insert(std::make_pair(std::make_pair(xIdx, yIdx), "padding"));
         }
     }
     numGridX = xIdx+1;
+    numGridY = maxSiteY+1;
 }
 
 void InterchangeDriver::addSiteMapToDateBase()
-{
+{   
     m_db.resize_sites(numGridX, numGridY);
     for (auto it = siteMap.begin(); it != siteMap.end(); it++)
     {
         std::pair<int, int> loc = it->first;
         m_db.site_info_update(loc.first, loc.second, it->second);
+        m_db.add_site_name(loc.first, loc.second, siteNameMap.at(loc));
     }
 }
 
