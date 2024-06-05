@@ -73,8 +73,12 @@ protected:
     int numGridX; /// Max num of grids at X direction
     int numGridY; /// Max num of grids at Y direction
 
-    std::vector<std::vector<std::string>> cellType2BusNames;
-    hashspace::unordered_map<std::string, int> cellType2Index;
+    // std::vector<std::vector<std::string>> cellType2PortNames
+
+    std::vector<std::vector<std::string>> port2BusNames;
+    // hashspace::unordered_map<std::string, int> cellType2Index;
+    hashspace::unordered_map<std::string, int> busPort2Index;
+
     hashspace::unordered_map<std::string, int> netName2Index;
     std::vector<std::string> netNames;
 

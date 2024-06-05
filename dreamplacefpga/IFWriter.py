@@ -2062,10 +2062,11 @@ class db_to_physicalnetlist():
 
         self.prevent_pin_overlap(placedb, phys_netlist)
 
+        # tt = time.time()
         self.stitch_routing(placedb, phys_netlist)
+        # logging.info("Intra-site routing time: %f", time.time() - tt)
 
         return phys_netlist
-
             
 class tcl_generator():
     """ generate a tcl script for the golden reference IF file

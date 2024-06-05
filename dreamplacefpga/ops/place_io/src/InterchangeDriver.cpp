@@ -7,6 +7,7 @@
 
 #include "InterchangeDriver.h"
 #include "utility/src/Msg.h"
+#include <chrono>
 
 DREAMPLACE_BEGIN_NAMESPACE
 
@@ -238,14 +239,14 @@ void InterchangeDriver::addLibCellsToDataBase()
         std::string cellTypeName = strings[libCell.getName()].cStr();
         
         m_db.add_lib_cell(cellTypeName);
-        std::vector<std::string> busNames;
-        int cellTypeId = cellType2BusNames.size();
 
         for (int j = 0; j < Ports.size(); j++)
         {   
             auto portIdx = Ports[j];
             std::string portName = strings[cellPorts[portIdx].getName()].cStr();
             auto portDir = cellPorts[portIdx].getDir();
+            std::vector<std::string> busNames;
+            // std::cout << "Cell Type: " << cellTypeName << " Port: " << portName <<std::endl;
 
             //Address the bus ports
             if (cellPorts[portIdx].isBus())
@@ -253,6 +254,7 @@ void InterchangeDriver::addLibCellsToDataBase()
                 auto busStart = cellPorts[portIdx].getBus().getBusStart();
                 auto busEnd = cellPorts[portIdx].getBus().getBusEnd();
                 std::vector<int> busIndices(std::abs(int(busStart-busEnd))+1);
+                int busPortId = port2BusNames.size();
                 
                 if (busStart > busEnd) 
                 {   
@@ -286,10 +288,11 @@ void InterchangeDriver::addLibCellsToDataBase()
                         }
                     }
                 }
+                port2BusNames.emplace_back(busNames);
+                busPort2Index.insert(std::make_pair(portName, busPortId));
 
             // for ports that are not bus
             } else {
-                busNames.emplace_back("");
                 switch (portDir) 
                     {
                         case LogicalNetlist::Netlist::Direction::INPUT:
@@ -318,9 +321,6 @@ void InterchangeDriver::addLibCellsToDataBase()
                     }
             }
         } 
-        cellType2BusNames.emplace_back(busNames);
-        cellType2Index.insert(make_pair(cellTypeName, cellTypeId));
-        
     }
 }
 
@@ -391,8 +391,12 @@ void InterchangeDriver::addNetsToDataBase()
                                 m_net.vNetPin.push_back(BookshelfParser::NetPin(cellName, netName));
                                
                             } else {
-                                int cellTypeId = cellType2Index.at(cellTypeName);
-                                std::string busName = cellType2BusNames.at(cellTypeId).at(port.getBusIdx().getIdx());
+                                int busPortId = busPort2Index.at(portName);
+                                std::string busName = port2BusNames.at(busPortId).at(port.getBusIdx().getIdx());
+                                // if (netName == "net_5071")
+                                // {
+                                //     std::cout << "Net: " << netName << " Cell: " << cellName << " Port: " << portName << " Bus: " << busName << std::endl;
+                                // }
                                 m_net.vNetPin.push_back(BookshelfParser::NetPin(cellName, busName));
                                 
                             }
@@ -444,14 +448,19 @@ bool readDeviceNetlist(InterchangeDataBase& db, std::string const& deviceFile, s
         return false;
     }
 
+    // std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
+
     int fd_device = open(deviceFile.c_str(), O_RDONLY);
     kj::FdInputStream fdInputDevice(fd_device);
     kj::GzipInputStream gzipInputDevice(fdInputDevice);
     capnp::InputStreamMessageReader deviceReader(gzipInputDevice, {1024L*1024L*1024L*64L, 64});
     DeviceResources::Device::Reader deviceRoot = deviceReader.getRoot<DeviceResources::Device>();
 
-    std::cout << "Parsing device file " << deviceFile << std::endl;
+    // std::cout << "Parsing device file " << deviceFile << std::endl;
     driver.parse_device(deviceRoot);
+
+    // std::cout << "Total time for parsing device file: " << std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - begin).count()/1000000.0 << " seconds" << std::endl;
+    // std::chrono::steady_clock::time_point begin_netlist = std::chrono::steady_clock::now();
 
     int fd_netlist = open(netlistFile.c_str(), O_RDONLY);
     kj::FdInputStream fdInputNetlist(fd_netlist);
@@ -459,10 +468,15 @@ bool readDeviceNetlist(InterchangeDataBase& db, std::string const& deviceFile, s
     capnp::InputStreamMessageReader netlistReader(gzipInputNetlist, {1024L*1024L*1024L*64L, 64});
     LogicalNetlist::Netlist::Reader netlistRoot = netlistReader.getRoot<LogicalNetlist::Netlist>();
 
-    std::cout << "Parsing netlist file " << netlistFile << std::endl;
+    // std::cout << "Parsing netlist file " << netlistFile << std::endl;
     driver.parse_netlist(netlistRoot);
+    
+    // std::cout << "Total time for parsing netlist file: " << std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - begin_netlist).count()/1000000.0 << " seconds" << std::endl;
+    // std::chrono::steady_clock::time_point begin_db = std::chrono::steady_clock::now();
 
     db.bookshelf_end(); // Finalize the database
+
+    // std::cout << "Total time for finalizing database: " << std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - begin_db).count()/1000000.0 << " seconds" << std::endl;
 
     return true;
 }
