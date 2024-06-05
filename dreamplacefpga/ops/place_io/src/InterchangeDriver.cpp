@@ -456,7 +456,7 @@ bool readDeviceNetlist(InterchangeDataBase& db, std::string const& deviceFile, s
     capnp::InputStreamMessageReader deviceReader(gzipInputDevice, {1024L*1024L*1024L*64L, 64});
     DeviceResources::Device::Reader deviceRoot = deviceReader.getRoot<DeviceResources::Device>();
 
-    // std::cout << "Parsing device file " << deviceFile << std::endl;
+    std::cout << "Parsing device file " << deviceFile << std::endl;
     driver.parse_device(deviceRoot);
 
     // std::cout << "Total time for parsing device file: " << std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - begin).count()/1000000.0 << " seconds" << std::endl;
@@ -468,7 +468,7 @@ bool readDeviceNetlist(InterchangeDataBase& db, std::string const& deviceFile, s
     capnp::InputStreamMessageReader netlistReader(gzipInputNetlist, {1024L*1024L*1024L*64L, 64});
     LogicalNetlist::Netlist::Reader netlistRoot = netlistReader.getRoot<LogicalNetlist::Netlist>();
 
-    // std::cout << "Parsing netlist file " << netlistFile << std::endl;
+    std::cout << "Parsing netlist file " << netlistFile << std::endl;
     driver.parse_netlist(netlistRoot);
     
     // std::cout << "Total time for parsing netlist file: " << std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - begin_netlist).count()/1000000.0 << " seconds" << std::endl;
