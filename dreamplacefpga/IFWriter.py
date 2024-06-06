@@ -1901,7 +1901,7 @@ class db_to_physicalnetlist():
                     stubNodes=[],
                     net_type=PhysicalNetType.Vcc)
 
-    def build_physicalnetlist(self, placedb):
+    def build_physicalnetlist(self, placedb, params):
         phys_netlist = PhysicalNetlist(self.part)
         
         mappings = self.device_resource.yield_cell_bel_mappings()
@@ -2063,7 +2063,8 @@ class db_to_physicalnetlist():
         self.prevent_pin_overlap(placedb, phys_netlist)
 
         # tt = time.time()
-        self.stitch_routing(placedb, phys_netlist)
+        if params.enable_site_routing:
+            self.stitch_routing(placedb, phys_netlist)
         # logging.info("Intra-site routing time: %f", time.time() - tt)
 
         return phys_netlist

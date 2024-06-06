@@ -21,6 +21,7 @@
     "plot_flag" : 0,
     "num_threads" : 1,
     "deterministic_flag" : 1,
-    "enable_if" : 1
+    "enable_if" : 1,
+    "enable_site_routing" : 1
     }
     
