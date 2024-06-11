@@ -246,7 +246,6 @@ void InterchangeDriver::addLibCellsToDataBase()
             std::string portName = strings[cellPorts[portIdx].getName()].cStr();
             auto portDir = cellPorts[portIdx].getDir();
             std::vector<std::string> busNames;
-            // std::cout << "Cell Type: " << cellTypeName << " Port: " << portName <<std::endl;
 
             //Address the bus ports
             if (cellPorts[portIdx].isBus())
@@ -368,6 +367,8 @@ void InterchangeDriver::addNetsToDataBase()
                 int netId(netNames.size());
                 netName2Index.insert(std::make_pair(netName, netId));
                 netNames.emplace_back(netName);
+                bool isExtPortNet = false;
+                bool isVCCGND = false;
 
                 m_net.net_name = netName;
                 m_net.vNetPin.clear();
@@ -378,37 +379,34 @@ void InterchangeDriver::addNetsToDataBase()
                     auto port = netPorts[k];
                     std::string portName = strings[cellPorts[port.getPort()].getName()].cStr();
                     
+                    if (port.getBusIdx().isIdx())
+                    {
+                        int busPortId = busPort2Index.at(portName);
+                        std::string busName = port2BusNames.at(busPortId).at(port.getBusIdx().getIdx());
+                        portName = busName;
+                    }
+
                     if (port.isInst())
                     {
                         auto inst = instList[port.getInst()];
                         std::string cellName = strings[inst.getName()].cStr();
                         std::string cellTypeName = strings[libCells[inst.getCell()].getName()].cStr();
-
-                        if (port.getBusIdx().isIdx())
+                        if (limbo::iequals(cellTypeName, "VCC")|| limbo::iequals(cellTypeName, "GND"))
                         {
-                            if (port.isExtPort())
-                            {   
-                                m_net.vNetPin.push_back(BookshelfParser::NetPin(cellName, netName));
-                               
-                            } else {
-                                int busPortId = busPort2Index.at(portName);
-                                std::string busName = port2BusNames.at(busPortId).at(port.getBusIdx().getIdx());
-                                // if (netName == "net_5071")
-                                // {
-                                //     std::cout << "Net: " << netName << " Cell: " << cellName << " Port: " << portName << " Bus: " << busName << std::endl;
-                                // }
-                                m_net.vNetPin.push_back(BookshelfParser::NetPin(cellName, busName));
-                                
-                            }
-
-                        } else {
-                            m_net.vNetPin.push_back(BookshelfParser::NetPin(cellName, portName));
+                            isVCCGND = true;
                         }
-                    }
-                    
+                        m_net.vNetPin.push_back(BookshelfParser::NetPin(cellName, portName));
+                        
+                    } else if (port.isExtPort())
+                    {
+                        isExtPortNet = true;
+                    }   
                 }
 
-                m_db.add_bookshelf_net(m_net);
+                if (!isExtPortNet && !isVCCGND)
+                {
+                    m_db.add_bookshelf_net(m_net);
+                }
                 m_net.reset();
             }
                
