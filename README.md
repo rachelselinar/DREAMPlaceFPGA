@@ -326,7 +326,7 @@ The most frequently used options in the JSON file are listed below. For the comp
 
 ## <a name="bug"></a>Bug Report
 
-Please report bugs to [rachelselina dot r at utexas dot edu](mailto:rachelselina.r@utexas.edu).
+To report a bug, please file an [issue](https://github.com/rachelselinar/DREAMPlaceFPGA/issues).
 
 ## <a name="copyright"></a>Copyright
 
