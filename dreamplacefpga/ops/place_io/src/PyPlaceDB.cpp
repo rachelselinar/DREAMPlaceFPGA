@@ -62,11 +62,13 @@ void PyPlaceDB::set(PlaceDB const& db)
     node_count.append(num_terminals);
 
     std::vector<double> fixed_node_size(num_terminals, 1.0); 
-    std::vector<PlaceDB::index_type> fixed_node2fence_region_map(num_terminals, 4); 
+    std::vector<PlaceDB::index_type> fixed_node2fence_region_map(num_terminals, 6); 
     std::vector<PlaceDB::index_type> fixed_lut_type(num_terminals, 0); 
     //Node Info
     node_names = pybind11::cast(std::move(db.movNodeNames())) + pybind11::cast(std::move(db.fixedNodeNames()));
     node_types = pybind11::cast(std::move(db.movNodeTypes())) + pybind11::cast(std::move(db.fixedNodeTypes()));
+    original_node_names = pybind11::cast(std::move(db.originalMovNodeNames())) + pybind11::cast(std::move(db.fixedNodeNames()));
+    original_node_types = pybind11::cast(std::move(db.originalMovNodeTypes())) + pybind11::cast(std::move(db.fixedNodeTypes()));
     node_size_x = pybind11::cast(std::move(db.movNodeXSizes())) + pybind11::cast(std::move(fixed_node_size));
     node_size_y = pybind11::cast(std::move(db.movNodeYSizes())) + pybind11::cast(std::move(fixed_node_size));
     node2fence_region_map = pybind11::cast(std::move(db.node2FenceRegionMap())) + pybind11::cast(std::move(fixed_node2fence_region_map));
@@ -80,6 +82,10 @@ void PyPlaceDB::set(PlaceDB const& db)
     node2pincount_map = pybind11::cast(std::move(db.node2PinCount()));
     node2pin_map = pybind11::cast(std::move(db.node2PinMap()));
     node_name2id_map = pybind11::cast(std::move(db.nodeName2Index()));
+    original_node_name2id_map = pybind11::cast(std::move(db.originalNodeName2Index()));
+    original_node2node_map = pybind11::cast(std::move(db.originalNode2NodeMap()));
+    org_node_x_offset = pybind11::cast(std::move(db.orgNodeXOffset()));
+    org_node_y_offset = pybind11::cast(std::move(db.orgNodeYOffset()));
     //movable_node_name2id_map = pybind11::cast(std::move(db.movNodeName2Index()));
     //fixed_node_name2id_map = pybind11::cast(std::move(db.fixedNodeName2Index()));
     flat_node2pin_map = pybind11::cast(std::move(db.flatNode2PinMap()));
@@ -104,6 +110,13 @@ void PyPlaceDB::set(PlaceDB const& db)
     net2tnet_start_map = pybind11::cast(std::move(db.net2TNetStartMap()));
     flat_tnet2pin_map = pybind11::cast(std::move(db.flatTNet2PinMap()));
     snkpin2tnet_map = pybind11::cast(std::move(db.snkPin2TNetMap()));
+
+    shape_heights = pybind11::cast(std::move(db.shapeHeights()));
+    shape_widths = pybind11::cast(std::move(db.shapeWidths()));
+    shape_types = pybind11::cast(std::move(db.shapeTypes()));
+    shape2org_node_map = pybind11::cast(std::move(db.shape2OrgNodeMap()));
+    shape2cluster_node_start = pybind11::cast(std::move(db.shape2ClusterNodeStart()));
+    original_node_is_shape_inst = pybind11::cast(std::move(db.originalNodeIsShapeInst()));
 
     //num_terminals = db.numFixed(); //IOs
     //num_movable_nodes = db.numMovable();  // Movable cells
@@ -192,13 +205,15 @@ void PyPlaceDB::set(PlaceDB const& db)
     }
 
     //SiteInfo
-    //pybind11::list region0, region2, region3, region4;
+    // pybind11::list region0, region2, region3, region4, region5, region6;
     std::vector<std::unordered_set<PlaceDB::index_type> > updCols;
-    std::unordered_set<PlaceDB::index_type> colSet0;
-    std::unordered_set<PlaceDB::index_type> colSet1;
-    std::unordered_set<PlaceDB::index_type> colSet2;
-    std::unordered_set<PlaceDB::index_type> colSet3;
-    std::unordered_set<PlaceDB::index_type> colSet4;
+    std::unordered_set<PlaceDB::index_type> colSet0; //LUTL
+    std::unordered_set<PlaceDB::index_type> colSet1; //LUTM
+    std::unordered_set<PlaceDB::index_type> colSet2; //FF   
+    std::unordered_set<PlaceDB::index_type> colSet3; //CARRY
+    std::unordered_set<PlaceDB::index_type> colSet4; //DSP
+    std::unordered_set<PlaceDB::index_type> colSet5; //BRAM
+    std::unordered_set<PlaceDB::index_type> colSet6; //IO
 
     for (unsigned int i = 0, ie = db.siteRows(); i < ie; ++i)
     {
@@ -220,31 +235,37 @@ void PyPlaceDB::set(PlaceDB const& db)
             //std::cout << "Site value at (" << i << ", " << j << ") is " << db.siteVal(i,j) << std::endl;
             switch(db.siteVal(i,j))
             {
-                case 1: //FF/LUT
+                case 1: //FF/LUTL/CARRY
                     {
                         colSet0.insert(i);
+                        colSet2.insert(i);
+                        colSet3.insert(i);
+                        break;
+                    }
+                case 2: //LUTM
+                    {
                         colSet1.insert(i);
                         break;
                     }
-                case 2: //DSP
+                case 3: //DSP
                     {
                         siteXY.append(i);
                         siteXY.append(std::round(j/2.5)*2.5);
                         dspSiteXYs.append(siteXY);
-                        colSet2.insert(i);
+                        colSet4.insert(i);
                         break;
                     }
-                case 3: //RAM
+                case 4: //RAM
                     {
                         siteXY.append(i);
                         siteXY.append(std::round(j/5.0)*5.0);
                         ramSiteXYs.append(siteXY);
-                        colSet3.insert(i);
+                        colSet5.insert(i);
                         break;
                     }
-                case 4: //IO
+                case 5: //IO
                     {    
-                        colSet4.insert((PlaceDB::index_type)i);
+                        colSet6.insert((PlaceDB::index_type)i);
                         break;
                     }
                 default: //Empty
@@ -265,10 +286,12 @@ void PyPlaceDB::set(PlaceDB const& db)
     updCols.emplace_back(colSet2);
     updCols.emplace_back(colSet3);
     updCols.emplace_back(colSet4);
+    updCols.emplace_back(colSet5);
+    updCols.emplace_back(colSet6);
 
     unsigned int flat_len = 0;
     flat_region_boxes_start.append(flat_len);
-    for (unsigned int rgn = 0; rgn < 5; ++rgn)
+    for (unsigned int rgn = 0; rgn < 7; ++rgn)
     {
         for (unsigned int cEl = 0; cEl < updCols[rgn].size(); ++cEl)
         {

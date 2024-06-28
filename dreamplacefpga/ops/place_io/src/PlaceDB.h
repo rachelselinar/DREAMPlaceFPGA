@@ -60,10 +60,47 @@ class PlaceDB : public BookshelfParser::BookshelfDataBase
         std::string const& movNodeName(index_type id) const {return mov_node_names.at(id);}
         std::string& movNodeName(index_type id) {return mov_node_names.at(id);}
 
+        std::vector<std::string> const& originalMovNodeNames() const {return original_mov_node_names;}
+        std::vector<std::string>& originalMovNodeNames() {return original_mov_node_names;}
+        std::string const& originalMovNodeName(index_type id) const {return original_mov_node_names.at(id);}
+        std::string& originalMovNodeName(index_type id) {return original_mov_node_names.at(id);}
+
         std::vector<std::string> const& movNodeTypes() const {return mov_node_types;}
         std::vector<std::string>& movNodeTypes() {return mov_node_types;}
         std::string const& movNodeType(index_type id) const {return mov_node_types.at(id);}
         std::string& movNodeType(index_type id) {return mov_node_types.at(id);}
+
+        std::vector<std::string> const& originalMovNodeTypes() const {return original_mov_node_types;}
+        std::vector<std::string>& originalMovNodeTypes() {return original_mov_node_types;}
+        std::string const& originalMovNodeType(index_type id) const {return original_mov_node_types.at(id);}
+        std::string& originalMovNodeType(index_type id) {return original_mov_node_types.at(id);}
+
+        std::vector<index_type> const& originalNode2NodeMap() const {return original_node2node_map;}
+        std::vector<index_type>& originalNode2NodeMap() {return original_node2node_map;}
+
+        std::vector<double> const& orgNodeXOffset() const {return org_node_x_offset;}
+        std::vector<double>& orgNodeXOffset() {return org_node_x_offset;}
+
+        std::vector<double> const& orgNodeYOffset() const {return org_node_y_offset;}
+        std::vector<double>& orgNodeYOffset() {return org_node_y_offset;}
+
+        std::vector<double> const& shapeHeights() const {return shape_heights;}
+        std::vector<double>& shapeHeights() {return shape_heights;}
+
+        std::vector<double> const& shapeWidths() const {return shape_widths;}
+        std::vector<double>& shapeWidths() {return shape_widths;}
+
+        std::vector<int> const& shapeTypes() const {return shape_types;}
+        std::vector<int>& shapeTypes() {return shape_types;}
+
+        std::vector<std::vector<index_type> > const& shape2OrgNodeMap() const {return shape2org_node_map;}
+        std::vector<std::vector<index_type> >& shape2OrgNodeMap() {return shape2org_node_map;}
+
+        std::vector<index_type> const& shape2ClusterNodeStart() const {return shape2cluster_node_start;}
+        std::vector<index_type>& shape2ClusterNodeStart() {return shape2cluster_node_start;}
+
+        std::vector<int> const& originalNodeIsShapeInst() const {return original_node_is_shape_inst;}
+        std::vector<int>& originalNodeIsShapeInst() {return original_node_is_shape_inst;}
 
         std::vector<double> const& movNodeXLocs() const {return mov_node_x;}
         std::vector<double>& movNodeXLocs() {return mov_node_x;}
@@ -230,6 +267,9 @@ class PlaceDB : public BookshelfParser::BookshelfDataBase
         string2index_map_type const& nodeName2Index() const {return node_name2id_map;}
         string2index_map_type& nodeName2Index() {return node_name2id_map;}
 
+        string2index_map_type const& originalNodeName2Index() const {return original_node_name2id_map;}
+        string2index_map_type& originalNodeName2Index() {return original_node_name2id_map;}
+
         string2index_map_type const& netName2Index() const {return net_name2id_map;}
         string2index_map_type& netName2Index() {return net_name2id_map;}
 
@@ -268,6 +308,11 @@ class PlaceDB : public BookshelfParser::BookshelfDataBase
 
         ///==== Interchange Callbacks ====
         virtual void add_site_name(int x, int y, std::string const& name);
+        virtual void add_interchange_node(std::string& name, std::string& type);
+        virtual void update_interchange_nodes();
+        virtual void add_interchange_net(BookshelfParser::Net const& n);
+        virtual void add_interchange_shape(double height, double width);
+        virtual void add_org_node_to_shape(std::string const& name, int dx, int dy);
 
         /// write placement solutions 
         virtual bool write(std::string const& filename) const;
@@ -289,20 +334,25 @@ class PlaceDB : public BookshelfParser::BookshelfDataBase
         std::string m_libCellTemp;
 
         std::size_t num_movable_nodes; ///< number of movable cells 
+        std::size_t original_num_movable_nodes; ///< number of movable cells
         std::size_t num_fixed_nodes; ///< number of fixed cells 
         std::size_t m_numLibCell; ///< number of standard cells in the library
         std::size_t m_numLUT; ///< number of LUTs in design
         std::size_t m_numFF; ///< number of FFs in design
+        std::size_t m_numCARRY; ///< number of CARRYs in design
         std::size_t m_numDSP; ///< number of DSPs in design
         std::size_t m_numRAM; ///< number of RAMs in design
+        std::size_t m_numShape; ///< number of shapes in design
 
         std::string m_designName; ///< for writing def file
 
         //New approach to parsing
         std::vector<std::string> mov_node_names; 
+        std::vector<std::string> original_mov_node_names;
         std::vector<std::string> fixed_node_names;
         std::vector<std::string> fixed_node_types;
         std::vector<std::string> mov_node_types;
+        std::vector<std::string> original_mov_node_types;
         std::vector<std::string> net_names;
         std::vector<std::string> pin_names;
         std::vector<std::string> pin_types;
@@ -338,6 +388,8 @@ class PlaceDB : public BookshelfParser::BookshelfDataBase
         //string2index_map_type mov_node_name2id_map;
         string2index_map_type fixed_node_name2id_map;
         string2index_map_type node_name2id_map;
+        string2index_map_type original_node_name2id_map;
+        std::vector<index_type> original_node2node_map;
         string2index_map_type net_name2id_map;
 
         // Timing net 
@@ -345,6 +397,21 @@ class PlaceDB : public BookshelfParser::BookshelfDataBase
         std::vector<index_type> net2tnet_start_map;
         std::vector<index_type> flat_tnet2pin_map;
         std::vector<index_type> snkpin2tnet_map;
+
+        // Shape information
+        std::vector<double> shape_heights;
+        std::vector<double> shape_widths;
+        std::vector<int> shape_types; // 0: LUT6_2, 1: Carry-chain, 2: LUTRAM, 3: DSP, 4: BRAM
+        std::vector<std::vector<index_type> > shape2org_node_map;
+        std::vector<index_type> shape2cluster_node_start;
+        std::vector<int> original_node_is_shape_inst;
+        std::vector<int> original_node_cluster_flag;
+        std::vector<double> org_node_x_offset;
+        std::vector<double> org_node_y_offset;
+        std::vector<double> org_node_pin_offset_x;
+        std::vector<double> org_node_pin_offset_y;
+
+        std::size_t numShapeClusterNodesTemp;
 
         std::vector<double> dspSiteXYs;
         std::vector<double> ramSiteXYs;

@@ -53,10 +53,13 @@ class DemandMap(nn.Module):
         self.num_threads = num_threads
 
     def forward(self): 
-        binCapMap0 = torch.zeros((self.num_bins_x, self.num_bins_y), dtype=self.node_size_x.dtype, device=self.device)
-        binCapMap1 = torch.zeros_like(binCapMap0)
-        binCapMap2 = torch.zeros_like(binCapMap0)
-        binCapMap3 = torch.zeros_like(binCapMap0)
+        
+        binCapMap0 = torch.zeros((self.num_bins_x, self.num_bins_y), dtype=self.node_size_x.dtype, device=self.device) #LUTL, FF, CARRY
+        binCapMap1 = torch.zeros_like(binCapMap0) # LUTM
+        binCapMap2 = torch.zeros_like(binCapMap0) # FF
+        binCapMap3 = torch.zeros_like(binCapMap0) # CARRY
+        binCapMap4 = torch.zeros_like(binCapMap0) # DSP
+        binCapMap5 = torch.zeros_like(binCapMap0) # BRAM
         
         if binCapMap0.is_cuda:
             demandMap_cuda.forward(
@@ -69,8 +72,9 @@ class DemandMap(nn.Module):
                                    self.height, 
                                    self.deterministic_flag,
                                    binCapMap0,
-                                   binCapMap2,
-                                   binCapMap3)
+                                   binCapMap1,
+                                   binCapMap4,
+                                   binCapMap5)
         else:
             demandMap_cpp.forward(
                                    self.site_type_map.flatten(), 
@@ -81,17 +85,21 @@ class DemandMap(nn.Module):
                                    self.width, 
                                    self.height, 
                                    binCapMap0,
-                                   binCapMap2,
-                                   binCapMap3,
+                                   binCapMap1,
+                                   binCapMap4,
+                                   binCapMap5,
                                    self.num_threads,
                                    self.deterministic_flag)
 
-        binCapMap1 = binCapMap0
+        binCapMap2 = binCapMap0
+        binCapMap3 = binCapMap0
         # Generate fixed demand maps from the bin capacity maps
         fixedDemMap0 = torch.zeros_like(binCapMap0)
         fixedDemMap1 = torch.zeros_like(binCapMap0)
         fixedDemMap2 = torch.zeros_like(binCapMap0)
         fixedDemMap3 = torch.zeros_like(binCapMap0)
+        fixedDemMap4 = torch.zeros_like(binCapMap0)
+        fixedDemMap5 = torch.zeros_like(binCapMap0)
 
         binX = (self.xh - self.xl)/self.num_bins_x
         binY = (self.yh - self.yl)/self.num_bins_y
@@ -100,6 +108,8 @@ class DemandMap(nn.Module):
         fixedDemMap1 = binArea - binCapMap1
         fixedDemMap2 = binArea - binCapMap2
         fixedDemMap3 = binArea - binCapMap3
+        fixedDemMap4 = binArea - binCapMap4
+        fixedDemMap5 = binArea - binCapMap5
 
-        return [fixedDemMap0, fixedDemMap1, fixedDemMap2, fixedDemMap3]
+        return [fixedDemMap0, fixedDemMap1, fixedDemMap2, fixedDemMap3, fixedDemMap4, fixedDemMap5]
 

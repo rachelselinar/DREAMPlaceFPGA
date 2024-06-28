@@ -33,7 +33,13 @@ class PlaceDBFPGA (object):
         self.num_physical_nodes = 0 # number of real nodes, including movable nodes, terminals, and terminal_NIs
         self.node_names = [] # name of instances 
         self.node_name2id_map = {} # map instance name to instance id 
-        self.node_types = [] # instance types 
+        self.node_types = [] # instance types
+        self.original_node_names = [] # original instance names
+        self.original_node_name2id_map = {} # map original instance name to instance id
+        self.original_node_types = [] # original instance types 
+        self.original_node2node_map = [] # map original instance to instance
+        self.org_node_x_offset = [] # original instance x offset
+        self.org_node_y_offset = [] # original instance y offset
         self.node_x = [] # site location
         self.node_y = [] # site location 
         self.node_z = [] # site specific location
@@ -112,6 +118,14 @@ class PlaceDBFPGA (object):
         self.tnet_weights = [] # weights for each timing net
         self.tnet_criticality = [] # criticality for each timing net
 
+        # create database for shape support
+        self.shape_heights = [] # shape heights
+        self.shape_widths = [] # shape widths
+        self.shape_types = [] # shape types - 0: LUT6_2, 1: Carry-chain, 2: LUTRAM
+        self.shape2org_node_map = [] # map shape to original node, nested array of array
+        self.shape2cluster_node_start = []
+        self.original_node_is_shape_inst = [] # original node is shape instance or not
+
         self.xl = None 
         self.yl = None 
         self.xh = None 
@@ -143,7 +157,7 @@ class PlaceDBFPGA (object):
         self.initial_vertical_demand_map = None # routing demand map from fixed cells, indexed by (grid x, grid y), projected to one layer  
         self.dtype = None
         #Use Fence region structure for different resource type placement
-        self.regions = 5 #FF, LUT, DSP, RAM & IO
+        self.regions = 7 # LUTL, LUTM, FF, CARRY, DSP, BRAM & IO
         #self.regionsLimits = []# array of 1D array with column min/max of x & y locations
         self.flat_region_boxes = []# flat version of regionsLimits
         self.flat_region_boxes_start = []# start indices of regionsLimits, length of num regions + 1
@@ -237,9 +251,11 @@ class PlaceDBFPGA (object):
 
         self.initialize_from_rawdb(params)
         self.lut_mask = self.node2fence_region_map == 0
-        self.flop_mask = self.node2fence_region_map == 1
-        self.dsp_mask = self.node2fence_region_map == 2
-        self.ram_mask = self.node2fence_region_map == 3
+        # self.lutm_mask = self.node2fence_region_map == 1
+        self.flop_mask = self.node2fence_region_map == 2
+        self.carry_mask = self.node2fence_region_map == 3
+        self.dsp_mask = self.node2fence_region_map == 4
+        self.ram_mask = self.node2fence_region_map == 5
 
     def initialize_from_rawdb(self, params):
         """
@@ -258,6 +274,13 @@ class PlaceDBFPGA (object):
         self.node_x = np.array(pydb.node_x, dtype=self.dtype)
         self.node_y = np.array(pydb.node_y, dtype=self.dtype)
         self.node_z = np.array(pydb.node_z, dtype=np.int32)
+
+        self.original_node_names = np.array(pydb.original_node_names, dtype=np.str_)
+        self.original_node_name2id_map = pydb.original_node_name2id_map
+        self.original_node_types = np.array(pydb.original_node_types, dtype=np.str_)
+        self.original_node2node_map = np.array(pydb.original_node2node_map, dtype=np.int32)
+        self.org_node_x_offset = np.array(pydb.org_node_x_offset, dtype=self.dtype) # original instance x offset
+        self.org_node_y_offset = np.array(pydb.org_node_y_offset, dtype=self.dtype) # original instance y offset
 
         self.node2pin_map = pydb.node2pin_map
 
@@ -318,7 +341,7 @@ class PlaceDBFPGA (object):
         self.ctrlSets = np.array(pydb.ctrlSets, dtype=np.int32)
         self.flat_ctrlSets = np.array(pydb.flat_ctrlSets, dtype=np.int32)
         self.flop2ctrlSetId_map = np.zeros(self.num_physical_nodes, dtype=np.int32)
-        self.flop2ctrlSetId_map[self.node2fence_region_map == 1] = np.arange(len(self.flop_indices))
+        self.flop2ctrlSetId_map[self.node2fence_region_map == 2] = np.arange(len(self.flop_indices))
 
         self.num_routing_grids_x = pydb.num_routing_grids_x
         self.num_routing_grids_y = pydb.num_routing_grids_y
@@ -333,6 +356,14 @@ class PlaceDBFPGA (object):
         self.snkpin2tnet_map = np.array(pydb.snkpin2tnet_map, dtype=np.int32)
         self.tnet_weights = np.array(np.zeros(len(self.tnet2net_map)), dtype=self.dtype) 
         self.tnet_criticality = np.array(np.zeros(len(self.tnet2net_map)), dtype=self.dtype)
+
+        # create database for shape support
+        self.shape_heights = np.array(pydb.shape_heights, dtype=self.dtype) # shape heights
+        self.shape_widths = np.array(pydb.shape_widths, dtype=self.dtype) # shape widths
+        self.shape_types = np.array(pydb.shape_types, dtype=np.int32) # shape types - 0: LUT6_2, 1: Carry-chain, 2: LUTRAM
+        self.shape2org_node_map = pydb.shape2org_node_map # map shape to original node, nested array of array
+        self.shape2cluster_node_start = np.array(pydb.shape2cluster_node_start, dtype=np.int32)
+        self.original_node_is_shape_inst = np.array(pydb.original_node_is_shape_inst, dtype=np.int32) # original node is shape instance or not
 
         self.xl = float(pydb.xl)
         self.yl = float(pydb.yl)
@@ -349,6 +380,8 @@ class PlaceDBFPGA (object):
             self.read_pl(params, params.io_pl)
 
         self.loc2site_map = self.create_loc2site_map(params)
+
+        # pdb.set_trace()
 
     def create_loc2site_map(self, params):
         """
@@ -370,7 +403,7 @@ class PlaceDBFPGA (object):
                 slice_flag = False
                 for j in range(self.num_sites_y):
                     # LUT/FF
-                    if self.site_type_map[i, j] == 1: 
+                    if self.site_type_map[i, j] == 1 or self.site_type_map[i, j] == 2:
                         slice_flag = True
                         slice_y = j
                         #  16 is the num of LUT/FF in a SLICE
@@ -378,19 +411,19 @@ class PlaceDBFPGA (object):
                             loc2site_map[i, j, k] = "SLICE_X" + str(slice_x) + "Y" + str(slice_y)
 
                     # DSP
-                    elif self.site_type_map[i, j] == 2:
+                    elif self.site_type_map[i, j] == 3:
                         site_x = int(dsp_cnt / dsp_y_num)
                         site_y = int(dsp_cnt - site_x * dsp_y_num)
                         loc2site_map[i, j, 0] = "DSP48E2_X" + str(site_x) + "Y" + str(site_y)
                         dsp_cnt += 1
                     # BRAM
-                    elif self.site_type_map[i, j] == 3:
+                    elif self.site_type_map[i, j] == 4:
                         site_x = int(bram_cnt / bram_y_num)
                         site_y = int(bram_cnt - site_x * bram_y_num)
                         loc2site_map[i, j, 0] = "RAMB36_X" + str(site_x) + "Y" + str(site_y)
                         bram_cnt += 1
                     # IO
-                    elif self.site_type_map[i, j] == 4:
+                    elif self.site_type_map[i, j] == 5:
                         if i not in IO_cols:
                             IO_cols.append(i)
 
@@ -402,14 +435,14 @@ class PlaceDBFPGA (object):
             for i in range(self.num_sites_x):
                 for j in range(self.num_sites_y):
                     # LUT/FF
-                    if self.site_type_map[i, j] == 1: 
+                    if self.site_type_map[i, j] == 1 or self.site_type_map[i, j] == 2:
                         for k in range(0, 16):
                             loc2site_map[i, j, k] = self.site_name_map[i, j]
                     # DSP and BRAM
-                    elif self.site_type_map[i, j] == 2 or self.site_type_map[i, j] == 3:
+                    elif self.site_type_map[i, j] == 3 or self.site_type_map[i, j] == 4:
                         loc2site_map[i, j, 0] = self.site_name_map[i, j]
                     # IO
-                    elif self.site_type_map[i, j] == 4:  
+                    elif self.site_type_map[i, j] == 5:  
                         if i not in IO_cols:
                             IO_cols.append(i)
 
@@ -633,10 +666,10 @@ class PlaceDBFPGA (object):
         @brief initialize data members after reading 
         @param params parameters 
         """
-        self.resource_size_x = np.ones(4, dtype=datatypes[params.dtype])
-        self.resource_size_y = np.ones(4, dtype=datatypes[params.dtype])
-        self.resource_size_y[2] = 2.5
-        self.resource_size_y[3] = 5.0
+        self.resource_size_x = np.ones(6, dtype=datatypes[params.dtype])
+        self.resource_size_y = np.ones(6, dtype=datatypes[params.dtype])
+        self.resource_size_y[4] = 2.5
+        self.resource_size_y[5] = 5.0
 
         #Parameter initialization - Can be changed later through params
         self.xWirelenWt = 0.7
@@ -657,39 +690,53 @@ class PlaceDBFPGA (object):
         self.unitPinCap = 0
 
         #Area type parameters - Consider default fillerstrategy of FIXED_SHAPE
-        #   0 - LUT
-        #   1 - FF
-        #   2 - DSP
-        #   3 - RAM
+        #   0 - LUTL
+        #   1 - LUTM
+        #   2 - FF
+        #   3 - CARRY
+        #   4 - DSP
+        #   5 - RAM
 
-        self.filler_size_x = np.zeros(4)
-        self.filler_size_y = np.zeros(4)
-        self.targetOverflow = np.zeros(4)
-        self.overflowInstDensityStretchRatio = np.zeros(4)
+        self.filler_size_x = np.zeros(6)
+        self.filler_size_y = np.zeros(6)
+        self.targetOverflow = np.zeros(6)
+        self.overflowInstDensityStretchRatio = np.zeros(6)
 
-        # 0 - LUT
+        # 0 - LUTL
         self.filler_size_x[0] = math.sqrt(0.125)
         self.filler_size_y[0] = math.sqrt(0.125)
         self.targetOverflow[0] = 0.1
         self.overflowInstDensityStretchRatio[0] = math.sqrt(2.0)
 
-        # 1 - FF
-        self.filler_size_x[1] = math.sqrt(0.125)
-        self.filler_size_y[1] = math.sqrt(0.125)
+        # 1 - LUTM
+        self.filler_size_x[1] = math.sqrt(0.5)
+        self.filler_size_y[1] = math.sqrt(0.5)
         self.targetOverflow[1] = 0.1
-        self.overflowInstDensityStretchRatio[1] = math.sqrt(2.0)
+        self.overflowInstDensityStretchRatio[1] = 0
 
-        # 2 - DSP
-        self.filler_size_x[2] = 1.0
-        self.filler_size_y[2] = 2.5
-        self.targetOverflow[2] = 0.2
-        self.overflowInstDensityStretchRatio[2] = 0
+        # 2 - FF
+        self.filler_size_x[2] = math.sqrt(0.125)
+        self.filler_size_y[2] = math.sqrt(0.125)
+        self.targetOverflow[2] = 0.1
+        self.overflowInstDensityStretchRatio[2] = math.sqrt(2.0)
 
-        # 3 - RAM
+        # 3 - CARRY
         self.filler_size_x[3] = 1.0
-        self.filler_size_y[3] = 5.0
+        self.filler_size_y[3] = 1.0
         self.targetOverflow[3] = 0.2
         self.overflowInstDensityStretchRatio[3] = 0
+
+        # 4 - DSP
+        self.filler_size_x[4] = 1.0
+        self.filler_size_y[4] = 2.5
+        self.targetOverflow[4] = 0.2
+        self.overflowInstDensityStretchRatio[4] = 0
+
+        # 5 - RAM
+        self.filler_size_x[5] = 1.0
+        self.filler_size_y[5] = 5.0
+        self.targetOverflow[5] = 0.2
+        self.overflowInstDensityStretchRatio[5] = 0
 
         #set number of bins
         self.num_bins_x = 512
@@ -698,11 +745,12 @@ class PlaceDBFPGA (object):
         self.bin_size_y = self.height/self.num_bins_y
 
         # set total cell area
-        movable_cell_region_mask01 = (self.node2fence_region_map[:self.num_movable_nodes] < 2)
-        movable_cell_region_mask23 = (self.node2fence_region_map[:self.num_movable_nodes] == 2) | (self.node2fence_region_map[:self.num_movable_nodes] == 3)
-        self.total_movable_node_area = float(np.sum(movable_cell_region_mask01)*self.filler_size_x[0]*self.filler_size_y[0])
-        if movable_cell_region_mask23.sum() > 0:
-            self.total_movable_node_area += float(np.sum(self.node_size_x[:self.num_movable_nodes][movable_cell_region_mask23]*self.node_size_y[:self.num_movable_nodes][movable_cell_region_mask23]))
+        movable_cell_region_mask012 = (self.node2fence_region_map[:self.num_movable_nodes] < 3)
+        movable_cell_region_mask345 = (self.node2fence_region_map[:self.num_movable_nodes] == 3) | (self.node2fence_region_map[:self.num_movable_nodes] == 4) | (self.node2fence_region_map[:self.num_movable_nodes] == 5)
+
+        self.total_movable_node_area = float(np.sum(movable_cell_region_mask012)*self.filler_size_x[0]*self.filler_size_y[0])
+        if movable_cell_region_mask345.sum() > 0:
+            self.total_movable_node_area += float(np.sum(self.node_size_x[:self.num_movable_nodes][movable_cell_region_mask345]*self.node_size_y[:self.num_movable_nodes][movable_cell_region_mask345]))
         # total fixed node area should exclude the area outside the layout and the area of terminal_NIs
         self.total_fixed_node_area = float(self.num_terminals)
         self.total_space_area = self.width * self.height
@@ -833,7 +881,7 @@ class PlaceDBFPGA (object):
         str_node_names = self.node_names
         content += "place_cell {\\\n"
         for i in range(self.num_physical_nodes): 
-            if self.node2fence_region_map[i] == 4:
+            if self.node2fence_region_map[i] == 6:
                 content += "\t %s %s \\\n" % (
                         str_node_names[i],
                         self.loc2site_map[node_x[i], node_y[i], node_z[i]],

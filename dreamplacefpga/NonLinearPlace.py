@@ -363,7 +363,7 @@ class NonLinearPlaceFPGA (BasicPlaceFPGA):
                             one_descent_step(Lgamma_step, Llambda_density_weight_step, Lsub_step, iteration, Lsub_metrics)
                             #print("Time for one step: %g ms" %((time.time()-ct0)*1000))
                             iteration += 1
-                            if model.lock_mask is not None and model.lock_mask[2:4].sum() == 2:
+                            if model.lock_mask is not None and model.lock_mask[4:6].sum() == 2:
                                 blockLegalIter += 1
                             # stopping criteria 
                             if Lsub_stop_criterion(Lgamma_step, Llambda_density_weight_step, Lsub_step, Lsub_metrics):
@@ -477,20 +477,21 @@ class NonLinearPlaceFPGA (BasicPlaceFPGA):
                                 break 
 
                         ##DSP/RAM legalization condition check
-                        if placedb.num_movable_nodes_fence_region[2:4].max() > 0 and Llambda_metrics[-1][-1].overflow[0] < placedb.targetOverflow[0] and Llambda_metrics[-1][-1].overflow[1] < placedb.targetOverflow[1] and Llambda_metrics[-1][-1].overflow[2] < placedb.targetOverflow[2] and Llambda_metrics[-1][-1].overflow[3] < placedb.targetOverflow[3]:
+                        if (placedb.num_movable_nodes_fence_region[4:6].max() > 0 and Llambda_metrics[-1][-1].overflow[0] < placedb.targetOverflow[0] and Llambda_metrics[-1][-1].overflow[1] < placedb.targetOverflow[1] and Llambda_metrics[-1][-1].overflow[2] < placedb.targetOverflow[2] and 
+                            Llambda_metrics[-1][-1].overflow[3] < placedb.targetOverflow[3] and Llambda_metrics[-1][-1].overflow[4] < placedb.targetOverflow[4] and Llambda_metrics[-1][-1].overflow[5] < placedb.targetOverflow[5]):
                             pos = model.data_collections.pos[0]
-                            if model.lock_mask is not None and model.lock_mask[2:4].sum() > 1:
+                            if model.lock_mask is not None and model.lock_mask[4:6].sum() > 1:
                                 break
                             #Legalize DSP at the end of Global placement
-                            movVal = dsp_ram_legalization.LegalizeDSPRAMFunction.legalize(pos, placedb, 2, model)
+                            movVal = dsp_ram_legalization.LegalizeDSPRAMFunction.legalize(pos, placedb, 4, model)
                             logging.info("Legalized DSPs with maxMov = %g and avgMov = %g" % (movVal[0], movVal[1]))
 
                             #Legalize RAM at the end of Global placement
-                            moVal = dsp_ram_legalization.LegalizeDSPRAMFunction.legalize(pos, placedb, 3, model)
+                            moVal = dsp_ram_legalization.LegalizeDSPRAMFunction.legalize(pos, placedb, 5, model)
                             logging.info("Legalized RAMs with maxMov = %g and avgMov = %g" % (moVal[0], moVal[1]))
 
                             #Lock DSP/RAM locations
-                            model.lock_mask[2:4] = True
+                            model.lock_mask[4:6] = True
                             model.update_mask = ~model.lock_mask
                             pos.grad[0:placedb.num_physical_nodes].data.masked_fill_(model.data_collections.dsp_ram_mask, 0.0)
                             pos.grad[placedb.num_nodes:placedb.num_nodes+placedb.num_physical_nodes].data.masked_fill_(model.data_collections.dsp_ram_mask, 0.0)

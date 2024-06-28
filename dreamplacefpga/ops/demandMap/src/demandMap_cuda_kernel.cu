@@ -16,8 +16,9 @@ __global__ void __launch_bounds__(1024, 8) computeDemandMap(
         const int width, const int height,
         AtomicOp atomicAddOp,
         typename AtomicOp::type *binCapMap0,
-        typename AtomicOp::type *binCapMap2,
-        typename AtomicOp::type *binCapMap3)
+        typename AtomicOp::type *binCapMap1,
+        typename AtomicOp::type *binCapMap4,
+        typename AtomicOp::type *binCapMap5)
 {
     T binW = T(width)/T(num_bins_x);
     T binH = T(height)/T(num_bins_y);
@@ -28,7 +29,7 @@ __global__ void __launch_bounds__(1024, 8) computeDemandMap(
             int rw = int(idx/height);
             int cl = int(idx%height);
 
-        if (site_type_map[idx] == 1)
+        if (site_type_map[idx] == 1 || site_type_map[idx] == 2)
         {
             T nodeX = node_size_x[1];
             T nodeY = node_size_y[1];
@@ -46,32 +47,16 @@ __global__ void __launch_bounds__(1024, 8) computeDemandMap(
                     T h = compute_demand_function(j, binH, col, nodeY);
                     T area = w * h;
                     atomicAddOp(&binCapMap0[i*num_bins_y + j], area);
-                }
-            }
-        } else if (site_type_map[idx] == 2)
-        {
-            T nodeX = node_size_x[2];
-            T nodeY = node_size_y[2];
-            T col = DREAMPLACE_STD_NAMESPACE::round(cl/nodeY)*nodeY;
-            int iLo = int(rw/binW);
-            int jLo = int(col/binH);
-            int iHi = DREAMPLACE_STD_NAMESPACE::min(int((rw + nodeX)/binW), num_bins_x-1);
-            int jHi = DREAMPLACE_STD_NAMESPACE::min(int((col + nodeY)/binH), num_bins_y-1);
-
-            for (int i = iLo + threadIdx.y; i <= iHi; i += blockDim.y)
-            {
-                T w = compute_demand_function(i, binW, T(rw), nodeX);
-                for (int j = jLo + threadIdx.x; j <= jHi; j += blockDim.x)
-                {
-                    T h = compute_demand_function(j, binH, col, nodeY);
-                    T area = w * h;
-                    atomicAddOp(&binCapMap2[i*num_bins_y + j], area);
+                    if (site_type_map[idx] == 2)
+                    {
+                        atomicAddOp(&binCapMap1[i*num_bins_y + j], area);
+                    }
                 }
             }
         } else if (site_type_map[idx] == 3)
         {
-            T nodeX = node_size_x[3];
-            T nodeY = node_size_y[3];
+            T nodeX = node_size_x[4];
+            T nodeY = node_size_y[4];
             T col = DREAMPLACE_STD_NAMESPACE::round(cl/nodeY)*nodeY;
             int iLo = int(rw/binW);
             int jLo = int(col/binH);
@@ -84,7 +69,26 @@ __global__ void __launch_bounds__(1024, 8) computeDemandMap(
                 {
                     T h = compute_demand_function(j, binH, col, nodeY);
                     T area = w * h;
-                    atomicAddOp(&binCapMap3[i*num_bins_y + j], area);
+                    atomicAddOp(&binCapMap4[i*num_bins_y + j], area);
+                }
+            }
+        } else if (site_type_map[idx] == 4)
+        {
+            T nodeX = node_size_x[5];
+            T nodeY = node_size_y[5];
+            T col = DREAMPLACE_STD_NAMESPACE::round(cl/nodeY)*nodeY;
+            int iLo = int(rw/binW);
+            int jLo = int(col/binH);
+            int iHi = DREAMPLACE_STD_NAMESPACE::min(int((rw + nodeX)/binW), num_bins_x-1);
+            int jHi = DREAMPLACE_STD_NAMESPACE::min(int((col + nodeY)/binH), num_bins_y-1);
+            for (int i = iLo + threadIdx.y; i <= iHi; i += blockDim.y)
+            {
+                T w = compute_demand_function(i, binW, T(rw), nodeX);
+                for (int j = jLo + threadIdx.x; j <= jHi; j += blockDim.x)
+                {
+                    T h = compute_demand_function(j, binH, col, nodeY);
+                    T area = w * h;
+                    atomicAddOp(&binCapMap5[i*num_bins_y + j], area);
                 }
             }
         }
@@ -100,8 +104,9 @@ int computeDemandMapCallKernel(
         const int num_bins_y, const int width, const int height,
         AtomicOp atomicAddOp,
         typename AtomicOp::type *binCapMap0,
-        typename AtomicOp::type *binCapMap2,
-        typename AtomicOp::type *binCapMap3
+        typename AtomicOp::type *binCapMap1,
+        typename AtomicOp::type *binCapMap4,
+        typename AtomicOp::type *binCapMap5
         )
 {
   int thread_count = 64;
@@ -113,7 +118,7 @@ int computeDemandMapCallKernel(
             site_type_map, node_size_x, node_size_y,
             num_bins_x, num_bins_y, width, height,
             atomicAddOp, binCapMap0,
-            binCapMap2, binCapMap3);
+            binCapMap1, binCapMap4, binCapMap5);
 
     return 0;
 }
@@ -130,8 +135,9 @@ int computeDemandMapCudaLauncher(
         const int height, 
         const int deterministic_flag,
         T *binCapMap0,
-        T *binCapMap2,
-        T *binCapMap3
+        T *binCapMap1,
+        T *binCapMap4,
+        T *binCapMap5
         )
 {
     if (deterministic_flag == 1)
@@ -145,10 +151,12 @@ int computeDemandMapCudaLauncher(
 
     unsigned long long int *bin_cap_map_0 = NULL;
     allocateCUDA(bin_cap_map_0, num_bins, unsigned long long int);
-    unsigned long long int *bin_cap_map_2 = NULL;
-    allocateCUDA(bin_cap_map_2, num_bins, unsigned long long int);
-    unsigned long long int *bin_cap_map_3 = NULL;
-    allocateCUDA(bin_cap_map_3, num_bins, unsigned long long int);
+    unsigned long long int *bin_cap_map_1 = NULL;
+    allocateCUDA(bin_cap_map_1, num_bins, unsigned long long int);
+    unsigned long long int *bin_cap_map_4 = NULL;
+    allocateCUDA(bin_cap_map_4, num_bins, unsigned long long int);
+    unsigned long long int *bin_cap_map_5 = NULL;
+    allocateCUDA(bin_cap_map_5, num_bins, unsigned long long int);
 
     AtomicAddCUDA<unsigned long long int> atomicAddOp(scale_factor);
     int thread_count = 512;
@@ -158,29 +166,36 @@ int computeDemandMapCudaLauncher(
         bin_cap_map_0, binCapMap0, scale_factor, num_bins);
     copyScaleArray<<<(num_bins + thread_count - 1) / thread_count,
                      thread_count>>>(
-        bin_cap_map_2, binCapMap2, scale_factor, num_bins);
+        bin_cap_map_1, binCapMap1, scale_factor, num_bins);
     copyScaleArray<<<(num_bins + thread_count - 1) / thread_count,
                      thread_count>>>(
-        bin_cap_map_3, binCapMap3, scale_factor, num_bins);
+        bin_cap_map_4, binCapMap4, scale_factor, num_bins);
+    copyScaleArray<<<(num_bins + thread_count - 1) / thread_count,
+                     thread_count>>>(
+        bin_cap_map_5, binCapMap5, scale_factor, num_bins);
 
     computeDemandMapCallKernel<T, decltype(atomicAddOp)>(
                 site_type_map, node_size_x, node_size_y,
                 num_bins_x, num_bins_y, width, height,
-                atomicAddOp, bin_cap_map_0, bin_cap_map_2, bin_cap_map_3);
+                atomicAddOp, bin_cap_map_0, bin_cap_map_1, bin_cap_map_4, bin_cap_map_5);
 
     copyScaleArray<<<(num_bins + thread_count - 1) / thread_count,
                      thread_count>>>(binCapMap0,
                      bin_cap_map_0, T(1.0 / scale_factor), num_bins);
     copyScaleArray<<<(num_bins + thread_count - 1) / thread_count,
-                     thread_count>>>(binCapMap2,
-                     bin_cap_map_2, T(1.0 / scale_factor), num_bins);
+                     thread_count>>>(binCapMap1,
+                     bin_cap_map_1, T(1.0 / scale_factor), num_bins);
     copyScaleArray<<<(num_bins + thread_count - 1) / thread_count,
-                     thread_count>>>(binCapMap3,
-                     bin_cap_map_3, T(1.0 / scale_factor), num_bins);
+                     thread_count>>>(binCapMap4,
+                     bin_cap_map_4, T(1.0 / scale_factor), num_bins);
+    copyScaleArray<<<(num_bins + thread_count - 1) / thread_count,
+                        thread_count>>>(binCapMap5,
+                        bin_cap_map_5, T(1.0 / scale_factor), num_bins);
 
     destroyCUDA(bin_cap_map_0);
-    destroyCUDA(bin_cap_map_2);
-    destroyCUDA(bin_cap_map_3);
+    destroyCUDA(bin_cap_map_1);
+    destroyCUDA(bin_cap_map_4);
+    destroyCUDA(bin_cap_map_5);
   } else
     {
         AtomicAddCUDA<T> atomicAddOp;
@@ -188,7 +203,7 @@ int computeDemandMapCudaLauncher(
         computeDemandMapCallKernel<T, decltype(atomicAddOp)>(
                 site_type_map, node_size_x, node_size_y,
                 num_bins_x, num_bins_y, width, height,
-                atomicAddOp, binCapMap0, binCapMap2, binCapMap3);
+                atomicAddOp, binCapMap0, binCapMap1, binCapMap4, binCapMap5);
     }
     return 0;
 }
@@ -200,7 +215,7 @@ int computeDemandMapCudaLauncher(
         const T *node_size_y, const int num_bins_x,         \
         const int num_bins_y, const int width,              \
         const int height, const int deterministic_flag,     \
-        T *binCapMap0, T *binCapMap2, T *binCapMap3);
+        T *binCapMap0, T *binCapMap1, T *binCapMap4, T *binCapMap5);
 
 REGISTER_KERNEL_LAUNCHER(float);
 REGISTER_KERNEL_LAUNCHER(double);

@@ -27,9 +27,11 @@ bool readInterchange(PlaceDB& db, std::string const& deviceFile, std::string con
 struct PyPlaceDB
 {
     pybind11::list node_names; ///< 1D array, cell name 
+    pybind11::list original_node_names; ///< 1D array, cell name
     pybind11::list node_size_x; ///< 1D array, cell width  
     pybind11::list node_size_y; ///< 1D array, cell height
     pybind11::list node_types; ///< 1D array, nodeTypes(FPGA)
+    pybind11::list original_node_types; ///< 1D array, nodeTypes(FPGA)
     pybind11::list flop_indices; ///< 1D array, nodeTypes(FPGA)
     //pybind11::list lut_indices; ///< 1D array, nodeTypes(FPGA)
     //pybind11::list flop_lut_indices; ///< 1D array, nodeTypes(FPGA)
@@ -50,9 +52,15 @@ struct PyPlaceDB
     pybind11::list lut_type; ///< 1D array, nodeTypes(FPGA)
     pybind11::list cluster_lut_type; ///< 1D array, LUT types for clustering
     pybind11::dict node_name2id_map; ///< node name to id map, cell name 
+    pybind11::dict original_node_name2id_map; ///< node name to id map, cell name
     //pybind11::dict movable_node_name2id_map; ///< node name to id map, cell name 
     //pybind11::dict fixed_node_name2id_map; ///< node name to id map, cell name 
     //pybind11::list fixedNodes; ///< 1D array, nodeTypes(FPGA)
+
+    pybind11::list original_node2node_map; ///< map original node id to node id
+    pybind11::list org_node_x_offset;  ///< map original node id to node placement offset in x direction
+    pybind11::list org_node_y_offset; ///< map original node id to node placement offset in y direction
+
     unsigned int num_terminals; ///< number of terminals, essentially IOs
     unsigned int num_movable_nodes; ///< number of movable nodes
     unsigned int num_physical_nodes; ///< number of movable nodes + terminals (FPGA)
@@ -109,6 +117,13 @@ struct PyPlaceDB
     int yh; 
     int row_height;
     int site_width;
+
+    pybind11::list shape_heights; ///< 1D array, shape height
+    pybind11::list shape_widths; ///< 1D array, shape width
+    pybind11::list shape_types; ///< 1D array, shape type
+    pybind11::list shape2org_node_map; ///< 1D array, shape to original node map
+    pybind11::list shape2cluster_node_start; ///< 1D array, shape to cluster node start map
+    pybind11::list original_node_is_shape_inst; ///< 1D array, original node is shape instance
 
     //pybind11::list node2orig_node_map; ///< due to some fixed nodes may have non-rectangular shapes, we flat the node list; 
     //                                    ///< this map maps the new indices back to the original ones 

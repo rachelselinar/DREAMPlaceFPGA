@@ -51,6 +51,8 @@ public:
     void addNodesToDataBase();
     /// @brief from .netlist file, record nets
     void addNetsToDataBase();
+    /// @brief from .netlist file, record shapes
+    void addShapesToDataBase();
 
 protected: 
     BookshelfParser::Net m_net; ///< temporary storage of net    
@@ -73,11 +75,11 @@ protected:
     int numGridX; /// Max num of grids at X direction
     int numGridY; /// Max num of grids at Y direction
 
-    // std::vector<std::vector<std::string>> cellType2PortNames
+    // std::vector<std::vector<std::string>> cellType2PortNames;
 
     std::vector<std::vector<std::string>> port2BusNames;
     // hashspace::unordered_map<std::string, int> cellType2Index;
-    hashspace::unordered_map<std::string, int> busPort2Index;
+    hashspace::unordered_map<int, int> busPort2Index; // port_id to bus_id
 
     hashspace::unordered_map<std::string, int> netName2Index;
     std::vector<std::string> netNames;

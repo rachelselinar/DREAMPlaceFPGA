@@ -49,20 +49,25 @@ void InterchangeDriver::setTileToSiteType()
             std::string siteTypeName = strings[siteType.getName()].cStr();
             std::string siteName = strings[site.getName()].cStr();
 
-            if ((siteTypeName.find("SLICEL") != std::string::npos) || (siteTypeName.find("SLICEM") != std::string::npos))
+            if (siteTypeName.find("SLICEL") != std::string::npos)
             {
                 int siteY = std::stoi(siteName.substr(siteName.find("Y")+1));
                 maxSiteY = (siteY > maxSiteY)? siteY : maxSiteY;
                 tile2SiteTypeId[i] = 1;
                 siteNames.emplace_back(siteName);
-
+            } else if (siteTypeName.find("SLICEM") != std::string::npos)
+            {   
+                int siteY = std::stoi(siteName.substr(siteName.find("Y")+1));
+                maxSiteY = (siteY > maxSiteY)? siteY : maxSiteY;
+                tile2SiteTypeId[i] = 2;
+                siteNames.emplace_back(siteName);
             } else if (siteTypeName.find("DSP48") != std::string::npos)
             {
-                tile2SiteTypeId[i] = 2;
+                tile2SiteTypeId[i] = 3;
                 siteNames.emplace_back(siteName);
             } else if (siteTypeName.find("RAMBFIFO36") != std::string::npos)
             {
-                tile2SiteTypeId[i] = 3;
+                tile2SiteTypeId[i] = 4;
                 siteNames.emplace_back(siteName);
             // "HPIOB" and "HRIO" are from Ultrascale, 
             // "HPIOB_M", "HPIOB_S" and "HPIOB_SNGL" are from Ultrascale+.
@@ -70,12 +75,12 @@ void InterchangeDriver::setTileToSiteType()
                 limbo::iequals(siteTypeName, "HPIOB_M") || limbo::iequals(siteTypeName, "HPIOB_S") || \
                 limbo::iequals(siteTypeName, "HPIOB_SNGL"))
             {
-                tile2SiteTypeId[i] = 4;
+                tile2SiteTypeId[i] = 5;
                 siteNames.emplace_back(siteName);
             // Make BUFGCE a different type due to different site size, merge to IO type in m_db
             } else if ( limbo::iequals(siteTypeName, "BUFGCE"))
             {
-                tile2SiteTypeId[i] = 5;
+                tile2SiteTypeId[i] = 6;
                 siteNames.emplace_back(siteName);
             } 
         }
@@ -102,7 +107,7 @@ void InterchangeDriver::setSiteMap()
         for (int i = 0; i < int((maxSiteY+1)/60); i++)
         {
             yIdx = int(60.0*i);
-            siteMap.insert(std::make_pair(std::make_pair(xIdx, yIdx), 4));
+            siteMap.insert(std::make_pair(std::make_pair(xIdx, yIdx), 5));
             siteNameMap.insert(std::make_pair(std::make_pair(xIdx, yIdx), "padding"));
         }
     }
@@ -128,7 +133,8 @@ void InterchangeDriver::setSiteMap()
         xIdx_temp = xIdx;
         switch(siteTypeId)
         {
-            case 1: //SLICEL/SLICEM
+            case 1: 
+            case 2://SLICEL or SLICEM
                 {   
                     int lastSLICEX = -1;
                     // sort siteName base on SITEX
@@ -142,48 +148,48 @@ void InterchangeDriver::setSiteMap()
                         int SLICEX = std::stoi(siteName.substr(siteName.find("X")+1, siteName.find("Y")-siteName.find("X")-1));
                         yIdx = SLICEY;
                         if (SLICEX != lastSLICEX && lastSLICEX != -1) {xIdx_temp++;}
-                        siteMap.insert(std::make_pair(std::make_pair(xIdx_temp, yIdx), 1));
+                        siteMap.insert(std::make_pair(std::make_pair(xIdx_temp, yIdx), (siteTypeId == 1)? 1 : 2));
                         siteNameMap.insert(std::make_pair(std::make_pair(xIdx_temp, yIdx), siteName));
                         lastSLICEX = SLICEX;
                     }
                     break;
                 }
-            case 2: //DSP
+            case 3: //DSP
                 {   
                     for (int k = 0; k < siteNames.size(); k++)
                     {
                         std::string siteName = siteNames[k];
                         int DSPY = std::stoi(siteName.substr(siteName.find("Y")+1));
                         yIdx = int(2.5*DSPY);
-                        siteMap.insert(std::make_pair(std::make_pair(xIdx, yIdx), 2));
+                        siteMap.insert(std::make_pair(std::make_pair(xIdx, yIdx), 3));
                         siteNameMap.insert(std::make_pair(std::make_pair(xIdx, yIdx), siteName));
                     }
                     break;
                 }
-            case 3: //BRAM
+            case 4: //BRAM
                 {
                     for (int k = 0; k < siteNames.size(); k++)
                     {
                         std::string siteName = siteNames[k];
                         int BRAMY = std::stoi(siteName.substr(siteName.find("Y")+1));
                         yIdx = int(5.0*BRAMY);
-                        siteMap.insert(std::make_pair(std::make_pair(xIdx, yIdx), 3));
+                        siteMap.insert(std::make_pair(std::make_pair(xIdx, yIdx), 4));
                         siteNameMap.insert(std::make_pair(std::make_pair(xIdx, yIdx), siteName));
                     }
                     break;
                 }
-            case 4: //IOB
+            case 5: //IOB
                 {   
                     yIdx = int(30.0*numTilePerCol);
-                    siteMap.insert(std::make_pair(std::make_pair(xIdx, yIdx), 4));
+                    siteMap.insert(std::make_pair(std::make_pair(xIdx, yIdx), 5));
                     siteNameMap.insert(std::make_pair(std::make_pair(xIdx, yIdx), "IOB"));
                     numTilePerCol++;
                     break;
                 }
-            case 5: //BUFGCE
+            case 6: //BUFGCE
                 {   
                     yIdx = int(60.0*numTilePerCol);
-                    siteMap.insert(std::make_pair(std::make_pair(xIdx, yIdx), 4));
+                    siteMap.insert(std::make_pair(std::make_pair(xIdx, yIdx), 5));
                     siteNameMap.insert(std::make_pair(std::make_pair(xIdx, yIdx), "BUFGCE"));
                     numTilePerCol++;
                     break;
@@ -205,7 +211,7 @@ void InterchangeDriver::setSiteMap()
         for (int i = 0; i < int((maxSiteY+1)/60); i++)
         {
             yIdx = int(60.0*i);
-            siteMap.insert(std::make_pair(std::make_pair(xIdx, yIdx), 4));
+            siteMap.insert(std::make_pair(std::make_pair(xIdx, yIdx), 5));
             siteNameMap.insert(std::make_pair(std::make_pair(xIdx, yIdx), "padding"));
         }
     }
@@ -288,7 +294,7 @@ void InterchangeDriver::addLibCellsToDataBase()
                     }
                 }
                 port2BusNames.emplace_back(busNames);
-                busPort2Index.insert(std::make_pair(portName, busPortId));
+                busPort2Index.insert(std::make_pair(portIdx, busPortId));
 
             // for ports that are not bus
             } else {
@@ -335,8 +341,9 @@ void InterchangeDriver::addNodesToDataBase()
         auto inst = instList[i];
         std::string instName = strings[inst.getName()].cStr();
         std::string instTypeName = strings[libCells[inst.getCell()].getName()].cStr();
+        std::cout << "adding node: " << instName << " " << instTypeName << std::endl;
 
-        m_db.add_bookshelf_node(instName, instTypeName);
+        m_db.add_interchange_node(instName, instTypeName);
     }
     
 }
@@ -381,7 +388,7 @@ void InterchangeDriver::addNetsToDataBase()
                     
                     if (port.getBusIdx().isIdx())
                     {
-                        int busPortId = busPort2Index.at(portName);
+                        int busPortId = busPort2Index.at(port.getPort());
                         std::string busName = port2BusNames.at(busPortId).at(port.getBusIdx().getIdx());
                         portName = busName;
                     }
@@ -405,13 +412,53 @@ void InterchangeDriver::addNetsToDataBase()
 
                 if (!isExtPortNet && !isVCCGND)
                 {
-                    m_db.add_bookshelf_net(m_net);
+                    m_db.add_interchange_net(m_net);
                 }
                 m_net.reset();
             }
                
         }
     }
+}
+
+void InterchangeDriver::addShapesToDataBase()
+{   
+    //// prepare data from logical netlist root for shapes
+    auto strings = interchangeNetlistRoot.getStrList();
+    auto shapeList = interchangeNetlistRoot.getShapeList();
+
+    std::cout << "Number of shapes: " << shapeList.size() << std::endl;
+
+    for (int i = 0; i < shapeList.size(); i++)
+    {
+        auto shape = shapeList[i];
+        auto ShapeElements = shape.getCells();
+        int height = shape.getHeight();
+        int width = shape.getWidth();
+
+        m_db.add_interchange_shape(double(height), double(width));
+
+        std::cout << "Shape height: " << height << " Shape width: " << width << std::endl;
+        
+        for (int j = 0; j < ShapeElements.size(); j++)
+        {
+            auto shapeElement = ShapeElements[j];
+            std::string cellName = strings[shapeElement.getCellName()].cStr();
+            std::string belName = strings[shapeElement.getBelName()].cStr();
+            auto siteTypes = shapeElement.getSiteTypes();
+            for (int k = 0; k < siteTypes.size(); k++)
+            {
+                std::string siteType = strings[siteTypes[k]].cStr();
+                std::cout << "Site type: " << siteType << std::endl; 
+            }
+            int dx = shapeElement.getDx();
+            int dy = shapeElement.getDy();
+            std::cout << "Cell name: " << cellName << " Bel name: " << belName << " dx: " << dx << " dy: " << dy << std::endl;
+            m_db.add_org_node_to_shape(cellName, dx, dy);
+        }
+    }
+
+    m_db.update_interchange_nodes();
 }
 
 bool InterchangeDriver::parse_device(DeviceResources::Device::Reader const& deviceRoot)
@@ -431,6 +478,7 @@ bool InterchangeDriver::parse_netlist(LogicalNetlist::Netlist::Reader const& net
 
     this->addLibCellsToDataBase();
     this->addNodesToDataBase();
+    this->addShapesToDataBase();
     this->addNetsToDataBase();
 
     return true;

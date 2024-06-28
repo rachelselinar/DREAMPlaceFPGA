@@ -100,6 +100,7 @@ class PlaceDataCollectionFPGA(object):
             ## Resource type masks
             self.flop_mask = torch.from_numpy(placedb.flop_mask).to(device)
             self.lut_mask = torch.from_numpy(placedb.lut_mask).to(device)
+
             self.ram_mask = torch.from_numpy(placedb.ram_mask).to(device)
             self.dsp_mask = torch.from_numpy(placedb.dsp_mask).to(device)
             self.flop_lut_mask = self.flop_mask | self.lut_mask
@@ -291,7 +292,7 @@ class BasicPlaceFPGA(nn.Module):
             ### uniformly spread fillers in fence region
             ### for cells in the fence region
             for i, region in enumerate(placedb.region_boxes):
-                if i < 4:
+                if i < 6:
                     #Construct Nx4 np array for region using placedb.flat_region_boxes
                     filler_beg, filler_end = placedb.filler_start_map[i:i+2]
                     if filler_end-filler_beg > 0:
@@ -313,7 +314,7 @@ class BasicPlaceFPGA(nn.Module):
                                     high=subregion[3] -
                                     placedb.filler_size_y_fence_region[i],
                                     size=sub_filler_end-sub_filler_beg)
-                #Skip for IOs - regions[4]
+                #Skip for IOs - regions[6]
                 else:
                     continue
 

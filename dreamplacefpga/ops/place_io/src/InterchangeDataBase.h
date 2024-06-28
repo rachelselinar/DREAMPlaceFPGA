@@ -33,11 +33,16 @@ class InterchangeDataBase
         virtual void add_clk_pin(std::string& pName);
         /// @brief add cell control pin
         virtual void add_ctrl_pin(std::string& pName);
-        /// @brief add node as bookshelf format 
-        /// @Zhili TODO: Is it necessary to modify these 3 function for interchange?
-        virtual void add_bookshelf_node(std::string& name, std::string& type); 
+        /// @brief add node from interchange .netlist
+        virtual void add_interchange_node(std::string& name, std::string& type); 
+        /// @brief update placement nodes for shape support
+        virtual void update_interchange_nodes();
+        /// @brief add shape from interchange .netlist
+        virtual void add_interchange_shape(double height, double width);
+        /// @brief add nodes to shape from interchange .netlist
+        virtual void add_org_node_to_shape(std::string const& name, int dx, int dy);
         /// @brief add net as bookshelf format 
-        virtual void add_bookshelf_net(BookshelfParser::Net const& n); 
+        virtual void add_interchange_net(BookshelfParser::Net const& n); 
         /// @brief a callback when a bookshelf file reaches to the end 
         virtual void bookshelf_end(); 
 
