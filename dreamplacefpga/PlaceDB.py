@@ -381,8 +381,6 @@ class PlaceDBFPGA (object):
 
         self.loc2site_map = self.create_loc2site_map(params)
 
-        # pdb.set_trace()
-
     def create_loc2site_map(self, params):
         """
         @brief create a loc2site_map for a given placedb
@@ -632,7 +630,10 @@ class PlaceDBFPGA (object):
         node2fence_region_map = node2fence_region_map[:self.num_movable_nodes]
         
         if(region_id < self.regions-1):
-            fence_region_mask = (node2fence_region_map == region_id)
+            if region_id == 0:
+                fence_region_mask = (node2fence_region_map == 0) | (node2fence_region_map == 1)
+            else:
+                fence_region_mask = (node2fence_region_map == region_id)
         else:
             fence_region_mask = (node2fence_region_map >= self.regions-1)
 

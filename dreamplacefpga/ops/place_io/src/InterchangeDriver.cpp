@@ -341,7 +341,7 @@ void InterchangeDriver::addNodesToDataBase()
         auto inst = instList[i];
         std::string instName = strings[inst.getName()].cStr();
         std::string instTypeName = strings[libCells[inst.getCell()].getName()].cStr();
-        std::cout << "adding node: " << instName << " " << instTypeName << std::endl;
+        // std::cout << "adding node: " << instName << " " << instTypeName << std::endl;
 
         m_db.add_interchange_node(instName, instTypeName);
     }
@@ -427,7 +427,7 @@ void InterchangeDriver::addShapesToDataBase()
     auto strings = interchangeNetlistRoot.getStrList();
     auto shapeList = interchangeNetlistRoot.getShapeList();
 
-    std::cout << "Number of shapes: " << shapeList.size() << std::endl;
+    // std::cout << "Number of shapes: " << shapeList.size() << std::endl;
 
     for (int i = 0; i < shapeList.size(); i++)
     {
@@ -438,7 +438,7 @@ void InterchangeDriver::addShapesToDataBase()
 
         m_db.add_interchange_shape(double(height), double(width));
 
-        std::cout << "Shape height: " << height << " Shape width: " << width << std::endl;
+        // std::cout << "Shape height: " << height << " Shape width: " << width << std::endl;
         
         for (int j = 0; j < ShapeElements.size(); j++)
         {
@@ -449,11 +449,11 @@ void InterchangeDriver::addShapesToDataBase()
             for (int k = 0; k < siteTypes.size(); k++)
             {
                 std::string siteType = strings[siteTypes[k]].cStr();
-                std::cout << "Site type: " << siteType << std::endl; 
+                // std::cout << "Site type: " << siteType << std::endl; 
             }
             int dx = shapeElement.getDx();
             int dy = shapeElement.getDy();
-            std::cout << "Cell name: " << cellName << " Bel name: " << belName << " dx: " << dx << " dy: " << dy << std::endl;
+            // std::cout << "Cell name: " << cellName << " Bel name: " << belName << " dx: " << dx << " dy: " << dy << std::endl;
             m_db.add_org_node_to_shape(cellName, dx, dy);
         }
     }

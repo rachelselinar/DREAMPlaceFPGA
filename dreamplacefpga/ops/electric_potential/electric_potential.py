@@ -345,7 +345,7 @@ class ElectricPotential(ElectricOverflow):
     def setLockDSPRAM(self):
         """ Set computation for DSP/RAM to zero after legalization 
         """
-        if self.region_id is not None and self.region_id > 1:
+        if self.region_id is not None and self.region_id > 3:
             self.lock_flag = True
 
     def forward(self, pos, mode="density"):

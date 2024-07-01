@@ -235,16 +235,19 @@ void PyPlaceDB::set(PlaceDB const& db)
             //std::cout << "Site value at (" << i << ", " << j << ") is " << db.siteVal(i,j) << std::endl;
             switch(db.siteVal(i,j))
             {
-                case 1: //FF/LUTL/CARRY
+                case 1: //SLICEL: LUTL/FF/CARRY
                     {
                         colSet0.insert(i);
                         colSet2.insert(i);
                         colSet3.insert(i);
                         break;
                     }
-                case 2: //LUTM
+                case 2: //SLICEM: LUTL/LUTM/FF/CARRY
                     {
+                        colSet0.insert(i);
                         colSet1.insert(i);
+                        colSet2.insert(i);
+                        colSet3.insert(i);
                         break;
                     }
                 case 3: //DSP
