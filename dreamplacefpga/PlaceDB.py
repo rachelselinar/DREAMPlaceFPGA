@@ -76,6 +76,11 @@ class PlaceDBFPGA (object):
         self.bin_size_x = None# bin width, currently 1 site  
         self.bin_size_y = None# bin height, currently 1 site  
 
+        self.sSLICELIdx = 1
+        self.sSLICEMIdx = 2
+        self.sDSPIdx = 3
+        self.sBRAMIdx = 4
+        self.sIOIdx = 5
         self.num_sites_x = None # number of sites in horizontal direction
         self.num_sites_y = None # number of sites in vertical direction 
         self.site_type_map = None # site type of each site 
@@ -158,6 +163,14 @@ class PlaceDBFPGA (object):
         self.dtype = None
         #Use Fence region structure for different resource type placement
         self.regions = 7 # LUTL, LUTM, FF, CARRY, DSP, BRAM & IO
+        self.rLutIdx = 0
+        self.rLutRamIdx = 1
+        self.rFFIdx = 2
+        self.rCarryIdx = 3
+        self.rDspIdx = 4
+        self.rBramIdx = 5
+        self.rIoIdx = 6
+
         #self.regionsLimits = []# array of 1D array with column min/max of x & y locations
         self.flat_region_boxes = []# flat version of regionsLimits
         self.flat_region_boxes_start = []# start indices of regionsLimits, length of num regions + 1
@@ -166,6 +179,8 @@ class PlaceDBFPGA (object):
         #Introduce masks
         self.flop_mask = None
         self.lut_mask = None
+        self.lutram_mask = None
+        self.carry_mask = None
         self.lut_type = None
         self.cluster_lut_type = None
         self.ram_mask = None
@@ -251,7 +266,7 @@ class PlaceDBFPGA (object):
 
         self.initialize_from_rawdb(params)
         self.lut_mask = self.node2fence_region_map == 0
-        # self.lutm_mask = self.node2fence_region_map == 1
+        self.lutram_mask = self.node2fence_region_map == 1 
         self.flop_mask = self.node2fence_region_map == 2
         self.carry_mask = self.node2fence_region_map == 3
         self.dsp_mask = self.node2fence_region_map == 4
@@ -341,7 +356,7 @@ class PlaceDBFPGA (object):
         self.ctrlSets = np.array(pydb.ctrlSets, dtype=np.int32)
         self.flat_ctrlSets = np.array(pydb.flat_ctrlSets, dtype=np.int32)
         self.flop2ctrlSetId_map = np.zeros(self.num_physical_nodes, dtype=np.int32)
-        self.flop2ctrlSetId_map[self.node2fence_region_map == 2] = np.arange(len(self.flop_indices))
+        self.flop2ctrlSetId_map[self.node2fence_region_map == self.rFFIdx] = np.arange(len(self.flop_indices))
 
         self.num_routing_grids_x = pydb.num_routing_grids_x
         self.num_routing_grids_y = pydb.num_routing_grids_y
@@ -365,6 +380,11 @@ class PlaceDBFPGA (object):
         self.shape2cluster_node_start = np.array(pydb.shape2cluster_node_start, dtype=np.int32)
         self.original_node_is_shape_inst = np.array(pydb.original_node_is_shape_inst, dtype=np.int32) # original node is shape instance or not
 
+        self.node2shape_map = np.ones(self.num_physical_nodes, dtype=np.int32) * -1
+        for i in range(len(self.shape2org_node_map)):
+            for j in self.shape2org_node_map[i]:
+                self.node2shape_map[self.original_node2node_map[j]] = i
+
         self.xl = float(pydb.xl)
         self.yl = float(pydb.yl)
         self.xh = float(pydb.xh)
@@ -380,6 +400,8 @@ class PlaceDBFPGA (object):
             self.read_pl(params, params.io_pl)
 
         self.loc2site_map = self.create_loc2site_map(params)
+
+        pdb.set_trace()
 
     def create_loc2site_map(self, params):
         """
@@ -630,8 +652,8 @@ class PlaceDBFPGA (object):
         node2fence_region_map = node2fence_region_map[:self.num_movable_nodes]
         
         if(region_id < self.regions-1):
-            if region_id == 0:
-                fence_region_mask = (node2fence_region_map == 0) | (node2fence_region_map == 1)
+            if region_id == self.rLutIdx:
+                fence_region_mask = (node2fence_region_map == self.rLutIdx) | (node2fence_region_map == self.rLutRamIdx)
             else:
                 fence_region_mask = (node2fence_region_map == region_id)
         else:
@@ -882,7 +904,7 @@ class PlaceDBFPGA (object):
         str_node_names = self.node_names
         content += "place_cell {\\\n"
         for i in range(self.num_physical_nodes): 
-            if self.node2fence_region_map[i] == 6:
+            if self.node2fence_region_map[i] == self.rIOIdx:
                 content += "\t %s %s \\\n" % (
                         str_node_names[i],
                         self.loc2site_map[node_x[i], node_y[i], node_z[i]],

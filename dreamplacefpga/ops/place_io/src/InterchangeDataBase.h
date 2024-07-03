@@ -24,6 +24,8 @@ class InterchangeDataBase
         ///@brief update site name 
         virtual void add_site_name(int, int, std::string const&);
         /// @brief add library cell by name
+        virtual void add_bel_map(std::string const& name, int z);
+        /// @brief add library cell by name
         virtual void add_lib_cell(std::string const& name);
         /// @brief add cell input pin
         virtual void add_input_pin(std::string& pName);
@@ -40,7 +42,7 @@ class InterchangeDataBase
         /// @brief add shape from interchange .netlist
         virtual void add_interchange_shape(double height, double width);
         /// @brief add nodes to shape from interchange .netlist
-        virtual void add_org_node_to_shape(std::string const& name, int dx, int dy);
+        virtual void add_org_node_to_shape(std::string const& cellName, std::string const& belName, int dx, int dy);
         /// @brief add net as bookshelf format 
         virtual void add_interchange_net(BookshelfParser::Net const& n); 
         /// @brief a callback when a bookshelf file reaches to the end 

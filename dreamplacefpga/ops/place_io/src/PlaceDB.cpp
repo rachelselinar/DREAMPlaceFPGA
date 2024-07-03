@@ -20,13 +20,15 @@ DREAMPLACE_BEGIN_NAMESPACE
 /// default constructor
 PlaceDB::PlaceDB() {
   num_movable_nodes = 0;
+  original_num_movable_nodes = 0;
   num_fixed_nodes = 0;
   m_numLibCell = 0;
   m_numLUT = 0;
+  m_numLUTRAM = 0;
   m_numFF = 0;
+  m_numCARRY = 0;
   m_numDSP = 0;
   m_numRAM = 0;
-  m_numCARRY = 0;
   m_numShape = 0;
 }
 
@@ -193,7 +195,7 @@ void PlaceDB::add_bookshelf_node(std::string& name, std::string& type)
       mov_node_z.emplace_back(0);
       lut_type.emplace_back(0);
       cluster_lut_type.emplace_back(0); 
-      m_numLUT += 1;
+      m_numLUTRAM += 1;
       ++num_movable_nodes;
     }
     else if (limbo::iequals(type, "CARRY8"))
@@ -438,6 +440,7 @@ void PlaceDB::add_interchange_node(std::string& name, std::string& type)
         original_node_name2id_map.insert(std::make_pair(name, original_mov_node_names.size()));
         original_mov_node_names.emplace_back(name);
         original_mov_node_types.emplace_back(type);
+        original_mov_node_z.emplace_back(0);
         original_node_is_shape_inst.emplace_back(0);
         original_node_cluster_flag.emplace_back(0);
         original_node2node_map.emplace_back(0);
@@ -482,6 +485,7 @@ void PlaceDB::update_interchange_nodes(){
             mov_node_y.emplace_back(0.0);
             mov_node_z.emplace_back(0);
             lut_type.emplace_back(0);
+            cluster_lut_type.emplace_back(0);
             m_numCARRY += 1;
             ++num_movable_nodes;
         } else if (limbo::iequals(type, "RAM32M") || limbo::iequals(type, "RAM64M"))
@@ -496,7 +500,8 @@ void PlaceDB::update_interchange_nodes(){
             mov_node_y.emplace_back(0.0);
             mov_node_z.emplace_back(0);
             lut_type.emplace_back(0);
-            m_numLUT += 1;
+            cluster_lut_type.emplace_back(0);
+            m_numLUTRAM += 1;
             ++num_movable_nodes;
         } else
         {
@@ -523,7 +528,6 @@ void PlaceDB::update_interchange_nodes(){
         
         if (original_node_cluster_flag[i] == 0)
         {   
-            // std::cout << "Original node " << name << " " << type << std::endl;
             //Updated approach
             if (limbo::iequals(type, "FDRE") || limbo::iequals(type, "FDSE"))
             {
@@ -537,8 +541,9 @@ void PlaceDB::update_interchange_nodes(){
                 mov_node_size_y.push_back(sqrt0p0625);
                 mov_node_x.emplace_back(0.0);
                 mov_node_y.emplace_back(0.0);
-                mov_node_z.emplace_back(0);
+                mov_node_z.emplace_back(original_mov_node_z[i]);
                 lut_type.emplace_back(0);
+                cluster_lut_type.emplace_back(0);
                 m_numFF += 1;
                 ++num_movable_nodes;
             }
@@ -553,8 +558,9 @@ void PlaceDB::update_interchange_nodes(){
                 mov_node_size_y.push_back(sqrt0p0625);
                 mov_node_x.emplace_back(0.0);
                 mov_node_y.emplace_back(0.0);
-                mov_node_z.emplace_back(0);
+                mov_node_z.emplace_back(original_mov_node_z[i]);
                 lut_type.emplace_back(0);
+                cluster_lut_type.emplace_back(0);
                 m_numLUT += 1;
                 ++num_movable_nodes;
             }
@@ -569,8 +575,9 @@ void PlaceDB::update_interchange_nodes(){
                 mov_node_size_y.push_back(sqrt0p0625);
                 mov_node_x.emplace_back(0.0);
                 mov_node_y.emplace_back(0.0);
-                mov_node_z.emplace_back(0);
-                lut_type.emplace_back(0);
+                mov_node_z.emplace_back(original_mov_node_z[i]);
+                lut_type.emplace_back(1);
+                cluster_lut_type.emplace_back(0);
                 m_numLUT += 1;
                 ++num_movable_nodes;
             }
@@ -585,8 +592,9 @@ void PlaceDB::update_interchange_nodes(){
                 mov_node_size_y.push_back(sqrt0p0625);
                 mov_node_x.emplace_back(0.0);
                 mov_node_y.emplace_back(0.0);
-                mov_node_z.emplace_back(0);
-                lut_type.emplace_back(0);
+                mov_node_z.emplace_back(original_mov_node_z[i]);
+                lut_type.emplace_back(2);
+                cluster_lut_type.emplace_back(1);
                 m_numLUT += 1;
                 ++num_movable_nodes;
             }
@@ -601,8 +609,9 @@ void PlaceDB::update_interchange_nodes(){
                 mov_node_size_y.push_back(sqrt0p0625);
                 mov_node_x.emplace_back(0.0);
                 mov_node_y.emplace_back(0.0);
-                mov_node_z.emplace_back(0);
-                lut_type.emplace_back(2);
+                mov_node_z.emplace_back(original_mov_node_z[i]);
+                lut_type.emplace_back(3);
+                cluster_lut_type.emplace_back(2);
                 m_numLUT += 1;
                 ++num_movable_nodes;
             }
@@ -617,8 +626,9 @@ void PlaceDB::update_interchange_nodes(){
                 mov_node_size_y.push_back(sqrt0p125);
                 mov_node_x.emplace_back(0.0);
                 mov_node_y.emplace_back(0.0);
-                mov_node_z.emplace_back(0);
-                lut_type.emplace_back(3);
+                mov_node_z.emplace_back(original_mov_node_z[i]);
+                lut_type.emplace_back(4);
+                cluster_lut_type.emplace_back(3);
                 m_numLUT += 1;
                 ++num_movable_nodes;
             }
@@ -633,8 +643,9 @@ void PlaceDB::update_interchange_nodes(){
                 mov_node_size_y.push_back(sqrt0p125);
                 mov_node_x.emplace_back(0.0);
                 mov_node_y.emplace_back(0.0);
-                mov_node_z.emplace_back(0);
-                lut_type.emplace_back(4);
+                mov_node_z.emplace_back(original_mov_node_z[i]);
+                lut_type.emplace_back(5);
+                cluster_lut_type.emplace_back(4);
                 m_numLUT += 1;
                 ++num_movable_nodes;
             }
@@ -649,8 +660,9 @@ void PlaceDB::update_interchange_nodes(){
                 mov_node_size_y.push_back(sqrt0p125);
                 mov_node_x.emplace_back(0.0);
                 mov_node_y.emplace_back(0.0);
-                mov_node_z.emplace_back(0);
-                lut_type.emplace_back(5);
+                mov_node_z.emplace_back(original_mov_node_z[i]);
+                lut_type.emplace_back(6);
+                cluster_lut_type.emplace_back(5);
                 m_numLUT += 1;
                 ++num_movable_nodes;
             }
@@ -665,8 +677,9 @@ void PlaceDB::update_interchange_nodes(){
                 mov_node_size_y.push_back(sqrt0p125);
                 mov_node_x.emplace_back(0.0);
                 mov_node_y.emplace_back(0.0);
-                mov_node_z.emplace_back(0);
-                lut_type.emplace_back(5); //Treating same as LUT6
+                mov_node_z.emplace_back(original_mov_node_z[i]);
+                lut_type.emplace_back(6); //Treating same as LUT6
+                cluster_lut_type.emplace_back(5); 
                 m_numLUT += 1;
                 ++num_movable_nodes;
             }
@@ -681,10 +694,10 @@ void PlaceDB::update_interchange_nodes(){
                 mov_node_size_y.push_back(sqrt0p5);
                 mov_node_x.emplace_back(0.0);
                 mov_node_y.emplace_back(0.0);
-                mov_node_z.emplace_back(0);
+                mov_node_z.emplace_back(original_mov_node_z[i]);
                 lut_type.emplace_back(0);
                 cluster_lut_type.emplace_back(0); 
-                m_numLUT += 1;
+                m_numLUTRAM += 1;
                 ++num_movable_nodes;
             }
             else if (limbo::iequals(type, "CARRY8"))
@@ -697,7 +710,7 @@ void PlaceDB::update_interchange_nodes(){
                 mov_node_size_y.push_back(1);
                 mov_node_x.emplace_back(0.0);
                 mov_node_y.emplace_back(0.0);
-                mov_node_z.emplace_back(0);
+                mov_node_z.emplace_back(original_mov_node_z[i]);
                 lut_type.emplace_back(0); 
                 cluster_lut_type.emplace_back(0); 
                 m_numCARRY += 1;
@@ -714,8 +727,9 @@ void PlaceDB::update_interchange_nodes(){
                 mov_node_size_y.push_back(2.5);
                 mov_node_x.emplace_back(0.0);
                 mov_node_y.emplace_back(0.0);
-                mov_node_z.emplace_back(0);
+                mov_node_z.emplace_back(original_mov_node_z[i]);
                 lut_type.emplace_back(0);
+                cluster_lut_type.emplace_back(0);
                 m_numDSP += 1;
                 ++num_movable_nodes;
             }
@@ -730,8 +744,9 @@ void PlaceDB::update_interchange_nodes(){
                 mov_node_size_y.push_back(5.0);
                 mov_node_x.emplace_back(0.0);
                 mov_node_y.emplace_back(0.0);
-                mov_node_z.emplace_back(0);
+                mov_node_z.emplace_back(original_mov_node_z[i]);
                 lut_type.emplace_back(0);
+                cluster_lut_type.emplace_back(0);
                 m_numRAM += 1;
                 ++num_movable_nodes;
             }
@@ -940,9 +955,10 @@ void PlaceDB::add_interchange_shape(double height, double width)
     m_numShape += 1;
     numShapeClusterNodesTemp = 0;
 }
-void PlaceDB::add_org_node_to_shape(std::string const& name, int dx, int dy)
+void PlaceDB::add_org_node_to_shape(std::string const& cellName, std::string const& belName, int dx, int dy)
 {   
     // Split the instance name to get the parent name
+    std::string name = cellName;
     std::string parent_name = name.substr(0, name.find_last_of("/"));
     string2index_map_type::iterator found = original_node_name2id_map.find(name);
     string2index_map_type::iterator found_parent = original_node_name2id_map.find(parent_name);
@@ -953,6 +969,12 @@ void PlaceDB::add_org_node_to_shape(std::string const& name, int dx, int dy)
         nodeId = original_node_name2id_map.at(name);
         org_node_x_offset[nodeId] = dx;
         org_node_y_offset[nodeId] = dy;
+
+        hashspace::unordered_map<std::string, int>::iterator found_bel = bel2ZLocation.find(belName);
+        if (found_bel != bel2ZLocation.end())
+        {
+            original_mov_node_z[nodeId] = bel2ZLocation.at(belName);
+        }
         shape2org_node_map[m_numShape-1].emplace_back(nodeId);
         original_node_is_shape_inst[nodeId] = 1;
         if (limbo::iequals(original_mov_node_types[nodeId], "CARRY8"))
@@ -970,21 +992,30 @@ void PlaceDB::add_org_node_to_shape(std::string const& name, int dx, int dy)
     } else if (found_parent != original_node_name2id_map.end())
     {
         nodeId = original_node_name2id_map.at(parent_name);
-        org_node_x_offset[nodeId] = dx;
-        org_node_y_offset[nodeId] = dy;
-        shape2org_node_map[m_numShape-1].emplace_back(nodeId);
-        original_node_is_shape_inst[nodeId] = 1;
-        if (limbo::iequals(original_mov_node_types[nodeId], "RAM32M") || limbo::iequals(original_mov_node_types[nodeId], "RAM64M"))
+        // for macro instances, check if it is already added to the shape
+        if (original_node_is_shape_inst[nodeId] == 0)
         {
-            shape_types[m_numShape-1] = 2;
-            original_node_cluster_flag[nodeId] = 1;
-            org_node_pin_offset_x[nodeId] = dx + 0.5 * 0.5;
-            org_node_pin_offset_y[nodeId] = dy + 0.5 * 0.5;
-            if (numShapeClusterNodesTemp == 0)
+            org_node_x_offset[nodeId] = dx;
+            org_node_y_offset[nodeId] = dy;
+            hashspace::unordered_map<std::string, int>::iterator found_bel = bel2ZLocation.find(belName);
+            if (found_bel != bel2ZLocation.end())
             {
-                shape2cluster_node_start[m_numShape-1] = nodeId;
+                original_mov_node_z[nodeId] = bel2ZLocation.at(belName);
             }
-            numShapeClusterNodesTemp += 1;
+            shape2org_node_map[m_numShape-1].emplace_back(nodeId);
+            original_node_is_shape_inst[nodeId] = 1;
+            if (limbo::iequals(original_mov_node_types[nodeId], "RAM32M") || limbo::iequals(original_mov_node_types[nodeId], "RAM64M"))
+            {
+                shape_types[m_numShape-1] = 2;
+                original_node_cluster_flag[nodeId] = 1;
+                org_node_pin_offset_x[nodeId] = dx + 0.5 * 0.5;
+                org_node_pin_offset_y[nodeId] = dy + 0.5 * 0.5;
+                if (numShapeClusterNodesTemp == 0)
+                {
+                    shape2cluster_node_start[m_numShape-1] = nodeId;
+                }
+                numShapeClusterNodesTemp += 1;
+            }
         }
     } else
     {
@@ -1005,6 +1036,10 @@ void PlaceDB::site_info_update(int x, int y, int val)
 void PlaceDB::add_site_name(int x, int y, std::string const& name)
 {
     m_siteNameDB[x][y] = name;
+}
+void PlaceDB::add_bel_map(std::string const& name, int z)
+{
+    bel2ZLocation.insert(std::make_pair(name, z));
 }
 void PlaceDB::resize_clk_regions(int xReg, int yReg)
 {

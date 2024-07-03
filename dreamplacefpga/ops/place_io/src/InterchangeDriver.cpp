@@ -49,6 +49,36 @@ void InterchangeDriver::setTileToSiteType()
             std::string siteTypeName = strings[siteType.getName()].cStr();
             std::string siteName = strings[site.getName()].cStr();
 
+            // construct bel name to z location mapping
+            if (siteTypeName.find("SLICE") != std::string::npos && lutBels.size() == 0)
+            {
+                for (int k = 0; k < siteType.getBels().size(); k++)
+                {
+                    auto bel = siteType.getBels()[k];
+                    std::string belName = strings[bel.getName()].cStr();
+                    if (belName.find("LUT") != std::string::npos)
+                    {
+                        lutBels.emplace_back(belName);
+                    } else if (belName.find("FF") != std::string::npos && belName.find("MUX") == std::string::npos)
+                    {
+                        ffBels.emplace_back(belName);
+                    }  
+                }
+
+                // sort the bels based on the bel name and create a mapping from bel name to z location
+                std::sort(lutBels.begin(), lutBels.end());
+                std::sort(ffBels.begin(), ffBels.end());
+
+                for (int k = 0; k < lutBels.size(); k++)
+                {
+                    m_db.add_bel_map(lutBels[k], k);
+                }
+                for (int k = 0; k < ffBels.size(); k++)
+                {
+                    m_db.add_bel_map(ffBels[k], k);
+                }
+            }
+
             if (siteTypeName.find("SLICEL") != std::string::npos)
             {
                 int siteY = std::stoi(siteName.substr(siteName.find("Y")+1));
@@ -82,7 +112,11 @@ void InterchangeDriver::setTileToSiteType()
             {
                 tile2SiteTypeId[i] = 6;
                 siteNames.emplace_back(siteName);
-            } 
+            } else {
+                // dreamplacePrint(kWARN, "Unknown site type %s\n", siteTypeName.c_str());
+                continue;
+            }
+
         }
         tile2SiteNames.emplace_back(siteNames);
     }
@@ -341,7 +375,6 @@ void InterchangeDriver::addNodesToDataBase()
         auto inst = instList[i];
         std::string instName = strings[inst.getName()].cStr();
         std::string instTypeName = strings[libCells[inst.getCell()].getName()].cStr();
-        // std::cout << "adding node: " << instName << " " << instTypeName << std::endl;
 
         m_db.add_interchange_node(instName, instTypeName);
     }
@@ -427,8 +460,6 @@ void InterchangeDriver::addShapesToDataBase()
     auto strings = interchangeNetlistRoot.getStrList();
     auto shapeList = interchangeNetlistRoot.getShapeList();
 
-    // std::cout << "Number of shapes: " << shapeList.size() << std::endl;
-
     for (int i = 0; i < shapeList.size(); i++)
     {
         auto shape = shapeList[i];
@@ -437,27 +468,23 @@ void InterchangeDriver::addShapesToDataBase()
         int width = shape.getWidth();
 
         m_db.add_interchange_shape(double(height), double(width));
-
-        // std::cout << "Shape height: " << height << " Shape width: " << width << std::endl;
         
         for (int j = 0; j < ShapeElements.size(); j++)
         {
             auto shapeElement = ShapeElements[j];
-            std::string cellName = strings[shapeElement.getCellName()].cStr();
-            std::string belName = strings[shapeElement.getBelName()].cStr();
             auto siteTypes = shapeElement.getSiteTypes();
             for (int k = 0; k < siteTypes.size(); k++)
             {
                 std::string siteType = strings[siteTypes[k]].cStr();
-                // std::cout << "Site type: " << siteType << std::endl; 
             }
+            std::string cellName = strings[shapeElement.getCellName()].cStr();
+            std::string belName = strings[shapeElement.getBelName()].cStr();
             int dx = shapeElement.getDx();
             int dy = shapeElement.getDy();
-            // std::cout << "Cell name: " << cellName << " Bel name: " << belName << " dx: " << dx << " dy: " << dy << std::endl;
-            m_db.add_org_node_to_shape(cellName, dx, dy);
+
+            m_db.add_org_node_to_shape(cellName, belName, dx, dy);
         }
     }
-
     m_db.update_interchange_nodes();
 }
 

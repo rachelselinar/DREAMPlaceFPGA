@@ -56,7 +56,9 @@ void PyPlaceDB::set(PlaceDB const& db)
     num_physical_nodes = num_terminals + num_movable_nodes;
 
     node_count.append(db.numLUT());
+    node_count.append(db.numLUTRAM());
     node_count.append(db.numFF());
+    node_count.append(db.numCARRY());
     node_count.append(db.numDSP());
     node_count.append(db.numRAM());
     node_count.append(num_terminals);

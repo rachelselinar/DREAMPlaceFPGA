@@ -100,7 +100,8 @@ class PlaceDataCollectionFPGA(object):
             ## Resource type masks
             self.flop_mask = torch.from_numpy(placedb.flop_mask).to(device)
             self.lut_mask = torch.from_numpy(placedb.lut_mask).to(device)
-
+            self.lutram_mask = torch.from_numpy(placedb.lutram_mask).to(device)
+            self.carry_mask = torch.from_numpy(placedb.carry_mask).to(device)
             self.ram_mask = torch.from_numpy(placedb.ram_mask).to(device)
             self.dsp_mask = torch.from_numpy(placedb.dsp_mask).to(device)
             self.flop_lut_mask = self.flop_mask | self.lut_mask
@@ -122,6 +123,9 @@ class PlaceDataCollectionFPGA(object):
             self.flop_indices = torch.from_numpy(placedb.flop_indices).to(dtype=torch.int32,device=device)
             self.lut_indices = torch.nonzero(self.lut_mask, as_tuple=True)[0].to(dtype=torch.int32)
             self.flop_lut_indices = torch.nonzero(self.flop_lut_mask, as_tuple=True)[0].to(dtype=torch.int32)
+            self.carry_indices = torch.nonzero(self.carry_mask, as_tuple=True)[0].to(dtype=torch.int32)
+            self.lutram_indices = torch.nonzero(self.lutram_mask, as_tuple=True)[0].to(dtype=torch.int32)
+
             self.pin_weights[self.flop_mask] = params.ffPinWeight
             self.unit_pin_capacity = torch.empty(1, dtype=self.pos[0].dtype, device=device)
             self.unit_pin_capacity.data.fill_(params.unit_pin_capacity)
@@ -577,18 +581,18 @@ class BasicPlaceFPGA(nn.Module):
         """
         # legalize LUT/FF
         #Avg areas
-        avgLUTArea = data_collections.node_areas[:placedb.num_physical_nodes][data_collections.node2fence_region_map == 0].sum()
-        avgLUTArea /= placedb.node_count[0]
-        avgFFArea = data_collections.node_areas[:placedb.num_physical_nodes][data_collections.node2fence_region_map == 1].sum()
-        avgFFArea /= placedb.node_count[1]
+        avgLUTArea = data_collections.node_areas[:placedb.num_physical_nodes][data_collections.node2fence_region_map == placedb.rLutIdx].sum()
+        avgLUTArea /= placedb.node_count[placedb.rLutIdx]
+        avgFFArea = data_collections.node_areas[:placedb.num_physical_nodes][data_collections.node2fence_region_map == placedb.rFFIdx].sum()
+        avgFFArea /= placedb.node_count[placedb.rFFIdx]
         #Inst Areas
-        inst_areas = data_collections.node_areas[:placedb.num_physical_nodes].detach().clone()
-        inst_areas[data_collections.node2fence_region_map > 1] = 0.0 #Area of non CLB nodes set to 0.0
-        inst_areas[data_collections.node2fence_region_map == 0] /= avgLUTArea
-        inst_areas[data_collections.node2fence_region_map == 1] /= avgFFArea
+        # inst_areas = data_collections.node_areas[:placedb.num_physical_nodes].detach().clone()
+        # inst_areas[data_collections.node2fence_region_map > 1] = 0.0 #Area of non CLB nodes set to 0.0
+        # inst_areas[data_collections.node2fence_region_map == 0] /= avgLUTArea
+        # inst_areas[data_collections.node2fence_region_map == 1] /= avgFFArea
         #Site types
         site_types = data_collections.site_type_map.detach().clone()
-        site_types[site_types > 1] = 0 #Set non CLB to 0
+        site_types[site_types > placedb.sSLICEMIdx] = 0 #Set non CLB to 0
 
         if (len(data_collections.net_weights)):
             net_wts = data_collections.net_weights
@@ -596,49 +600,11 @@ class BasicPlaceFPGA(nn.Module):
             net_wts = torch.ones(placedb.num_nets, dtype=self.pos[0].dtype, device=device)
 
         return lut_ff_legalization.LegalizeCLB(
-            lutFlopIndices=data_collections.flop_lut_indices,
-            nodeNames=placedb.node_names,
-            flop2ctrlSet=data_collections.flop2ctrlSetId_map,
-            flop_ctrlSet=data_collections.flop_ctrlSets,
-            pin2node=data_collections.pin2node_map,
-            pin2net=data_collections.pin2net_map,
-            snkpin2tnet=data_collections.snkpin2tnet_map,
-            net2tnet_start=data_collections.net2tnet_start_map,
-            flat_tnet2pin_map=data_collections.flat_tnet2pin_map,
-            flat_net2pin=data_collections.flat_net2pin_map,
-            flat_net2pin_start=data_collections.flat_net2pin_start_map,
-            flat_node2pin=data_collections.flat_node2pin_map,
-            flat_node2pin_start=data_collections.flat_node2pin_start_map,
-            node2fence=data_collections.node2fence_region_map,
-            pin_types=data_collections.pin_typeIds,
-            lut_type=data_collections.lut_type,
+            data_collections=data_collections,
+            placedb=placedb,
+            params=params,
             net_wts=net_wts,
-            tnet_wts=data_collections.tnet_weights,
-            avg_lut_area=avgLUTArea,
-            avg_ff_area=avgFFArea,
-            inst_areas=inst_areas,
-            pin_offset_x=data_collections.lg_pin_offset_x,
-            pin_offset_y=data_collections.lg_pin_offset_y,
             site_types=site_types,
-            site_xy=data_collections.lg_siteXYs,
-            node_size_x=data_collections.node_size_x[:placedb.num_physical_nodes],
-            node_size_y=data_collections.node_size_y[:placedb.num_physical_nodes],
-            node2outpin=data_collections.node2outpinIdx_map[:placedb.num_physical_nodes],
-            net2pincount=data_collections.net2pincount_map,
-            node2pincount=data_collections.node2pincount_map,
-            spiral_accessor=data_collections.spiral_accessor,
-            num_nets=placedb.num_nets,
-            num_movable_nodes=placedb.num_movable_nodes,
-            num_nodes=placedb.num_physical_nodes,
-            num_sites_x=placedb.num_sites_x,
-            num_sites_y=placedb.num_sites_y,
-            xWirelenWt=placedb.xWirelenWt,
-            yWirelenWt=placedb.yWirelenWt,
-            lg_alpha=params.lg_alpha,
-            lg_beta=params.lg_beta,
-            enableTimingPreclustering=params.enableTimingPreclustering,
-            nbrDistEnd=placedb.nbrDistEnd,
-            num_threads=params.num_threads,
             device=device)
 
     def build_timing_op(self, params, placedb, data_collections, timer=None):

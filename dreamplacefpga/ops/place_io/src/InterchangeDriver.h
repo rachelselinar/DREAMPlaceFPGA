@@ -55,14 +55,17 @@ public:
     void addShapesToDataBase();
 
 protected: 
-    BookshelfParser::Net m_net; ///< temporary storage of net    
+        
 
     DeviceResources::Device::Reader interchangeDeviceRoot;
     LogicalNetlist::Netlist::Reader interchangeNetlistRoot;
 
-    boost::unordered_map<std::pair<int, int>, int> siteMap;
-    // std::map<std::pair<int, int>, int> siteMap;
-    boost::unordered_map<std::pair<int, int>, std::string> siteNameMap;
+    boost::unordered_map<std::pair<int, int>, int> siteMap; /// (xLoc, yLoc) to siteTypeId
+    boost::unordered_map<std::pair<int, int>, std::string> siteNameMap; /// (xLoc, yLoc) to siteName
+
+    std::vector<std::string> lutBels; /// LUT BEL names
+    std::vector<std::string> ffBels; /// FF BEL names
+    // hashspace::unordered_map<std::string, int> bel2ZLocation;
 
     std::vector<std::vector<std::string>> tile2SiteNames; /// Tile to site names
     std::vector<std::pair<int, int>> tile2ColRow; /// Tile to col and row
@@ -75,14 +78,12 @@ protected:
     int numGridX; /// Max num of grids at X direction
     int numGridY; /// Max num of grids at Y direction
 
-    // std::vector<std::vector<std::string>> cellType2PortNames;
+    std::vector<std::vector<std::string>> port2BusNames; /// Port to bus names
+    hashspace::unordered_map<int, int> busPort2Index; /// port_id to bus_id
 
-    std::vector<std::vector<std::string>> port2BusNames;
-    // hashspace::unordered_map<std::string, int> cellType2Index;
-    hashspace::unordered_map<int, int> busPort2Index; // port_id to bus_id
-
-    hashspace::unordered_map<std::string, int> netName2Index;
-    std::vector<std::string> netNames;
+    hashspace::unordered_map<std::string, int> netName2Index; /// net name to net index
+    std::vector<std::string> netNames; /// net names
+    BookshelfParser::Net m_net; ///< temporary storage of net
 
 };
 

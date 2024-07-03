@@ -277,7 +277,9 @@ class PlaceDB : public BookshelfParser::BookshelfDataBase
         std::size_t numFixed() const {return fixed_node_names.size();}
         std::size_t numLibCell() const {return m_numLibCell;}
         std::size_t numLUT() const {return m_numLUT;}
+        std::size_t numLUTRAM() const {return m_numLUTRAM;}
         std::size_t numFF() const {return m_numFF;}
+        std::size_t numCARRY() const {return m_numCARRY;}
         std::size_t numDSP() const {return m_numDSP;}
         std::size_t numRAM() const {return m_numRAM;}
         std::string designName() const {return m_designName;}
@@ -308,11 +310,12 @@ class PlaceDB : public BookshelfParser::BookshelfDataBase
 
         ///==== Interchange Callbacks ====
         virtual void add_site_name(int x, int y, std::string const& name);
+        virtual void add_bel_map(std::string const& name, int z); //map slice bel name to z location
         virtual void add_interchange_node(std::string& name, std::string& type);
         virtual void update_interchange_nodes();
         virtual void add_interchange_net(BookshelfParser::Net const& n);
         virtual void add_interchange_shape(double height, double width);
-        virtual void add_org_node_to_shape(std::string const& name, int dx, int dy);
+        virtual void add_org_node_to_shape(std::string const& cellName, std::string const& belName, int dx, int dy);
 
         /// write placement solutions 
         virtual bool write(std::string const& filename) const;
@@ -320,6 +323,7 @@ class PlaceDB : public BookshelfParser::BookshelfDataBase
 
         std::vector<std::vector<index_type> > m_siteDB; //FPGA Site Information
         std::vector<std::vector<std::string> > m_siteNameDB; //FPGA Site Name Information
+        hashspace::unordered_map<std::string, int> bel2ZLocation; //FPGA BEL to Z Location Information
         std::vector<clk_region> m_clkRegionDB; //FPGA clkRegion Information
         std::vector<std::string> m_clkRegions; //FPGA clkRegion Names 
         int m_clkRegX;
@@ -338,6 +342,7 @@ class PlaceDB : public BookshelfParser::BookshelfDataBase
         std::size_t num_fixed_nodes; ///< number of fixed cells 
         std::size_t m_numLibCell; ///< number of standard cells in the library
         std::size_t m_numLUT; ///< number of LUTs in design
+        std::size_t m_numLUTRAM; ///< number of LUTRAMs in design
         std::size_t m_numFF; ///< number of FFs in design
         std::size_t m_numCARRY; ///< number of CARRYs in design
         std::size_t m_numDSP; ///< number of DSPs in design
@@ -379,6 +384,7 @@ class PlaceDB : public BookshelfParser::BookshelfDataBase
         std::vector<double> mov_node_x;
         std::vector<double> mov_node_y;
         std::vector<index_type> mov_node_z;
+        std::vector<index_type> original_mov_node_z;
         std::vector<double> fixed_node_x;
         std::vector<double> fixed_node_y;
         std::vector<index_type> fixed_node_z;
