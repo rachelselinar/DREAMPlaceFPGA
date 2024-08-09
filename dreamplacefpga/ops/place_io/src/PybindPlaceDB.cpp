@@ -179,6 +179,8 @@ void bind_PlaceDB(pybind11::module& m)
         .def("shapeWidths", (std::vector<double> const& (DREAMPLACE_NAMESPACE::PlaceDB::*)() const) &DREAMPLACE_NAMESPACE::PlaceDB::shapeWidths)
         .def("shapeTypes", (std::vector<int> const& (DREAMPLACE_NAMESPACE::PlaceDB::*)() const) &DREAMPLACE_NAMESPACE::PlaceDB::shapeTypes)
         .def("shape2OrgNodeMap", (std::vector<std::vector<DREAMPLACE_NAMESPACE::PlaceDB::index_type> > const& (DREAMPLACE_NAMESPACE::PlaceDB::*)() const) &DREAMPLACE_NAMESPACE::PlaceDB::shape2OrgNodeMap)
+        .def("flatShape2OrgNodeMap", (std::vector<DREAMPLACE_NAMESPACE::PlaceDB::index_type> const& (DREAMPLACE_NAMESPACE::PlaceDB::*)() const) &DREAMPLACE_NAMESPACE::PlaceDB::flatShape2OrgNodeMap)
+        .def("flatShape2OrgNodeStartMap", (std::vector<DREAMPLACE_NAMESPACE::PlaceDB::index_type> const& (DREAMPLACE_NAMESPACE::PlaceDB::*)() const) &DREAMPLACE_NAMESPACE::PlaceDB::flatShape2OrgNodeStartMap)
         .def("shape2ClusterNodeStart", (std::vector<DREAMPLACE_NAMESPACE::PlaceDB::index_type> const& (DREAMPLACE_NAMESPACE::PlaceDB::*)() const) &DREAMPLACE_NAMESPACE::PlaceDB::shape2ClusterNodeStart)
         .def("originalNodeIsShapeInst", (std::vector<int> const& (DREAMPLACE_NAMESPACE::PlaceDB::*)() const) &DREAMPLACE_NAMESPACE::PlaceDB::originalNodeIsShapeInst)
         ;

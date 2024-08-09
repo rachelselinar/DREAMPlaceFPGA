@@ -84,6 +84,9 @@ class PlaceDB : public BookshelfParser::BookshelfDataBase
         std::vector<double> const& orgNodeYOffset() const {return org_node_y_offset;}
         std::vector<double>& orgNodeYOffset() {return org_node_y_offset;}
 
+        std::vector<double> const& orgNodeZOffset() const {return org_node_z_offset;}
+        std::vector<double>& orgNodeZOffset() {return org_node_z_offset;}
+
         std::vector<double> const& shapeHeights() const {return shape_heights;}
         std::vector<double>& shapeHeights() {return shape_heights;}
 
@@ -95,6 +98,12 @@ class PlaceDB : public BookshelfParser::BookshelfDataBase
 
         std::vector<std::vector<index_type> > const& shape2OrgNodeMap() const {return shape2org_node_map;}
         std::vector<std::vector<index_type> >& shape2OrgNodeMap() {return shape2org_node_map;}
+
+        std::vector<index_type> const& flatShape2OrgNodeMap() const {return flat_shape2org_node_map;}
+        std::vector<index_type>& flatShape2OrgNodeMap() {return flat_shape2org_node_map;}
+
+        std::vector<index_type> const& flatShape2OrgNodeStartMap() const {return flat_shape2org_node_start_map;}
+        std::vector<index_type>& flatShape2OrgNodeStartMap() {return flat_shape2org_node_start_map;}
 
         std::vector<index_type> const& shape2ClusterNodeStart() const {return shape2cluster_node_start;}
         std::vector<index_type>& shape2ClusterNodeStart() {return shape2cluster_node_start;}
@@ -217,6 +226,9 @@ class PlaceDB : public BookshelfParser::BookshelfDataBase
         std::vector<index_type> const& pin2NodeMap() const {return pin2node_map;}
         std::vector<index_type>& pin2NodeMap() {return pin2node_map;}
 
+        std::vector<index_type> const& pin2OrgNodeMap() const {return pin2org_node_map;}
+        std::vector<index_type>& pin2OrgNodeMap() {return pin2org_node_map;}
+
         std::vector<index_type> const& pin2NodeTypeMap() const {return pin2nodeType_map;}
         std::vector<index_type>& pin2NodeTypeMap() {return pin2nodeType_map;}
 
@@ -279,6 +291,7 @@ class PlaceDB : public BookshelfParser::BookshelfDataBase
         std::size_t numLUT() const {return m_numLUT;}
         std::size_t numLUTRAM() const {return m_numLUTRAM;}
         std::size_t numFF() const {return m_numFF;}
+        std::size_t numMUX() const {return m_numMUX;}
         std::size_t numCARRY() const {return m_numCARRY;}
         std::size_t numDSP() const {return m_numDSP;}
         std::size_t numRAM() const {return m_numRAM;}
@@ -316,6 +329,7 @@ class PlaceDB : public BookshelfParser::BookshelfDataBase
         virtual void add_interchange_net(BookshelfParser::Net const& n);
         virtual void add_interchange_shape(double height, double width);
         virtual void add_org_node_to_shape(std::string const& cellName, std::string const& belName, int dx, int dy);
+        virtual void interchange_end();
 
         /// write placement solutions 
         virtual bool write(std::string const& filename) const;
@@ -324,6 +338,7 @@ class PlaceDB : public BookshelfParser::BookshelfDataBase
         std::vector<std::vector<index_type> > m_siteDB; //FPGA Site Information
         std::vector<std::vector<std::string> > m_siteNameDB; //FPGA Site Name Information
         hashspace::unordered_map<std::string, int> bel2ZLocation; //FPGA BEL to Z Location Information
+        hashspace::unordered_map<std::string, int> lutramOutPin2ZLoc; //FPGA LUTRAM Out Pin to Z Location Information
         std::vector<clk_region> m_clkRegionDB; //FPGA clkRegion Information
         std::vector<std::string> m_clkRegions; //FPGA clkRegion Names 
         int m_clkRegX;
@@ -344,10 +359,19 @@ class PlaceDB : public BookshelfParser::BookshelfDataBase
         std::size_t m_numLUT; ///< number of LUTs in design
         std::size_t m_numLUTRAM; ///< number of LUTRAMs in design
         std::size_t m_numFF; ///< number of FFs in design
+        std::size_t m_numMUX; ///< number of MUXs in design
         std::size_t m_numCARRY; ///< number of CARRYs in design
         std::size_t m_numDSP; ///< number of DSPs in design
         std::size_t m_numRAM; ///< number of RAMs in design
         std::size_t m_numShape; ///< number of shapes in design
+        std::size_t rLutIdx = 0; ///< index of normal LUT for node2fenceregion
+        std::size_t rLutramIdx = 1; ///< index of LUTRAM for node2fenceregion
+        std::size_t rFFIdx = 2; ///< index of FF for node2fenceregion
+        std::size_t rMuxIdx = 3; ///< index of MUX for node2fenceregion
+        std::size_t rCarryIdx = 4; ///< index of CARRY for node2fenceregion
+        std::size_t rDspIdx = 5; ///< index of DSP for node2fenceregion
+        std::size_t rBramIdx = 6; ///< index of BRAM for node2fenceregion
+        std::size_t rIoIdx = 7; ///< index of IO for node2fenceregion
 
         std::string m_designName; ///< for writing def file
 
@@ -368,6 +392,7 @@ class PlaceDB : public BookshelfParser::BookshelfDataBase
         std::vector<index_type> node2outpinIdx_map;
         std::vector<index_type> pin_typeIds;
         std::vector<index_type> pin2node_map;
+        std::vector<index_type> pin2org_node_map;
         std::vector<index_type> pin2net_map;
         std::vector<index_type> pin2nodeType_map;
         std::vector<std::vector<index_type> > net2pin_map;
@@ -409,11 +434,14 @@ class PlaceDB : public BookshelfParser::BookshelfDataBase
         std::vector<double> shape_widths;
         std::vector<int> shape_types; // 0: LUT6_2, 1: Carry-chain, 2: LUTRAM, 3: DSP, 4: BRAM
         std::vector<std::vector<index_type> > shape2org_node_map;
+        std::vector<index_type> flat_shape2org_node_map;
+        std::vector<index_type> flat_shape2org_node_start_map;
         std::vector<index_type> shape2cluster_node_start;
         std::vector<int> original_node_is_shape_inst;
         std::vector<int> original_node_cluster_flag;
         std::vector<double> org_node_x_offset;
         std::vector<double> org_node_y_offset;
+        std::vector<double> org_node_z_offset;
         std::vector<double> org_node_pin_offset_x;
         std::vector<double> org_node_pin_offset_y;
 

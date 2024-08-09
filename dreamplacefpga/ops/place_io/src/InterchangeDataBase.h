@@ -46,7 +46,7 @@ class InterchangeDataBase
         /// @brief add net as bookshelf format 
         virtual void add_interchange_net(BookshelfParser::Net const& n); 
         /// @brief a callback when a bookshelf file reaches to the end 
-        virtual void bookshelf_end(); 
+        virtual void interchange_end();
 
     private:
         /// @brief remind users to define some optional callback functions at runtime 

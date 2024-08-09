@@ -62,7 +62,13 @@ void InterchangeDriver::setTileToSiteType()
                     } else if (belName.find("FF") != std::string::npos && belName.find("MUX") == std::string::npos)
                     {
                         ffBels.emplace_back(belName);
-                    }  
+                    } else if (belName.find("F7MUX") != std::string::npos)
+                    {
+                        mux7Bels.emplace_back(belName);
+                    } else if (belName.find("F8MUX") != std::string::npos)
+                    {
+                        mux8Bels.emplace_back(belName);
+                    }
                 }
 
                 // sort the bels based on the bel name and create a mapping from bel name to z location
@@ -76,6 +82,14 @@ void InterchangeDriver::setTileToSiteType()
                 for (int k = 0; k < ffBels.size(); k++)
                 {
                     m_db.add_bel_map(ffBels[k], k);
+                }
+                for (int k = 0; k < mux7Bels.size(); k++)
+                {
+                    m_db.add_bel_map(mux7Bels[k], k);
+                }
+                for (int k = 0; k < mux8Bels.size(); k++)
+                {
+                    m_db.add_bel_map(mux8Bels[k], k);
                 }
             }
 
@@ -339,7 +353,7 @@ void InterchangeDriver::addLibCellsToDataBase()
                             if (limbo::iequals(portName, "CLK") || limbo::iequals(portName, "C"))
                             {
                                 m_db.add_clk_pin(portName);
-                            } else if (limbo::iequals(portName, "R") || limbo::iequals(portName, "CE")){
+                            } else if (limbo::iequals(portName, "R") || limbo::iequals(portName, "CE") || limbo::iequals(portName, "S")){
                                 m_db.add_ctrl_pin(portName);
                             } else {
                                 m_db.add_input_pin(portName);
@@ -443,10 +457,24 @@ void InterchangeDriver::addNetsToDataBase()
                     }   
                 }
 
-                if (!isExtPortNet && !isVCCGND)
-                {
-                    m_db.add_interchange_net(m_net);
-                }
+                // if(m_net.net_name.find("clk") != std::string::npos)
+                // {
+                //     if (isExtPortNet)
+                //     {
+                //         std::cout << "clk net with external port: " << m_net.net_name << std::endl;
+                //     }
+
+                //     if (isVCCGND)
+                //     {
+                //         std::cout << "clk net with VCCGND: " << m_net.net_name << std::endl;
+                //     }
+                // }
+
+                m_db.add_interchange_net(m_net);
+                // if (!isExtPortNet && !isVCCGND)
+                // {
+                //     m_db.add_interchange_net(m_net);
+                // }
                 m_net.reset();
             }
                
@@ -547,7 +575,7 @@ bool readDeviceNetlist(InterchangeDataBase& db, std::string const& deviceFile, s
     // std::cout << "Total time for parsing netlist file: " << std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - begin_netlist).count()/1000000.0 << " seconds" << std::endl;
     // std::chrono::steady_clock::time_point begin_db = std::chrono::steady_clock::now();
 
-    db.bookshelf_end(); // Finalize the database
+    db.interchange_end(); // Finalize the database
 
     // std::cout << "Total time for finalizing database: " << std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - begin_db).count()/1000000.0 << " seconds" << std::endl;
 

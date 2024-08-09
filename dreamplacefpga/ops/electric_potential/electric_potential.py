@@ -318,8 +318,8 @@ class ElectricPotential(ElectricOverflow):
         self.placedb = placedb
         self.region_id = region_id
         # self.fence_region_mask = node2fence_region_map == region_id
-        if self.region_id == 0:
-            self.fence_region_mask = (node2fence_region_map == 0) | (node2fence_region_map == 1)
+        if self.region_id == placedb.rLutIdx:
+            self.fence_region_mask = (node2fence_region_map == placedb.rLutIdx) | (node2fence_region_map == placedb.rLutRamIdx)
         else:
             self.fence_region_mask = node2fence_region_map == region_id
         ## set by build_density_op func
@@ -345,7 +345,7 @@ class ElectricPotential(ElectricOverflow):
     def setLockDSPRAM(self):
         """ Set computation for DSP/RAM to zero after legalization 
         """
-        if self.region_id is not None and self.region_id > 3:
+        if self.region_id is not None and self.region_id >= self.placedb.rDspIdx:
             self.lock_flag = True
 
     def forward(self, pos, mode="density"):

@@ -65,6 +65,8 @@ protected:
 
     std::vector<std::string> lutBels; /// LUT BEL names
     std::vector<std::string> ffBels; /// FF BEL names
+    std::vector<std::string> mux7Bels; /// MUX7 BEL names
+    std::vector<std::string> mux8Bels; /// MUX8 BEL names
     // hashspace::unordered_map<std::string, int> bel2ZLocation;
 
     std::vector<std::vector<std::string>> tile2SiteNames; /// Tile to site names

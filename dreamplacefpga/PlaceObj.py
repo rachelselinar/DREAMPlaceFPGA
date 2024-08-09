@@ -136,7 +136,7 @@ class PlaceObjFPGA(nn.Module):
         ### this is to avoid repeated legalization
         ### 1 represents already legal
         self.legal_mask = torch.zeros(placedb.regions)
-        self.legal_mask[6] = 1 #IOs are legal
+        self.legal_mask[7] = 1 #IOs are legal
 
         self.params = params
         self.placedb = placedb
@@ -159,7 +159,7 @@ class PlaceObjFPGA(nn.Module):
         self.gamma = torch.tensor(self.base_gamma(params, placedb)[0],
                                   dtype=self.data_collections.pos[0].dtype,
                                   device=self.data_collections.pos[0].device)
-        initOverflow = torch.ones(6, dtype=self.gamma.dtype, device=self.gamma.device)
+        initOverflow = torch.ones(7, dtype=self.gamma.dtype, device=self.gamma.device)
         self.update_gamma(0, initOverflow, self.base_gamma(params, placedb))
 
         # compute weighted average wirelength from position
@@ -395,7 +395,7 @@ class PlaceObjFPGA(nn.Module):
         @param num_bins_y number of bins in vertical direction
         @param padding number of padding bins to left, right, bottom, top of the placement region
         @param name string for printing
-        @param fence_regions a [n_subregions, 6] tensor for fence regions potential penalty
+        @param fence_regions a [n_subregions, 7] tensor for fence regions potential penalty
         """
         bin_size_x = (placedb.xh - placedb.xl) / num_bins_x
         bin_size_y = (placedb.yh - placedb.yl) / num_bins_y

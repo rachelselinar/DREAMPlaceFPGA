@@ -26,6 +26,7 @@ PlaceDB::PlaceDB() {
   m_numLUT = 0;
   m_numLUTRAM = 0;
   m_numFF = 0;
+  m_numMUX = 0;
   m_numCARRY = 0;
   m_numDSP = 0;
   m_numRAM = 0;
@@ -34,7 +35,7 @@ PlaceDB::PlaceDB() {
 
 void PlaceDB::add_bookshelf_node(std::string& name, std::string& type) 
 {
-    double sqrt0p0625(std::sqrt(0.0625)), sqrt0p125(std::sqrt(0.125)), sqrt0p5(std::sqrt(0.5));
+    double sqrt0p0625(std::sqrt(0.0625)), sqrt0p125(std::sqrt(0.125)), sqrt0p5(std::sqrt(0.5)), sqrt0p25(std::sqrt(0.25));
 
     //Updated approach
     if (limbo::iequals(type, "FDRE") || limbo::iequals(type, "FDSE"))
@@ -43,7 +44,7 @@ void PlaceDB::add_bookshelf_node(std::string& name, std::string& type)
       flop_indices.emplace_back(mov_node_names.size());
       mov_node_names.emplace_back(name);
       mov_node_types.emplace_back(type);
-      node2fence_region_map.emplace_back(2);
+      node2fence_region_map.emplace_back(rFFIdx);
       mov_node_size_x.push_back(sqrt0p0625);
       mov_node_size_y.push_back(sqrt0p0625);
       mov_node_x.emplace_back(0.0);
@@ -59,7 +60,7 @@ void PlaceDB::add_bookshelf_node(std::string& name, std::string& type)
       node_name2id_map.insert(std::make_pair(name, mov_node_names.size()));
       mov_node_names.emplace_back(name);
       mov_node_types.emplace_back(type);
-      node2fence_region_map.emplace_back(0);
+      node2fence_region_map.emplace_back(rLutIdx);
       mov_node_size_x.push_back(sqrt0p0625);
       mov_node_size_y.push_back(sqrt0p0625);
       mov_node_x.emplace_back(0.0);
@@ -75,7 +76,7 @@ void PlaceDB::add_bookshelf_node(std::string& name, std::string& type)
       node_name2id_map.insert(std::make_pair(name, mov_node_names.size()));
       mov_node_names.emplace_back(name);
       mov_node_types.emplace_back(type);
-      node2fence_region_map.emplace_back(0);
+      node2fence_region_map.emplace_back(rLutIdx);
       mov_node_size_x.push_back(sqrt0p0625);
       mov_node_size_y.push_back(sqrt0p0625);
       mov_node_x.emplace_back(0.0);
@@ -91,7 +92,7 @@ void PlaceDB::add_bookshelf_node(std::string& name, std::string& type)
       node_name2id_map.insert(std::make_pair(name, mov_node_names.size()));
       mov_node_names.emplace_back(name);
       mov_node_types.emplace_back(type);
-      node2fence_region_map.emplace_back(0);
+      node2fence_region_map.emplace_back(rLutIdx);
       mov_node_size_x.push_back(sqrt0p0625);
       mov_node_size_y.push_back(sqrt0p0625);
       mov_node_x.emplace_back(0.0);
@@ -107,7 +108,7 @@ void PlaceDB::add_bookshelf_node(std::string& name, std::string& type)
       node_name2id_map.insert(std::make_pair(name, mov_node_names.size()));
       mov_node_names.emplace_back(name);
       mov_node_types.emplace_back(type);
-      node2fence_region_map.emplace_back(0);
+      node2fence_region_map.emplace_back(rLutIdx);
       mov_node_size_x.push_back(sqrt0p0625);
       mov_node_size_y.push_back(sqrt0p0625);
       mov_node_x.emplace_back(0.0);
@@ -123,7 +124,7 @@ void PlaceDB::add_bookshelf_node(std::string& name, std::string& type)
       node_name2id_map.insert(std::make_pair(name, mov_node_names.size()));
       mov_node_names.emplace_back(name);
       mov_node_types.emplace_back(type);
-      node2fence_region_map.emplace_back(0);
+      node2fence_region_map.emplace_back(rLutIdx);
       mov_node_size_x.push_back(sqrt0p125);
       mov_node_size_y.push_back(sqrt0p125);
       mov_node_x.emplace_back(0.0);
@@ -139,7 +140,7 @@ void PlaceDB::add_bookshelf_node(std::string& name, std::string& type)
       node_name2id_map.insert(std::make_pair(name, mov_node_names.size()));
       mov_node_names.emplace_back(name);
       mov_node_types.emplace_back(type);
-      node2fence_region_map.emplace_back(0);
+      node2fence_region_map.emplace_back(rLutIdx);
       mov_node_size_x.push_back(sqrt0p125);
       mov_node_size_y.push_back(sqrt0p125);
       mov_node_x.emplace_back(0.0);
@@ -155,7 +156,7 @@ void PlaceDB::add_bookshelf_node(std::string& name, std::string& type)
       node_name2id_map.insert(std::make_pair(name, mov_node_names.size()));
       mov_node_names.emplace_back(name);
       mov_node_types.emplace_back(type);
-      node2fence_region_map.emplace_back(0);
+      node2fence_region_map.emplace_back(rLutIdx);
       mov_node_size_x.push_back(sqrt0p125);
       mov_node_size_y.push_back(sqrt0p125);
       mov_node_x.emplace_back(0.0);
@@ -171,7 +172,7 @@ void PlaceDB::add_bookshelf_node(std::string& name, std::string& type)
       node_name2id_map.insert(std::make_pair(name, mov_node_names.size()));
       mov_node_names.emplace_back(name);
       mov_node_types.emplace_back(type);
-      node2fence_region_map.emplace_back(0);
+      node2fence_region_map.emplace_back(rLutIdx);
       mov_node_size_x.push_back(sqrt0p125);
       mov_node_size_y.push_back(sqrt0p125);
       mov_node_x.emplace_back(0.0);
@@ -187,7 +188,7 @@ void PlaceDB::add_bookshelf_node(std::string& name, std::string& type)
       node_name2id_map.insert(std::make_pair(name, mov_node_names.size()));
       mov_node_names.emplace_back(name);
       mov_node_types.emplace_back(type);
-      node2fence_region_map.emplace_back(1);
+      node2fence_region_map.emplace_back(rLutramIdx);
       mov_node_size_x.push_back(sqrt0p5);
       mov_node_size_y.push_back(sqrt0p5);
       mov_node_x.emplace_back(0.0);
@@ -203,7 +204,7 @@ void PlaceDB::add_bookshelf_node(std::string& name, std::string& type)
       node_name2id_map.insert(std::make_pair(name, mov_node_names.size()));
       mov_node_names.emplace_back(name);
       mov_node_types.emplace_back(type);
-      node2fence_region_map.emplace_back(3);
+      node2fence_region_map.emplace_back(rCarryIdx);
       mov_node_size_x.push_back(1);
       mov_node_size_y.push_back(1);
       mov_node_x.emplace_back(0.0);
@@ -219,7 +220,7 @@ void PlaceDB::add_bookshelf_node(std::string& name, std::string& type)
       node_name2id_map.insert(std::make_pair(name, mov_node_names.size()));
       mov_node_names.emplace_back(name);
       mov_node_types.emplace_back(type);
-      node2fence_region_map.emplace_back(4);
+      node2fence_region_map.emplace_back(rDspIdx);
       mov_node_size_x.push_back(1.0);
       mov_node_size_y.push_back(2.5);
       mov_node_x.emplace_back(0.0);
@@ -235,7 +236,7 @@ void PlaceDB::add_bookshelf_node(std::string& name, std::string& type)
       node_name2id_map.insert(std::make_pair(name, mov_node_names.size()));
       mov_node_names.emplace_back(name);
       mov_node_types.emplace_back(type);
-      node2fence_region_map.emplace_back(5);
+      node2fence_region_map.emplace_back(rBramIdx);
       mov_node_size_x.push_back(1.0);
       mov_node_size_y.push_back(5.0);
       mov_node_x.emplace_back(0.0);
@@ -446,9 +447,11 @@ void PlaceDB::add_interchange_node(std::string& name, std::string& type)
         original_node2node_map.emplace_back(0);
         org_node_x_offset.emplace_back(0.0);
         org_node_y_offset.emplace_back(0.0);
+        org_node_z_offset.emplace_back(0.0);
         org_node_pin_offset_x.emplace_back(0.0);
         org_node_pin_offset_y.emplace_back(0.0);
         ++original_num_movable_nodes;
+        // std::cout << "Added node: " << name << " with type: " << type << std::endl;
     }  
 }
 
@@ -478,12 +481,12 @@ void PlaceDB::update_interchange_nodes(){
             node_name2id_map.insert(std::make_pair(name, mov_node_names.size()));
             mov_node_names.emplace_back(name);
             mov_node_types.emplace_back(type);
-            node2fence_region_map.emplace_back(3);
+            node2fence_region_map.emplace_back(rCarryIdx);
             mov_node_size_x.push_back(shape_widths[i]);
             mov_node_size_y.push_back(shape_heights[i]);
             mov_node_x.emplace_back(0.0);
             mov_node_y.emplace_back(0.0);
-            mov_node_z.emplace_back(0);
+            mov_node_z.emplace_back(original_mov_node_z[cluster_start_nodeId]);
             lut_type.emplace_back(0);
             cluster_lut_type.emplace_back(0);
             m_numCARRY += 1;
@@ -493,12 +496,12 @@ void PlaceDB::update_interchange_nodes(){
             node_name2id_map.insert(std::make_pair(name, mov_node_names.size()));
             mov_node_names.emplace_back(name);
             mov_node_types.emplace_back(type);
-            node2fence_region_map.emplace_back(1);
+            node2fence_region_map.emplace_back(rLutramIdx);
             mov_node_size_x.push_back(shape_widths[i]);
             mov_node_size_y.push_back(shape_heights[i]);
             mov_node_x.emplace_back(0.0);
             mov_node_y.emplace_back(0.0);
-            mov_node_z.emplace_back(0);
+            mov_node_z.emplace_back(original_mov_node_z[cluster_start_nodeId]);
             lut_type.emplace_back(0);
             cluster_lut_type.emplace_back(0);
             m_numLUTRAM += 1;
@@ -516,7 +519,7 @@ void PlaceDB::update_interchange_nodes(){
     }  
     
     // Add not clustered nodes
-    double sqrt0p0625(std::sqrt(0.0625)), sqrt0p125(std::sqrt(0.125)), sqrt0p5(std::sqrt(0.5));
+    double sqrt0p0625(std::sqrt(0.0625)), sqrt0p125(std::sqrt(0.125)), sqrt0p5(std::sqrt(0.5)), sqrt0p25(std::sqrt(0.25));
 
     // std::cout << "Original movable nodes num" << original_num_movable_nodes << std::endl;
     // std::cout << "size of original node_names map " << original_mov_node_names.size() << std::endl;
@@ -536,7 +539,7 @@ void PlaceDB::update_interchange_nodes(){
                 flop_indices.emplace_back(mov_node_names.size());
                 mov_node_names.emplace_back(name);
                 mov_node_types.emplace_back(type);
-                node2fence_region_map.emplace_back(2);
+                node2fence_region_map.emplace_back(rFFIdx);
                 mov_node_size_x.push_back(sqrt0p0625);
                 mov_node_size_y.push_back(sqrt0p0625);
                 mov_node_x.emplace_back(0.0);
@@ -553,7 +556,7 @@ void PlaceDB::update_interchange_nodes(){
                 original_node2node_map[i] = mov_node_names.size();
                 mov_node_names.emplace_back(name);
                 mov_node_types.emplace_back(type);
-                node2fence_region_map.emplace_back(0);
+                node2fence_region_map.emplace_back(rLutIdx);
                 mov_node_size_x.push_back(sqrt0p0625);
                 mov_node_size_y.push_back(sqrt0p0625);
                 mov_node_x.emplace_back(0.0);
@@ -564,13 +567,47 @@ void PlaceDB::update_interchange_nodes(){
                 m_numLUT += 1;
                 ++num_movable_nodes;
             }
+            else if (limbo::iequals(type, "MUXF7"))
+            {
+                node_name2id_map.insert(std::make_pair(name, mov_node_names.size()));
+                original_node2node_map[i] = mov_node_names.size();
+                mov_node_names.emplace_back(name);
+                mov_node_types.emplace_back(type);
+                node2fence_region_map.emplace_back(rMuxIdx);
+                mov_node_size_x.push_back(sqrt0p25);
+                mov_node_size_y.push_back(sqrt0p25);
+                mov_node_x.emplace_back(0.0);
+                mov_node_y.emplace_back(0.0);
+                mov_node_z.emplace_back(original_mov_node_z[i]);
+                lut_type.emplace_back(0);
+                cluster_lut_type.emplace_back(0);
+                m_numMUX += 1;
+                ++num_movable_nodes;
+            }
+            else if (limbo::iequals(type, "MUXF8"))
+            {
+                node_name2id_map.insert(std::make_pair(name, mov_node_names.size()));
+                original_node2node_map[i] = mov_node_names.size();
+                mov_node_names.emplace_back(name);
+                mov_node_types.emplace_back(type);
+                node2fence_region_map.emplace_back(rMuxIdx);
+                mov_node_size_x.push_back(sqrt0p5);
+                mov_node_size_y.push_back(sqrt0p5);
+                mov_node_x.emplace_back(0.0);
+                mov_node_y.emplace_back(0.0);
+                mov_node_z.emplace_back(original_mov_node_z[i]);
+                lut_type.emplace_back(0);
+                cluster_lut_type.emplace_back(0);
+                m_numMUX += 1;
+                ++num_movable_nodes;
+            }
             else if (limbo::iequals(type, "LUT1"))
             {
                 node_name2id_map.insert(std::make_pair(name, mov_node_names.size()));
                 original_node2node_map[i] = mov_node_names.size();
                 mov_node_names.emplace_back(name);
                 mov_node_types.emplace_back(type);
-                node2fence_region_map.emplace_back(0);
+                node2fence_region_map.emplace_back(rLutIdx);
                 mov_node_size_x.push_back(sqrt0p0625);
                 mov_node_size_y.push_back(sqrt0p0625);
                 mov_node_x.emplace_back(0.0);
@@ -587,7 +624,7 @@ void PlaceDB::update_interchange_nodes(){
                 original_node2node_map[i] = mov_node_names.size();
                 mov_node_names.emplace_back(name);
                 mov_node_types.emplace_back(type);
-                node2fence_region_map.emplace_back(0);
+                node2fence_region_map.emplace_back(rLutIdx);
                 mov_node_size_x.push_back(sqrt0p0625);
                 mov_node_size_y.push_back(sqrt0p0625);
                 mov_node_x.emplace_back(0.0);
@@ -604,7 +641,7 @@ void PlaceDB::update_interchange_nodes(){
                 original_node2node_map[i] = mov_node_names.size();
                 mov_node_names.emplace_back(name);
                 mov_node_types.emplace_back(type);
-                node2fence_region_map.emplace_back(0);
+                node2fence_region_map.emplace_back(rLutIdx);
                 mov_node_size_x.push_back(sqrt0p0625);
                 mov_node_size_y.push_back(sqrt0p0625);
                 mov_node_x.emplace_back(0.0);
@@ -621,7 +658,7 @@ void PlaceDB::update_interchange_nodes(){
                 original_node2node_map[i] = mov_node_names.size();
                 mov_node_names.emplace_back(name);
                 mov_node_types.emplace_back(type);
-                node2fence_region_map.emplace_back(0);
+                node2fence_region_map.emplace_back(rLutIdx);
                 mov_node_size_x.push_back(sqrt0p125);
                 mov_node_size_y.push_back(sqrt0p125);
                 mov_node_x.emplace_back(0.0);
@@ -638,7 +675,7 @@ void PlaceDB::update_interchange_nodes(){
                 original_node2node_map[i] = mov_node_names.size();
                 mov_node_names.emplace_back(name);
                 mov_node_types.emplace_back(type);
-                node2fence_region_map.emplace_back(0);
+                node2fence_region_map.emplace_back(rLutIdx);
                 mov_node_size_x.push_back(sqrt0p125);
                 mov_node_size_y.push_back(sqrt0p125);
                 mov_node_x.emplace_back(0.0);
@@ -655,7 +692,7 @@ void PlaceDB::update_interchange_nodes(){
                 original_node2node_map[i] = mov_node_names.size();
                 mov_node_names.emplace_back(name);
                 mov_node_types.emplace_back(type);
-                node2fence_region_map.emplace_back(0);
+                node2fence_region_map.emplace_back(rLutIdx);
                 mov_node_size_x.push_back(sqrt0p125);
                 mov_node_size_y.push_back(sqrt0p125);
                 mov_node_x.emplace_back(0.0);
@@ -672,7 +709,7 @@ void PlaceDB::update_interchange_nodes(){
                 original_node2node_map[i] = mov_node_names.size();
                 mov_node_names.emplace_back(name);
                 mov_node_types.emplace_back(type);
-                node2fence_region_map.emplace_back(0);
+                node2fence_region_map.emplace_back(rLutIdx);
                 mov_node_size_x.push_back(sqrt0p125);
                 mov_node_size_y.push_back(sqrt0p125);
                 mov_node_x.emplace_back(0.0);
@@ -689,7 +726,7 @@ void PlaceDB::update_interchange_nodes(){
                 original_node2node_map[i] = mov_node_names.size();
                 mov_node_names.emplace_back(name);
                 mov_node_types.emplace_back(type);
-                node2fence_region_map.emplace_back(1);
+                node2fence_region_map.emplace_back(rLutramIdx);
                 mov_node_size_x.push_back(sqrt0p5);
                 mov_node_size_y.push_back(sqrt0p5);
                 mov_node_x.emplace_back(0.0);
@@ -705,7 +742,7 @@ void PlaceDB::update_interchange_nodes(){
                 node_name2id_map.insert(std::make_pair(name, mov_node_names.size()));
                 mov_node_names.emplace_back(name);
                 mov_node_types.emplace_back(type);
-                node2fence_region_map.emplace_back(3);
+                node2fence_region_map.emplace_back(rCarryIdx);
                 mov_node_size_x.push_back(1);
                 mov_node_size_y.push_back(1);
                 mov_node_x.emplace_back(0.0);
@@ -722,7 +759,7 @@ void PlaceDB::update_interchange_nodes(){
                 original_node2node_map[i] = mov_node_names.size();
                 mov_node_names.emplace_back(name);
                 mov_node_types.emplace_back(type);
-                node2fence_region_map.emplace_back(4);
+                node2fence_region_map.emplace_back(rDspIdx);
                 mov_node_size_x.push_back(1.0);
                 mov_node_size_y.push_back(2.5);
                 mov_node_x.emplace_back(0.0);
@@ -739,7 +776,7 @@ void PlaceDB::update_interchange_nodes(){
                 original_node2node_map[i] = mov_node_names.size();
                 mov_node_names.emplace_back(name);
                 mov_node_types.emplace_back(type);
-                node2fence_region_map.emplace_back(5);
+                node2fence_region_map.emplace_back(rBramIdx);
                 mov_node_size_x.push_back(1.0);
                 mov_node_size_y.push_back(5.0);
                 mov_node_x.emplace_back(0.0);
@@ -808,8 +845,8 @@ void PlaceDB::add_interchange_net(BookshelfParser::Net const& n) {
 
         if (found != node_name2id_map.end())
         {
-            nodeId = node_name2id_map.at(netPin.node_name);
             org_nodeId = original_node_name2id_map.at(netPin.node_name);
+            nodeId = node_name2id_map.at(netPin.node_name);
             pin2nodeType_map.emplace_back(node2fence_region_map[nodeId]);
             if (original_node_cluster_flag[org_nodeId] == 1)
             {
@@ -835,6 +872,7 @@ void PlaceDB::add_interchange_net(BookshelfParser::Net const& n) {
             if (fnd != fixed_node_name2id_map.end())
             {
                 nodeId = fixed_node_name2id_map.at(netPin.node_name);
+                org_nodeId = -1;
                 pin2nodeType_map.emplace_back(4);
                 pin_offset_x.emplace_back(0.5);
                 pin_offset_y.emplace_back(0.5);
@@ -913,6 +951,7 @@ void PlaceDB::add_interchange_net(BookshelfParser::Net const& n) {
 
         ++node2pincount_map[nodeId];
         pin2node_map.emplace_back(nodeId);
+        pin2org_node_map.emplace_back(org_nodeId);
         node2pin_map[nodeId].emplace_back(pinId);
         if (pinTypeId == 0) //Output pin
         {
@@ -988,7 +1027,10 @@ void PlaceDB::add_org_node_to_shape(std::string const& cellName, std::string con
                 shape2cluster_node_start[m_numShape-1] = nodeId;
             }
             numShapeClusterNodesTemp += 1;
-        }
+        } else if (limbo::iequals(original_mov_node_types[nodeId], "MUXF7") || limbo::iequals(original_mov_node_types[nodeId], "MUXF8"))
+        {
+            shape_types[m_numShape-1] = 3;
+        } 
     } else if (found_parent != original_node_name2id_map.end())
     {
         nodeId = original_node_name2id_map.at(parent_name);
@@ -1010,6 +1052,7 @@ void PlaceDB::add_org_node_to_shape(std::string const& cellName, std::string con
                 original_node_cluster_flag[nodeId] = 1;
                 org_node_pin_offset_x[nodeId] = dx + 0.5 * 0.5;
                 org_node_pin_offset_y[nodeId] = dy + 0.5 * 0.5;
+                org_node_z_offset[nodeId] = bel2ZLocation.at(belName);
                 if (numShapeClusterNodesTemp == 0)
                 {
                     shape2cluster_node_start[m_numShape-1] = nodeId;
@@ -1159,6 +1202,32 @@ void PlaceDB::set_bookshelf_design(std::string& name) {
 void PlaceDB::bookshelf_end() {
     //  // parsing bookshelf format finishes
     //  // now it is necessary to init data that is not set in bookshelf
+    //Flatten node2pin
+    flat_node2pin_map.reserve(pin_names.size());
+    flat_node2pin_start_map.emplace_back(0);
+    for (const auto& sub : node2pin_map)
+    {
+        flat_node2pin_map.insert(flat_node2pin_map.end(), sub.begin(), sub.end());
+        flat_node2pin_start_map.emplace_back(flat_node2pin_map.size());
+    }
+
+    for (auto& el : fixed_node_name2id_map)
+    {
+        el.second += num_movable_nodes;
+    }
+
+    node_name2id_map.insert(fixed_node_name2id_map.begin(), fixed_node_name2id_map.end());
+}
+
+void PlaceDB::interchange_end(){
+    //Flatten shape2org_node_map
+    flat_shape2org_node_start_map.emplace_back(0);
+    for (const auto& sub : shape2org_node_map)
+    {   
+        flat_shape2org_node_map.insert(flat_shape2org_node_map.end(), sub.begin(), sub.end());
+        flat_shape2org_node_start_map.emplace_back(flat_shape2org_node_map.size());
+    }
+
     //Flatten node2pin
     flat_node2pin_map.reserve(pin_names.size());
     flat_node2pin_start_map.emplace_back(0);

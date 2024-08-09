@@ -1414,25 +1414,22 @@ class DeviceResources:
 
 
 class db_to_physicalnetlist():
-    def __init__(self, placedb, schema_dir, device_file):
-        self.part = os.path.basename(device_file).replace(".device", "").replace(".DEVICE", "")
+    def __init__(self, placedb, schema_dir, params):
+        """ Initialize PhysicalNetlist object. """
+        self.part = os.path.basename(params.interchange_device).replace(".device", "").replace(".DEVICE", "")
         self.schema_dir = schema_dir
         self.sitemap = placedb.loc2site_map
-
         self.Site_LUTs = {}
         self.shared_LUT = []
-
         # map from node name to cellplacement obj 
         self.node_placement = {}
         # map from port name to cellplacement obj 
         self.port_placement = {}
-
         # map from site name to SiteInst object
         self.site_instances = {}
         # map from node name to site name
         self.node_site_map = {}
-
-        self.device_resource = DeviceResources(self.schema_dir, device_file)
+        self.device_resource = DeviceResources(self.schema_dir, params.interchange_device)
 
         sitetypes_prefix = ['SLICEM', 'SLICEL', 'HPIOB', 'HRIO', 'BUFGCE', 'RAMB36', 'DSP48E2']
         sitetypes = []
@@ -1461,6 +1458,25 @@ class db_to_physicalnetlist():
                         self.dsp_bel_pins[bel_name] = []
                     self.dsp_bel_pins[bel_name].append(bel_pin_name)
 
+        # from placedb
+        self.node_x = placedb.node_x
+        self.node_y = placedb.node_y
+        self.node_z = placedb.node_z
+        self.node2fence_region_map = placedb.node2fence_region_map
+        self.lut_type = placedb.lut_type
+        if "aux_input" in params.__dict__ and params.aux_input:
+            self.num_nodes = placedb.num_physical_nodes
+            self.node_names = placedb.node_names
+            self.node_types = placedb.node_types
+        else:
+            self.num_nodes = len(placedb.original_node_names)
+            self.node_names = placedb.original_node_names
+            self.node_types = placedb.original_node_types
+            self.original_node2node_map = placedb.original_node2node_map
+            self.org_node_x_offset = placedb.org_node_x_offset
+            self.org_node_y_offset = placedb.org_node_y_offset
+            self.org_node_z_offset = placedb.org_node_z_offset
+
 
     def Map_bel(self, node_z, node_type):
         if node_type[:3] == "LUT":
@@ -1481,6 +1497,14 @@ class db_to_physicalnetlist():
                 13:"G6LUT",
                 14:"H5LUT",
                 15:"H6LUT",
+            }
+            return switcher[node_z]
+        elif node_type == "RAM32M" or node_type == "RAM64M":
+            switcher = {
+                0: "D5LUT",
+                1: "D6LUT",
+                8: "H5LUT",
+                9: "H6LUT",
             }
             return switcher[node_z]
         elif node_type[:4] == "FDRE":
@@ -1507,8 +1531,24 @@ class db_to_physicalnetlist():
             return "BUFCE"
         elif node_type[:4] == "OBUF":
             return "OUTBUF"
-        elif node_type[:3] == "RAM":
+        elif node_type[:4] == "RAMB":
             return "RAMB36E2"
+        elif node_type == "CARRY8":
+            return "CARRY8"
+        elif node_type == "MUXF7":
+            switcher = {
+                0: "F7MUX_AB",
+                1: "F7MUX_CD",
+                2: "F7MUX_EF",
+                3: "F7MUX_GH",
+            }
+            return switcher[node_z]
+        elif node_type == "MUXF8":
+            switcher = {
+                0: "F8MUX_BOT",
+                1: "F8MUX_TOP",
+            }
+            return switcher[node_z]
         else:
             return "None"
 
@@ -1716,7 +1756,50 @@ class db_to_physicalnetlist():
 
                     lut_pair[0].add_pins(output_pin_0[0], output_pin_0[2])
                     lut_pair[1].add_pins(output_pin_1[0], output_pin_1[2])
-                
+
+    def is_carry_input_same_site(self, placedb, cellpin, org_node_id):
+        """
+        Check the carry chain pins for the carry8 cell
+        """
+
+        node_id = placedb.original_node2node_map[org_node_id]
+        loc_x = placedb.node_x[node_id] + placedb.org_node_x_offset[org_node_id]
+        loc_y = placedb.node_y[node_id] + placedb.org_node_y_offset[org_node_id]
+        
+        # if doesn't have the cellpin connecting to any nets
+        if  np.where(placedb.pin_names[placedb.node2pin_map[node_id]] == cellpin)[0].size == 0:
+            return False
+
+        cellpin_idx = np.where(placedb.pin_names[placedb.node2pin_map[node_id]] == cellpin)[0][0]
+        pin_id = placedb.node2pin_map[node_id][cellpin_idx]
+        net_id = placedb.pin2net_map[pin_id]
+
+        # find the driver pin of the net
+        driverpin_idx = np.where(placedb.pin_typeIds[placedb.net2pin_map[net_id]] == 0)[0][0]
+        pin_id = placedb.net2pin_map[net_id][driverpin_idx]
+        driver_node_id = placedb.pin2node_map[pin_id]
+
+        driver_loc_x = placedb.node_x[driver_node_id]
+        driver_loc_y = placedb.node_y[driver_node_id]
+
+        if loc_x == driver_loc_x and loc_y == driver_loc_y:
+            return True
+        else:
+            return False
+
+    def is_carry_driven_by_cell(self, placedb, cellpin, org_node_id):
+        node_id = placedb.original_node2node_map[org_node_id]
+        loc_x = placedb.node_x[node_id] + placedb.org_node_x_offset[org_node_id]
+        loc_y = placedb.node_y[node_id] + placedb.org_node_y_offset[org_node_id]
+        
+        # if doesn't have the cellpin connecting to any nets
+        if  np.where(placedb.pin_names[placedb.node2pin_map[node_id]] == cellpin)[0].size == 0:
+            return False
+
+        else:
+            print('cellpin is connected to net')
+            return True
+
 
     def stitch_routing(self, placedb, phys_netlist):
         """
@@ -1910,34 +1993,53 @@ class db_to_physicalnetlist():
             pinmap[cell] = mapping.common_pins
             parameter_pinmap[cell] = mapping.parameter_pins
         
-        for i in range(placedb.num_physical_nodes):
-            node_name = placedb.node_names[i]
-            node_type = placedb.node_types[i]
+        for i in range(self.num_nodes):
+            node_name = self.node_names[i]
+            node_type = self.node_types[i]
 
-            x = int(placedb.node_x[i])
-            y = int(placedb.node_y[i])
-            z = int(placedb.node_z[i])
+            if "aux_input" in params.__dict__ and params.aux_input:
+                node_id = i
+                x = int(self.node_x[node_id])
+                y = int(self.node_y[node_id])
+                z = int(self.node_z[node_id])
+            
+            else:
+                node_id = self.original_node2node_map[i]
+                if node_type == 'CARRY8' or node_type == 'RAM64M' or node_type == 'RAM32M':
+                    x = int(self.node_x[node_id] + self.org_node_x_offset[i])
+                    y = int(self.node_y[node_id] + self.org_node_y_offset[i])
+                    z = self.org_node_z_offset[i]
+                else:
+                    x = int(self.node_x[node_id])
+                    y = int(self.node_y[node_id])
+                    z = int(self.node_z[node_id])
 
             # ignore the pseudo VCC, GND nodes
-            if placedb.node2fence_region_map[i] == 0 and placedb.lut_type[i] == 0:
+            if self.node2fence_region_map[node_id] == 0 and self.lut_type[node_id] == 0:
                 continue
 
             self.node_placement[node_name] = []
 
             if node_type in macro_inst:
-                LUT6_2_flag = False
+                if node_type == 'LUT6_2':
+                    z = z if z%2 == 0 else z-1
+                    incre = 1
+                elif node_type == 'RAM64M':
+                    incre = 2
+                else:
+                    incre = 1
+
                 for inst in macro_inst[node_type]:
                     cell_type = macro_inst[node_type][inst]
                     cell_name = node_name + "/" + inst
                     site_name = self.sitemap[x, y, z]
                             
-                    if site_type_map[site_name][:5] == 'SLICE' and LUT6_2_flag == False:
-                        bel_name = self.Map_bel(z-1, node_type)
-                        LUT6_2_flag = True
-                    elif LUT6_2_flag == True:
+                    if site_type_map[site_name][:5] == 'SLICE':
                         bel_name = self.Map_bel(z, node_type)
                     else:
                         bel_name = cell_type
+                    
+                    z+=incre
 
                     self.node_site_map[node_name] = site_name
 
@@ -2011,7 +2113,20 @@ class db_to_physicalnetlist():
                 for key, value in pinmap[cell_type][site_type, bel_name].items():
                     belpin = key
                     cellpin = value
-                    if cellpin == "GND": 
+
+                    if cell_type == 'CARRY8' and cellpin.startswith('DI'):
+                        if self.is_carry_input_same_site(placedb, cellpin, i) and belpin.endswith('X'):
+                            continue
+                        elif not self.is_carry_input_same_site(placedb, cellpin, i) and belpin.startswith('DI'):
+                            continue
+                        else:
+                            cellplacement.add_pins(cellpin, belpin)
+
+                    elif cell_type == 'CARRY8' and cellpin.endswith('TOP'):
+                        if not self.is_carry_driven_by_cell(placedb, cellpin, i):
+                            continue
+
+                    elif cellpin == "GND": 
                         continue
                     else:
                         cellplacement.add_pins(cellpin, belpin)
@@ -2083,5 +2198,3 @@ class tcl_generator():
                     placement.cell_name = placement.cell_name[:-5]
                 line = 'place_cell ' + placement.cell_name + ' ' + placement.site_name + '/' + placement.bel_name
                 tcl_file.write(line + os.linesep)
-
-

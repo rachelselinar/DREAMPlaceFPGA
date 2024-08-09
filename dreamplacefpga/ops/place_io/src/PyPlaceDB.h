@@ -60,6 +60,7 @@ struct PyPlaceDB
     pybind11::list original_node2node_map; ///< map original node id to node id
     pybind11::list org_node_x_offset;  ///< map original node id to node placement offset in x direction
     pybind11::list org_node_y_offset; ///< map original node id to node placement offset in y direction
+    pybind11::list org_node_z_offset; ///< map original node id to node placement offset in z direction
 
     unsigned int num_terminals; ///< number of terminals, essentially IOs
     unsigned int num_movable_nodes; ///< number of movable nodes
@@ -72,6 +73,7 @@ struct PyPlaceDB
     pybind11::list pin_types; ///< 1D array, pin types (FPGA)
     pybind11::list pin_typeIds; ///< 1D array, pin types (FPGA)
     pybind11::list pin2node_map; ///< 1D array, contain parent node id of each pin 
+    pybind11::list pin2org_node_map; ///< 1D array, contain original node id of each pin
     pybind11::list pin2net_map; ///< 1D array, contain parent net id of each pin 
     pybind11::list pin2nodeType_map; ///< 1D array, pin to node type
 
@@ -90,6 +92,7 @@ struct PyPlaceDB
     //pybind11::list regions; ///< array of 1D array, each region contains rectangles 
     pybind11::list dspSiteXYs; ///< 1D array of DSP sites (FPGA)
     pybind11::list ramSiteXYs; ///< 1D array of RAM sites (FPGA)
+    pybind11::list sliceSiteXYs; ///< 1D array of slice sites (FPGA)
     //pybind11::list regionsLimits; ///< array of 1D array, each region contains rectangles 
     pybind11::list flat_region_boxes; ///< flatten version of regions 
     pybind11::list flat_region_boxes_start; ///< starting index of each region in flat_region_boxes
@@ -121,7 +124,9 @@ struct PyPlaceDB
     pybind11::list shape_heights; ///< 1D array, shape height
     pybind11::list shape_widths; ///< 1D array, shape width
     pybind11::list shape_types; ///< 1D array, shape type
-    pybind11::list shape2org_node_map; ///< 1D array, shape to original node map
+    pybind11::list shape2org_node_map; ///< 2D array, shape to original node map
+    pybind11::list flat_shape2org_node_map; ///< 1D array, shape to original node map
+    pybind11::list flat_shape2org_node_start_map; ///< 1D array, shape to original node start map
     pybind11::list shape2cluster_node_start; ///< 1D array, shape to cluster node start map
     pybind11::list original_node_is_shape_inst; ///< 1D array, original node is shape instance
 

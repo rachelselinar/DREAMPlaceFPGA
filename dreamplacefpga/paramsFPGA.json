@@ -291,5 +291,13 @@
 "write_io_placement_flag" : {    
     "descripton" : "write tcl file for IO placement in Vivado 2022.1 flow",
     "default" : 0
+    },
+"bram_array_flag": {
+    "descripton" : "Enable BRAM array placement",
+    "default" : 0
+    },
+"bram_pl": {
+    "descripton" : "BRAM placement configuration",
+    "default" : ""
     }
 }
