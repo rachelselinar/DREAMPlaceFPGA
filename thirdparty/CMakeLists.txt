@@ -1,3 +1,7 @@
+#
+# Modifications Copyright(C) 2024 Advanced Micro Devices, Inc. All rights reserved
+#
+
 #project(thirdparty)
 
 set(OPENBLAS OFF CACHE BOOL "Turn off OPENBLAS for Limbo")

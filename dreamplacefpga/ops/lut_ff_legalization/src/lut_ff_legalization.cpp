@@ -3,6 +3,9 @@
  * @author Rachel Selina (DREAMPlaceFPGA-PL)
  * @date   Mar 2021
  * @brief  Legalize LUT/FF
+ *
+ * Modifications Copyright(C) 2024 Advanced Micro Devices, Inc. All rights reserved
+ *
  */
 
 //pybind Dependency

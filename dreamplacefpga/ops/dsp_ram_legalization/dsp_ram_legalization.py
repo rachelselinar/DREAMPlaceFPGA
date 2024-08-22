@@ -3,6 +3,10 @@
 @Author: Rachel Selina Rajarathnam (DREAMPlaceFPGA) 
 @Date: Oct 2020
 '''
+#
+# Modifications Copyright(C) 2024 Advanced Micro Devices, Inc. All rights reserved
+#
+
 import math
 import torch
 from torch import nn

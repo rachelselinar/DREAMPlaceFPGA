@@ -4,7 +4,8 @@
 # @date   Sep 2020
 # @brief  Base placement class
 #
-
+# Modifications Copyright(C) 2024 Advanced Micro Devices, Inc. All rights reserved
+#
 import os
 import sys
 import time

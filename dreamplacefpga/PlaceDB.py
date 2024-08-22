@@ -4,6 +4,8 @@
 # @date   Oct 2020
 # @brief  FPGA placement database 
 #
+# Modifications Copyright(C) 2024 Advanced Micro Devices, Inc. All rights reserved
+#
 
 import sys
 import os

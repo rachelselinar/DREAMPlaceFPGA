@@ -4,7 +4,9 @@
  * @date   Jan 2021
  * @brief  Implementation of @ref BookshelfParser::Driver
  */
-
+/** 
+ * Modifications Copyright(C) 2024 Advanced Micro Devices, Inc. All rights reserved
+ */
 #include "BookshelfDriver.h"
 #include "BookshelfScanner.h"
 #include <limbo/string/String.h>

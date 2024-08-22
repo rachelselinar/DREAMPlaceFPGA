@@ -4,6 +4,9 @@
  * @date   Mar 2021
  * @brief  Placement database for python 
  */
+/**
+ * Modifications Copyright(C) 2024 Advanced Micro Devices, Inc. All rights reserved
+ */
 
 #ifndef _DREAMPLACE_PLACE_IO_PYPLACEDB_H
 #define _DREAMPLACE_PLACE_IO_PYPLACEDB_H

@@ -1,3 +1,7 @@
+/**
+ * Modifications Copyright(C) 2024 Advanced Micro Devices, Inc. All rights reserved
+ *
+ */
 #include "utility/src/utils.cuh"
 #include "utility/src/limits.h"
 // local dependency

@@ -1,3 +1,4 @@
+# Modifications Copyright(C) 2024 Advanced Micro Devices, Inc. All rights reserved
 cmake_minimum_required(VERSION 3.14)
 
 project(DREAMPlaceFPGA LANGUAGES CXX)

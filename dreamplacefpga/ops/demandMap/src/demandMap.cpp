@@ -3,6 +3,9 @@
  * @author Rachel Selina Rajarathnam (DREAMPlaceFPGA) 
  * @date   Nov 2020
  * @brief  Compute binCapMap
+ *
+ * Modifications Copyright(C) 2024 Advanced Micro Devices, Inc. All rights reserved
+ *
  */
 #include "utility/src/torch.h"
 #include "utility/src/utils.h"

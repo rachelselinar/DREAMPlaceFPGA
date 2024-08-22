@@ -4,6 +4,8 @@
 # @date   Sep 2020
 # @brief  Placement model class defining the placement objective.
 #
+# Modifications Copyright(C) 2024 Advanced Micro Devices, Inc. All rights reserved
+#
 
 import os
 import sys

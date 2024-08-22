@@ -1,4 +1,5 @@
 #!/bin/bash
+# Modifications Copyright(C) 2024 Advanced Micro Devices, Inc. All rights reserved
 
 # usage: run_dreamplacefpga.sh -DREAMPlaceFPGA_dir <DREAMPlaceFPGA_dir> -result_dir <result_dir> -interchange_netlist <interchange_netlist> -interchange_device <interchange_device> -gpu <gpu>
 

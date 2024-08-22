@@ -3,6 +3,8 @@
 # @author Rachel Selina Rajarathnam (DREAMPlaceFPGA)
 # @date   Nov 2020
 #
+# Modifications Copyright(C) 2024 Advanced Micro Devices, Inc. All rights reserved
+#
 
 import torch
 from torch.autograd import Function

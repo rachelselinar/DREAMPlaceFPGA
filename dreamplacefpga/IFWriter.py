@@ -4,7 +4,8 @@
 # @date   Dec 2022
 # @brief  Convert bookshelf outputs to interchange .phys file.
 #
-
+# Modifications Copyright(C) 2024 Advanced Micro Devices, Inc. All rights reserved
+# 
 import capnp
 import capnp.lib.capnp
 capnp.remove_import_hook()

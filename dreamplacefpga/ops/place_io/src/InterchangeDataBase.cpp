@@ -4,7 +4,9 @@
  @date   May 2024
  @brief  Implementation of FPGA interchange format database
  */
-
+/**
+ * Modifications Copyright(C) 2024 Advanced Micro Devices, Inc. All rights reserved
+ */
 #include "InterchangeDataBase.h"
 
 DREAMPLACE_BEGIN_NAMESPACE

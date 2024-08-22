@@ -4,6 +4,9 @@
  @date   May 2024
  @brief  Implementation of FPGA interchange format parser
  */
+/**
+ * Modifications Copyright(C) 2024 Advanced Micro Devices, Inc. All rights reserved
+ */
 
 #ifndef INTERCHANGE_DRIVER_H
 #define INTERCHANGE_DRIVER_H

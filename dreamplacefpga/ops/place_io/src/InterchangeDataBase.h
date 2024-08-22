@@ -4,6 +4,9 @@
  @date   May 2024
  @brief  Implementation of FPGA interchange format database
  */
+/**
+ * Modifications Copyright(C) 2024 Advanced Micro Devices, Inc. All rights reserved
+ */
 
 #ifndef INTERCHANGE_DATABASE_H
 #define INTERCHANGE_DATABASE_H

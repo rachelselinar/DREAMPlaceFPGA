@@ -3,6 +3,9 @@
 # @author Yibo Lin (DREAMPlace), Rachel Selina Rajarathnam (DREAMPlaceFPGA)
 # @date   Mar 2021
 #
+#
+# Modifications Copyright(C) 2024 Advanced Micro Devices, Inc. All rights reserved
+#
 
 from torch.autograd import Function
 
