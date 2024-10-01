@@ -4,6 +4,9 @@
  * @date   Mar 2021
  * @brief  Python binding for PlaceDB 
  */
+/**
+ * Modifications Copyright(C) 2024 Advanced Micro Devices, Inc. All rights reserved
+ */
 
 #include "PyPlaceDB.h"
 
@@ -94,8 +97,10 @@ void bind_PlaceDB(pybind11::module& m)
     pybind11::class_<DREAMPLACE_NAMESPACE::PlaceDB> (m, "PlaceDB")
         .def(pybind11::init<>())
         .def("movNodeNames", (std::vector<std::string> const& (DREAMPLACE_NAMESPACE::PlaceDB::*)() const) &DREAMPLACE_NAMESPACE::PlaceDB::movNodeNames)
+        .def("originalMovNodeNames", (std::vector<std::string> const& (DREAMPLACE_NAMESPACE::PlaceDB::*)() const) &DREAMPLACE_NAMESPACE::PlaceDB::originalMovNodeNames)
         .def("movNodeName", (std::string const& (DREAMPLACE_NAMESPACE::PlaceDB::*)(DREAMPLACE_NAMESPACE::PlaceDB::index_type) const) &DREAMPLACE_NAMESPACE::PlaceDB::movNodeName)
         .def("movNodeTypes", (std::vector<std::string> const& (DREAMPLACE_NAMESPACE::PlaceDB::*)() const) &DREAMPLACE_NAMESPACE::PlaceDB::movNodeTypes)
+        .def("originalMovNodeTypes", (std::vector<std::string> const& (DREAMPLACE_NAMESPACE::PlaceDB::*)() const) &DREAMPLACE_NAMESPACE::PlaceDB::originalMovNodeTypes)
         .def("movNodeType", (std::string const& (DREAMPLACE_NAMESPACE::PlaceDB::*)(DREAMPLACE_NAMESPACE::PlaceDB::index_type) const) &DREAMPLACE_NAMESPACE::PlaceDB::movNodeType)
         .def("movNodeXLocs", (std::vector<double> const& (DREAMPLACE_NAMESPACE::PlaceDB::*)() const) &DREAMPLACE_NAMESPACE::PlaceDB::movNodeXLocs)
         .def("movNodeX", (double const& (DREAMPLACE_NAMESPACE::PlaceDB::*)(DREAMPLACE_NAMESPACE::PlaceDB::index_type) const) &DREAMPLACE_NAMESPACE::PlaceDB::movNodeX)
@@ -153,6 +158,7 @@ void bind_PlaceDB(pybind11::module& m)
         .def("siteVal", (DREAMPLACE_NAMESPACE::PlaceDB::index_type const& (DREAMPLACE_NAMESPACE::PlaceDB::*)(DREAMPLACE_NAMESPACE::PlaceDB::index_type, DREAMPLACE_NAMESPACE::PlaceDB::index_type) const) &DREAMPLACE_NAMESPACE::PlaceDB::siteVal)
         .def("dieArea", &DREAMPLACE_NAMESPACE::PlaceDB::dieArea)
         .def("nodeName2Index", (DREAMPLACE_NAMESPACE::PlaceDB::string2index_map_type const& (DREAMPLACE_NAMESPACE::PlaceDB::*)() const) &DREAMPLACE_NAMESPACE::PlaceDB::nodeName2Index)
+        .def("originalNodeName2Index", (DREAMPLACE_NAMESPACE::PlaceDB::string2index_map_type const& (DREAMPLACE_NAMESPACE::PlaceDB::*)() const) &DREAMPLACE_NAMESPACE::PlaceDB::originalNodeName2Index)
         .def("libCellName2Index", (DREAMPLACE_NAMESPACE::PlaceDB::string2index_map_type const& (DREAMPLACE_NAMESPACE::PlaceDB::*)() const) &DREAMPLACE_NAMESPACE::PlaceDB::libCellName2Index)
         .def("netName2Index", (DREAMPLACE_NAMESPACE::PlaceDB::string2index_map_type const& (DREAMPLACE_NAMESPACE::PlaceDB::*)() const) &DREAMPLACE_NAMESPACE::PlaceDB::netName2Index)
         .def("numMovable", &DREAMPLACE_NAMESPACE::PlaceDB::numMovable)
@@ -169,6 +175,17 @@ void bind_PlaceDB(pybind11::module& m)
         .def("yh", &DREAMPLACE_NAMESPACE::PlaceDB::yh)
         .def("width", &DREAMPLACE_NAMESPACE::PlaceDB::width)
         .def("height", &DREAMPLACE_NAMESPACE::PlaceDB::height)
+        .def("originalNode2NodeMap", (std::vector<DREAMPLACE_NAMESPACE::PlaceDB::index_type> const& (DREAMPLACE_NAMESPACE::PlaceDB::*)() const) &DREAMPLACE_NAMESPACE::PlaceDB::originalNode2NodeMap)
+        .def("orgNodeXOffset", (std::vector<double> const& (DREAMPLACE_NAMESPACE::PlaceDB::*)() const) &DREAMPLACE_NAMESPACE::PlaceDB::orgNodeXOffset)
+        .def("orgNodeYOffset", (std::vector<double> const& (DREAMPLACE_NAMESPACE::PlaceDB::*)() const) &DREAMPLACE_NAMESPACE::PlaceDB::orgNodeYOffset)
+        .def("shapeHeights", (std::vector<double> const& (DREAMPLACE_NAMESPACE::PlaceDB::*)() const) &DREAMPLACE_NAMESPACE::PlaceDB::shapeHeights)
+        .def("shapeWidths", (std::vector<double> const& (DREAMPLACE_NAMESPACE::PlaceDB::*)() const) &DREAMPLACE_NAMESPACE::PlaceDB::shapeWidths)
+        .def("shapeTypes", (std::vector<int> const& (DREAMPLACE_NAMESPACE::PlaceDB::*)() const) &DREAMPLACE_NAMESPACE::PlaceDB::shapeTypes)
+        .def("shape2OrgNodeMap", (std::vector<std::vector<DREAMPLACE_NAMESPACE::PlaceDB::index_type> > const& (DREAMPLACE_NAMESPACE::PlaceDB::*)() const) &DREAMPLACE_NAMESPACE::PlaceDB::shape2OrgNodeMap)
+        .def("flatShape2OrgNodeMap", (std::vector<DREAMPLACE_NAMESPACE::PlaceDB::index_type> const& (DREAMPLACE_NAMESPACE::PlaceDB::*)() const) &DREAMPLACE_NAMESPACE::PlaceDB::flatShape2OrgNodeMap)
+        .def("flatShape2OrgNodeStartMap", (std::vector<DREAMPLACE_NAMESPACE::PlaceDB::index_type> const& (DREAMPLACE_NAMESPACE::PlaceDB::*)() const) &DREAMPLACE_NAMESPACE::PlaceDB::flatShape2OrgNodeStartMap)
+        .def("shape2ClusterNodeStart", (std::vector<DREAMPLACE_NAMESPACE::PlaceDB::index_type> const& (DREAMPLACE_NAMESPACE::PlaceDB::*)() const) &DREAMPLACE_NAMESPACE::PlaceDB::shape2ClusterNodeStart)
+        .def("originalNodeIsShapeInst", (std::vector<int> const& (DREAMPLACE_NAMESPACE::PlaceDB::*)() const) &DREAMPLACE_NAMESPACE::PlaceDB::originalNodeIsShapeInst)
         ;
 }
 

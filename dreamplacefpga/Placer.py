@@ -4,6 +4,8 @@
 # @date   Sep 2020
 # @brief  Main file to run the entire placement flow. 
 #
+# Modifications Copyright(C) 2024 Advanced Micro Devices, Inc. All rights reserved
+#
 
 import matplotlib 
 matplotlib.use('Agg')
@@ -81,22 +83,23 @@ def placeFPGA(params):
         logging.info("Detailed Placement not run")
 
     if params.write_tcl_flag:
-        placedb.writeTcl(params, 'place_cells.tcl')
+        placedb.writeTclShape(params,'place_cells.tcl')
+        placedb.writeTclBRAM(params,'place_bram.tcl')
 
     logging.info("Completed Placement in %.3f seconds" % (time.time()-start))
 
     if params.enable_if == 1:
         tt = time.time()
         logging.info("Start writing solution to Interchange Format(IF)")
-        part_name = params.part_name
         schema_dir = os.path.join(os.path.dirname(__file__), '../thirdparty/fpga-interchange-schema/interchange')
-        db2phys = db_to_physicalnetlist(placedb, schema_dir, part_name)  
-        phys_netlist = db2phys.build_physicalnetlist(placedb, final_out_file)
-        # tcl_generator().write_tcl(phys_netlist)
+        db2phys = db_to_physicalnetlist(placedb, schema_dir, params)
+        phys_netlist = db2phys.build_physicalnetlist(placedb, params)
         if_writer = IFWriter(schema_dir)
         physical_netlist = if_writer.build_IF(phys_netlist)
         if_file = os.path.join(path, "%s.phys" % (params.design_name()))
         if_writer.write_IF(physical_netlist, if_file)
+        # tcl_writer = tcl_generator()
+        # tcl_writer.write_tcl(phys_netlist, placedb)
         logging.info("Interchange Format(IF) Writer completed in %.3f seconds" % (time.time()-tt))
                
 

@@ -3,6 +3,9 @@
 # @author Yibo Lin (DREAMPlace), Rachel Selina Rajarathnam (DREAMPlaceFPGA)
 # @date   Mar 2021
 #
+#
+# Modifications Copyright(C) 2024 Advanced Micro Devices, Inc. All rights reserved
+#
 
 from torch.autograd import Function
 
@@ -16,8 +19,14 @@ class PlaceIOFunction(Function):
         @brief read design and store in placement database
         """
         args = params.aux_input
+        raw_db = None
         if "aux_input" in params.__dict__ and params.aux_input:
             return place_io_cpp.forward(args)
+
+        else:
+            device_file = params.interchange_device
+            netlist_file = params.interchange_netlist
+            return place_io_cpp.forward_interchange(device_file, netlist_file)
 
     @staticmethod
     def pydb(raw_db): 

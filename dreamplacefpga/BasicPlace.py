@@ -4,7 +4,8 @@
 # @date   Sep 2020
 # @brief  Base placement class
 #
-
+# Modifications Copyright(C) 2024 Advanced Micro Devices, Inc. All rights reserved
+#
 import os
 import sys
 import time
@@ -66,6 +67,10 @@ class PlaceDataCollectionFPGA(object):
             self.site_type_map = torch.from_numpy(placedb.site_type_map.astype(np.int32)).to(device)
             self.lg_siteXYs = torch.from_numpy(placedb.lg_siteXYs).to(device)
 
+            self.original_node2node_map = torch.from_numpy(placedb.original_node2node_map).to(device)
+            self.org_node_x_offset = torch.from_numpy(placedb.org_node_x_offset).to(device)
+            self.org_node_y_offset = torch.from_numpy(placedb.org_node_y_offset).to(device)
+
             if params.routability_opt_flag:
                 self.original_node_size_x = self.node_size_x.clone()
                 self.original_node_size_y = self.node_size_y.clone()
@@ -84,6 +89,7 @@ class PlaceDataCollectionFPGA(object):
             self.movable_macro_mask = None
 
             self.pin2node_map = torch.from_numpy(placedb.pin2node_map).to(device)
+            self.pin2org_node_map = torch.from_numpy(placedb.pin2org_node_map).to(device)
             self.flat_node2pin_map = torch.from_numpy(placedb.flat_node2pin_map).to(device)
             self.flat_node2pin_start_map = torch.from_numpy(placedb.flat_node2pin_start_map).to(device)
             self.node2outpinIdx_map = torch.from_numpy(placedb.node2outpinIdx_map).to(device)
@@ -100,6 +106,9 @@ class PlaceDataCollectionFPGA(object):
             ## Resource type masks
             self.flop_mask = torch.from_numpy(placedb.flop_mask).to(device)
             self.lut_mask = torch.from_numpy(placedb.lut_mask).to(device)
+            self.lutram_mask = torch.from_numpy(placedb.lutram_mask).to(device)
+            self.mux_mask = torch.from_numpy(placedb.mux_mask).to(device)
+            self.carry_mask = torch.from_numpy(placedb.carry_mask).to(device)
             self.ram_mask = torch.from_numpy(placedb.ram_mask).to(device)
             self.dsp_mask = torch.from_numpy(placedb.dsp_mask).to(device)
             self.flop_lut_mask = self.flop_mask | self.lut_mask
@@ -110,6 +119,9 @@ class PlaceDataCollectionFPGA(object):
             self.cluster_lut_type = torch.from_numpy(placedb.cluster_lut_type).to(dtype=torch.int32,device=device)
             self.pin_typeIds = torch.from_numpy(placedb.pin_typeIds).to(dtype=torch.int32,device=device)
 
+            #MUX type
+            self.mux_type = torch.from_numpy(placedb.mux_type).to(dtype=torch.int32,device=device)
+            
             #FF control sets
             self.flop_ctrlSets = torch.from_numpy(placedb.flat_ctrlSets).to(dtype=torch.int32,device=device)
             #FF to ctrlset ID
@@ -121,6 +133,10 @@ class PlaceDataCollectionFPGA(object):
             self.flop_indices = torch.from_numpy(placedb.flop_indices).to(dtype=torch.int32,device=device)
             self.lut_indices = torch.nonzero(self.lut_mask, as_tuple=True)[0].to(dtype=torch.int32)
             self.flop_lut_indices = torch.nonzero(self.flop_lut_mask, as_tuple=True)[0].to(dtype=torch.int32)
+            self.carry_indices = torch.nonzero(self.carry_mask, as_tuple=True)[0].to(dtype=torch.int32)
+            self.lutram_indices = torch.nonzero(self.lutram_mask, as_tuple=True)[0].to(dtype=torch.int32)
+            self.muxshape_indices = torch.from_numpy(placedb.muxshape_indices).to(dtype=torch.int32,device=device)
+
             self.pin_weights[self.flop_mask] = params.ffPinWeight
             self.unit_pin_capacity = torch.empty(1, dtype=self.pos[0].dtype, device=device)
             self.unit_pin_capacity.data.fill_(params.unit_pin_capacity)
@@ -154,6 +170,13 @@ class PlaceDataCollectionFPGA(object):
             self.snkpin2tnet_map = torch.from_numpy(placedb.snkpin2tnet_map).to(device)
             self.net2tnet_start_map = torch.from_numpy(placedb.net2tnet_start_map).to(device)
 
+            # shapes
+            self.shape_heights = torch.from_numpy(placedb.shape_heights).to(device) # shape heights
+            self.shape_widths = torch.from_numpy(placedb.shape_widths).to(device) # shape widths
+            self.flat_shape2org_node_map = torch.from_numpy(placedb.flat_shape2org_node_map).to(device) # flattened version of shape2org_node_map
+            self.flat_shape2org_node_start_map = torch.from_numpy(placedb.flat_shape2org_node_start_map).to(device) # starting point for flat_shape2org_node_map
+            self.node2shape_map = torch.from_numpy(placedb.node2shape_map).to(device) # node to shape map
+    
             # regions
             self.region_boxes = [torch.tensor(region).to(device) for region in placedb.region_boxes]
             self.flat_region_boxes = torch.from_numpy(
@@ -291,7 +314,7 @@ class BasicPlaceFPGA(nn.Module):
             ### uniformly spread fillers in fence region
             ### for cells in the fence region
             for i, region in enumerate(placedb.region_boxes):
-                if i < 4:
+                if i < 7:
                     #Construct Nx4 np array for region using placedb.flat_region_boxes
                     filler_beg, filler_end = placedb.filler_start_map[i:i+2]
                     if filler_end-filler_beg > 0:
@@ -313,7 +336,7 @@ class BasicPlaceFPGA(nn.Module):
                                     high=subregion[3] -
                                     placedb.filler_size_y_fence_region[i],
                                     size=sub_filler_end-sub_filler_beg)
-                #Skip for IOs - regions[4]
+                #Skip for IOs - regions[7]
                 else:
                     continue
 
@@ -574,20 +597,9 @@ class BasicPlaceFPGA(nn.Module):
         @param data_collections a collection of all data and variables required for constructing the ops
         @param device cpu or cuda
         """
-        # legalize LUT/FF
-        #Avg areas
-        avgLUTArea = data_collections.node_areas[:placedb.num_physical_nodes][data_collections.node2fence_region_map == 0].sum()
-        avgLUTArea /= placedb.node_count[0]
-        avgFFArea = data_collections.node_areas[:placedb.num_physical_nodes][data_collections.node2fence_region_map == 1].sum()
-        avgFFArea /= placedb.node_count[1]
-        #Inst Areas
-        inst_areas = data_collections.node_areas[:placedb.num_physical_nodes].detach().clone()
-        inst_areas[data_collections.node2fence_region_map > 1] = 0.0 #Area of non CLB nodes set to 0.0
-        inst_areas[data_collections.node2fence_region_map == 0] /= avgLUTArea
-        inst_areas[data_collections.node2fence_region_map == 1] /= avgFFArea
         #Site types
         site_types = data_collections.site_type_map.detach().clone()
-        site_types[site_types > 1] = 0 #Set non CLB to 0
+        site_types[site_types > placedb.sSLICEMIdx] = 0 #Set non CLB to 0
 
         if (len(data_collections.net_weights)):
             net_wts = data_collections.net_weights
@@ -595,49 +607,11 @@ class BasicPlaceFPGA(nn.Module):
             net_wts = torch.ones(placedb.num_nets, dtype=self.pos[0].dtype, device=device)
 
         return lut_ff_legalization.LegalizeCLB(
-            lutFlopIndices=data_collections.flop_lut_indices,
-            nodeNames=placedb.node_names,
-            flop2ctrlSet=data_collections.flop2ctrlSetId_map,
-            flop_ctrlSet=data_collections.flop_ctrlSets,
-            pin2node=data_collections.pin2node_map,
-            pin2net=data_collections.pin2net_map,
-            snkpin2tnet=data_collections.snkpin2tnet_map,
-            net2tnet_start=data_collections.net2tnet_start_map,
-            flat_tnet2pin_map=data_collections.flat_tnet2pin_map,
-            flat_net2pin=data_collections.flat_net2pin_map,
-            flat_net2pin_start=data_collections.flat_net2pin_start_map,
-            flat_node2pin=data_collections.flat_node2pin_map,
-            flat_node2pin_start=data_collections.flat_node2pin_start_map,
-            node2fence=data_collections.node2fence_region_map,
-            pin_types=data_collections.pin_typeIds,
-            lut_type=data_collections.lut_type,
+            data_collections=data_collections,
+            placedb=placedb,
+            params=params,
             net_wts=net_wts,
-            tnet_wts=data_collections.tnet_weights,
-            avg_lut_area=avgLUTArea,
-            avg_ff_area=avgFFArea,
-            inst_areas=inst_areas,
-            pin_offset_x=data_collections.lg_pin_offset_x,
-            pin_offset_y=data_collections.lg_pin_offset_y,
             site_types=site_types,
-            site_xy=data_collections.lg_siteXYs,
-            node_size_x=data_collections.node_size_x[:placedb.num_physical_nodes],
-            node_size_y=data_collections.node_size_y[:placedb.num_physical_nodes],
-            node2outpin=data_collections.node2outpinIdx_map[:placedb.num_physical_nodes],
-            net2pincount=data_collections.net2pincount_map,
-            node2pincount=data_collections.node2pincount_map,
-            spiral_accessor=data_collections.spiral_accessor,
-            num_nets=placedb.num_nets,
-            num_movable_nodes=placedb.num_movable_nodes,
-            num_nodes=placedb.num_physical_nodes,
-            num_sites_x=placedb.num_sites_x,
-            num_sites_y=placedb.num_sites_y,
-            xWirelenWt=placedb.xWirelenWt,
-            yWirelenWt=placedb.yWirelenWt,
-            lg_alpha=params.lg_alpha,
-            lg_beta=params.lg_beta,
-            enableTimingPreclustering=params.enableTimingPreclustering,
-            nbrDistEnd=placedb.nbrDistEnd,
-            num_threads=params.num_threads,
             device=device)
 
     def build_timing_op(self, params, placedb, data_collections, timer=None):

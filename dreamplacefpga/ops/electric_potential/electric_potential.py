@@ -4,6 +4,9 @@
 # @Date: Oct 2020
 # @brief  electric potential according to e-place (http://cseweb.ucsd.edu/~jlu/papers/eplace-todaes14/paper.pdf)
 #
+#
+# Modifications Copyright(C) 2024 Advanced Micro Devices, Inc. All rights reserved
+#
 
 import os
 import sys
@@ -277,7 +280,11 @@ class ElectricPotential(ElectricOverflow):
             ### reconstruct data structure
             self.region_id = region_id
             num_nodes = placedb.num_nodes
-            self.fence_region_mask = node2fence_region_map[:num_movable_nodes] == region_id
+            # self.fence_region_mask = node2fence_region_map[:num_movable_nodes] == region_id
+            if self.region_id == 0:
+                self.fence_region_mask = (node2fence_region_map[:num_movable_nodes] == 0) | (node2fence_region_map[:num_movable_nodes] == 1)
+            else:
+                self.fence_region_mask = node2fence_region_map[:num_movable_nodes] == region_id
 
             node_size_x = torch.cat([node_size_x[:num_movable_nodes][self.fence_region_mask],
                                     node_size_x[num_nodes-num_filler_nodes+placedb.filler_start_map[region_id]:num_nodes-num_filler_nodes+placedb.filler_start_map[region_id+1]]], 0)
@@ -313,7 +320,11 @@ class ElectricPotential(ElectricOverflow):
         self.node2fence_region_map = node2fence_region_map
         self.placedb = placedb
         self.region_id = region_id
-        self.fence_region_mask = node2fence_region_map == region_id
+        # self.fence_region_mask = node2fence_region_map == region_id
+        if self.region_id == placedb.rLutIdx:
+            self.fence_region_mask = (node2fence_region_map == placedb.rLutIdx) | (node2fence_region_map == placedb.rLutRamIdx)
+        else:
+            self.fence_region_mask = node2fence_region_map == region_id
         ## set by build_density_op func
         self.filler_start_map = None
         self.filler_beg = None
@@ -337,7 +348,7 @@ class ElectricPotential(ElectricOverflow):
     def setLockDSPRAM(self):
         """ Set computation for DSP/RAM to zero after legalization 
         """
-        if self.region_id is not None and self.region_id > 1:
+        if self.region_id is not None and self.region_id >= self.placedb.rDspIdx:
             self.lock_flag = True
 
     def forward(self, pos, mode="density"):

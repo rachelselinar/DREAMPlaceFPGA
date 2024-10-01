@@ -5,12 +5,17 @@
     > Created Time: Mon 14 Mar 2016 09:22:46 PM CDT
     > Updated: Mar 2021
  ************************************************************************/
+/**
+ * Modifications Copyright(C) 2024 Advanced Micro Devices, Inc. All rights reserved
+ */
 
 #ifndef DREAMPLACE_PLACEDB_H
 #define DREAMPLACE_PLACEDB_H
 
 #include <limbo/parsers/bookshelf/bison/BookshelfDriver.h> // bookshelf parser 
 #include <limbo/string/String.h>
+
+#include "InterchangeDriver.h" // interchange format parser
 
 #include "Node.h"
 #include "Net.h"
@@ -34,6 +39,7 @@ struct clk_region
 };
 
 class PlaceDB : public BookshelfParser::BookshelfDataBase
+                , public DREAMPLACE_NAMESPACE::InterchangeDataBase
 {
     public:
         typedef Object::coordinate_type coordinate_type;
@@ -57,10 +63,56 @@ class PlaceDB : public BookshelfParser::BookshelfDataBase
         std::string const& movNodeName(index_type id) const {return mov_node_names.at(id);}
         std::string& movNodeName(index_type id) {return mov_node_names.at(id);}
 
+        std::vector<std::string> const& originalMovNodeNames() const {return original_mov_node_names;}
+        std::vector<std::string>& originalMovNodeNames() {return original_mov_node_names;}
+        std::string const& originalMovNodeName(index_type id) const {return original_mov_node_names.at(id);}
+        std::string& originalMovNodeName(index_type id) {return original_mov_node_names.at(id);}
+
         std::vector<std::string> const& movNodeTypes() const {return mov_node_types;}
         std::vector<std::string>& movNodeTypes() {return mov_node_types;}
         std::string const& movNodeType(index_type id) const {return mov_node_types.at(id);}
         std::string& movNodeType(index_type id) {return mov_node_types.at(id);}
+
+        std::vector<std::string> const& originalMovNodeTypes() const {return original_mov_node_types;}
+        std::vector<std::string>& originalMovNodeTypes() {return original_mov_node_types;}
+        std::string const& originalMovNodeType(index_type id) const {return original_mov_node_types.at(id);}
+        std::string& originalMovNodeType(index_type id) {return original_mov_node_types.at(id);}
+
+        std::vector<index_type> const& originalNode2NodeMap() const {return original_node2node_map;}
+        std::vector<index_type>& originalNode2NodeMap() {return original_node2node_map;}
+
+        std::vector<double> const& orgNodeXOffset() const {return org_node_x_offset;}
+        std::vector<double>& orgNodeXOffset() {return org_node_x_offset;}
+
+        std::vector<double> const& orgNodeYOffset() const {return org_node_y_offset;}
+        std::vector<double>& orgNodeYOffset() {return org_node_y_offset;}
+
+        std::vector<double> const& orgNodeZOffset() const {return org_node_z_offset;}
+        std::vector<double>& orgNodeZOffset() {return org_node_z_offset;}
+
+        std::vector<double> const& shapeHeights() const {return shape_heights;}
+        std::vector<double>& shapeHeights() {return shape_heights;}
+
+        std::vector<double> const& shapeWidths() const {return shape_widths;}
+        std::vector<double>& shapeWidths() {return shape_widths;}
+
+        std::vector<int> const& shapeTypes() const {return shape_types;}
+        std::vector<int>& shapeTypes() {return shape_types;}
+
+        std::vector<std::vector<index_type> > const& shape2OrgNodeMap() const {return shape2org_node_map;}
+        std::vector<std::vector<index_type> >& shape2OrgNodeMap() {return shape2org_node_map;}
+
+        std::vector<index_type> const& flatShape2OrgNodeMap() const {return flat_shape2org_node_map;}
+        std::vector<index_type>& flatShape2OrgNodeMap() {return flat_shape2org_node_map;}
+
+        std::vector<index_type> const& flatShape2OrgNodeStartMap() const {return flat_shape2org_node_start_map;}
+        std::vector<index_type>& flatShape2OrgNodeStartMap() {return flat_shape2org_node_start_map;}
+
+        std::vector<index_type> const& shape2ClusterNodeStart() const {return shape2cluster_node_start;}
+        std::vector<index_type>& shape2ClusterNodeStart() {return shape2cluster_node_start;}
+
+        std::vector<int> const& originalNodeIsShapeInst() const {return original_node_is_shape_inst;}
+        std::vector<int>& originalNodeIsShapeInst() {return original_node_is_shape_inst;}
 
         std::vector<double> const& movNodeXLocs() const {return mov_node_x;}
         std::vector<double>& movNodeXLocs() {return mov_node_x;}
@@ -177,6 +229,9 @@ class PlaceDB : public BookshelfParser::BookshelfDataBase
         std::vector<index_type> const& pin2NodeMap() const {return pin2node_map;}
         std::vector<index_type>& pin2NodeMap() {return pin2node_map;}
 
+        std::vector<index_type> const& pin2OrgNodeMap() const {return pin2org_node_map;}
+        std::vector<index_type>& pin2OrgNodeMap() {return pin2org_node_map;}
+
         std::vector<index_type> const& pin2NodeTypeMap() const {return pin2nodeType_map;}
         std::vector<index_type>& pin2NodeTypeMap() {return pin2nodeType_map;}
 
@@ -214,6 +269,8 @@ class PlaceDB : public BookshelfParser::BookshelfDataBase
         std::size_t siteCols() const {return m_siteDB[0].size();}
         index_type const& siteVal(index_type xloc, index_type yloc) const {return m_siteDB.at(xloc).at(yloc);}
         index_type& siteVal(index_type xloc, index_type yloc) {return m_siteDB.at(xloc).at(yloc);}
+        std::string const& siteName(index_type xloc, index_type yloc) const {return m_siteNameDB.at(xloc).at(yloc);}
+        std::string& siteName(index_type xloc, index_type yloc) {return m_siteNameDB.at(xloc).at(yloc);}
 
         /// be careful to use die area because it is larger than the actual rowBbox() which is the placement area 
         /// it is safer to use rowBbox()
@@ -225,6 +282,9 @@ class PlaceDB : public BookshelfParser::BookshelfDataBase
         string2index_map_type const& nodeName2Index() const {return node_name2id_map;}
         string2index_map_type& nodeName2Index() {return node_name2id_map;}
 
+        string2index_map_type const& originalNodeName2Index() const {return original_node_name2id_map;}
+        string2index_map_type& originalNodeName2Index() {return original_node_name2id_map;}
+
         string2index_map_type const& netName2Index() const {return net_name2id_map;}
         string2index_map_type& netName2Index() {return net_name2id_map;}
 
@@ -232,7 +292,10 @@ class PlaceDB : public BookshelfParser::BookshelfDataBase
         std::size_t numFixed() const {return fixed_node_names.size();}
         std::size_t numLibCell() const {return m_numLibCell;}
         std::size_t numLUT() const {return m_numLUT;}
+        std::size_t numLUTRAM() const {return m_numLUTRAM;}
         std::size_t numFF() const {return m_numFF;}
+        std::size_t numMUX() const {return m_numMUX;}
+        std::size_t numCARRY() const {return m_numCARRY;}
         std::size_t numDSP() const {return m_numDSP;}
         std::size_t numRAM() const {return m_numRAM;}
         std::string designName() const {return m_designName;}
@@ -261,11 +324,24 @@ class PlaceDB : public BookshelfParser::BookshelfDataBase
         virtual void set_bookshelf_design(std::string& name);
         virtual void bookshelf_end(); 
 
+        ///==== Interchange Callbacks ====
+        virtual void add_site_name(int x, int y, std::string const& name);
+        virtual void add_bel_map(std::string const& name, int z); //map slice bel name to z location
+        virtual void add_interchange_node(std::string& name, std::string& type);
+        virtual void update_interchange_nodes();
+        virtual void add_interchange_net(BookshelfParser::Net const& n);
+        virtual void add_interchange_shape(double height, double width);
+        virtual void add_org_node_to_shape(std::string const& cellName, std::string const& belName, int dx, int dy);
+        virtual void interchange_end();
+
         /// write placement solutions 
         virtual bool write(std::string const& filename) const;
         virtual bool write(std::string const& filename, float const* x = NULL, float const* y = NULL, index_type const* z = NULL) const;
 
         std::vector<std::vector<index_type> > m_siteDB; //FPGA Site Information
+        std::vector<std::vector<std::string> > m_siteNameDB; //FPGA Site Name Information
+        hashspace::unordered_map<std::string, int> bel2ZLocation; //FPGA BEL to Z Location Information
+        hashspace::unordered_map<std::string, int> lutramOutPin2ZLoc; //FPGA LUTRAM Out Pin to Z Location Information
         std::vector<clk_region> m_clkRegionDB; //FPGA clkRegion Information
         std::vector<std::string> m_clkRegions; //FPGA clkRegion Names 
         int m_clkRegX;
@@ -280,20 +356,35 @@ class PlaceDB : public BookshelfParser::BookshelfDataBase
         std::string m_libCellTemp;
 
         std::size_t num_movable_nodes; ///< number of movable cells 
+        std::size_t original_num_movable_nodes; ///< number of movable cells
         std::size_t num_fixed_nodes; ///< number of fixed cells 
         std::size_t m_numLibCell; ///< number of standard cells in the library
         std::size_t m_numLUT; ///< number of LUTs in design
+        std::size_t m_numLUTRAM; ///< number of LUTRAMs in design
         std::size_t m_numFF; ///< number of FFs in design
+        std::size_t m_numMUX; ///< number of MUXs in design
+        std::size_t m_numCARRY; ///< number of CARRYs in design
         std::size_t m_numDSP; ///< number of DSPs in design
         std::size_t m_numRAM; ///< number of RAMs in design
+        std::size_t m_numShape; ///< number of shapes in design
+        std::size_t rLutIdx = 0; ///< index of normal LUT for node2fenceregion
+        std::size_t rLutramIdx = 1; ///< index of LUTRAM for node2fenceregion
+        std::size_t rFFIdx = 2; ///< index of FF for node2fenceregion
+        std::size_t rMuxIdx = 3; ///< index of MUX for node2fenceregion
+        std::size_t rCarryIdx = 4; ///< index of CARRY for node2fenceregion
+        std::size_t rDspIdx = 5; ///< index of DSP for node2fenceregion
+        std::size_t rBramIdx = 6; ///< index of BRAM for node2fenceregion
+        std::size_t rIoIdx = 7; ///< index of IO for node2fenceregion
 
         std::string m_designName; ///< for writing def file
 
         //New approach to parsing
         std::vector<std::string> mov_node_names; 
+        std::vector<std::string> original_mov_node_names;
         std::vector<std::string> fixed_node_names;
         std::vector<std::string> fixed_node_types;
         std::vector<std::string> mov_node_types;
+        std::vector<std::string> original_mov_node_types;
         std::vector<std::string> net_names;
         std::vector<std::string> pin_names;
         std::vector<std::string> pin_types;
@@ -304,6 +395,7 @@ class PlaceDB : public BookshelfParser::BookshelfDataBase
         std::vector<index_type> node2outpinIdx_map;
         std::vector<index_type> pin_typeIds;
         std::vector<index_type> pin2node_map;
+        std::vector<index_type> pin2org_node_map;
         std::vector<index_type> pin2net_map;
         std::vector<index_type> pin2nodeType_map;
         std::vector<std::vector<index_type> > net2pin_map;
@@ -320,6 +412,7 @@ class PlaceDB : public BookshelfParser::BookshelfDataBase
         std::vector<double> mov_node_x;
         std::vector<double> mov_node_y;
         std::vector<index_type> mov_node_z;
+        std::vector<index_type> original_mov_node_z;
         std::vector<double> fixed_node_x;
         std::vector<double> fixed_node_y;
         std::vector<index_type> fixed_node_z;
@@ -329,6 +422,8 @@ class PlaceDB : public BookshelfParser::BookshelfDataBase
         //string2index_map_type mov_node_name2id_map;
         string2index_map_type fixed_node_name2id_map;
         string2index_map_type node_name2id_map;
+        string2index_map_type original_node_name2id_map;
+        std::vector<index_type> original_node2node_map;
         string2index_map_type net_name2id_map;
 
         // Timing net 
@@ -336,6 +431,24 @@ class PlaceDB : public BookshelfParser::BookshelfDataBase
         std::vector<index_type> net2tnet_start_map;
         std::vector<index_type> flat_tnet2pin_map;
         std::vector<index_type> snkpin2tnet_map;
+
+        // Shape information
+        std::vector<double> shape_heights;
+        std::vector<double> shape_widths;
+        std::vector<int> shape_types; // 0: LUT6_2, 1: Carry-chain, 2: LUTRAM, 3: DSP, 4: BRAM
+        std::vector<std::vector<index_type> > shape2org_node_map;
+        std::vector<index_type> flat_shape2org_node_map;
+        std::vector<index_type> flat_shape2org_node_start_map;
+        std::vector<index_type> shape2cluster_node_start;
+        std::vector<int> original_node_is_shape_inst;
+        std::vector<int> original_node_cluster_flag;
+        std::vector<double> org_node_x_offset;
+        std::vector<double> org_node_y_offset;
+        std::vector<double> org_node_z_offset;
+        std::vector<double> org_node_pin_offset_x;
+        std::vector<double> org_node_pin_offset_y;
+
+        std::size_t numShapeClusterNodesTemp;
 
         std::vector<double> dspSiteXYs;
         std::vector<double> ramSiteXYs;

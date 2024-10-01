@@ -3,6 +3,10 @@
 @Author: Rachel Selina Rajarathnam (DREAMPlaceFPGA) 
 @Date: Oct 2020
 '''
+#
+# Modifications Copyright(C) 2024 Advanced Micro Devices, Inc. All rights reserved
+#
+
 import math
 import torch
 from torch import nn
@@ -41,10 +45,10 @@ class LegalizeDSPRAMFunction(Function):
         num_inst = int(placedb.num_movable_nodes_fence_region[region_id])
         outLoc = np.zeros(2*num_inst, dtype=np.float32).tolist()
 
-        if region_id == 2:
+        if region_id == placedb.rDspIdx:
             mask = model.data_collections.dsp_mask
             sites = placedb.dspSiteXYs
-        elif region_id == 3:
+        elif region_id == placedb.rBramIdx:
             mask = model.data_collections.ram_mask
             sites = placedb.ramSiteXYs
 

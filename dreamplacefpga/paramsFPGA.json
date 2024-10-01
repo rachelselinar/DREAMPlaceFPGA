@@ -240,6 +240,10 @@
     "descripton" : "Enable IF Writer", 
     "default" : 0
     },
+"enable_site_routing" : {
+    "descripton" : "Enable site routing", 
+    "default" : 0
+    },
 "timing_driven_flag" : {
     "descripton" : "Enable timing driven placement", 
     "default" : 0
@@ -287,5 +291,13 @@
 "write_io_placement_flag" : {    
     "descripton" : "write tcl file for IO placement in Vivado 2022.1 flow",
     "default" : 0
+    },
+"bram_array_flag": {
+    "descripton" : "Enable BRAM array placement",
+    "default" : 0
+    },
+"bram_pl": {
+    "descripton" : "BRAM placement configuration",
+    "default" : ""
     }
 }

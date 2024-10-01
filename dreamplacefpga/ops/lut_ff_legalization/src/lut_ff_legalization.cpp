@@ -3,10 +3,19 @@
  * @author Rachel Selina (DREAMPlaceFPGA-PL)
  * @date   Mar 2021
  * @brief  Legalize LUT/FF
+ *
+ * Modifications Copyright(C) 2024 Advanced Micro Devices, Inc. All rights reserved
+ *
  */
 
+//pybind Dependency
+#include <pybind11/pybind11.h>
+#include <pybind11/stl_bind.h>
+#include <pybind11/numpy.h>
+//Lemon Graph Dependency
 #include "lemon/list_graph.h"
 #include "lemon/matching.h"
+#include "lemon/network_simplex.h"
 #include "utility/src/torch.h"
 #include "utility/src/utils.h"
 #include <vector>
@@ -163,9 +172,21 @@ inline bool inst_in_sig(const int instId, const int siteDetSigSize, const int* s
 }
 
 // define two_lut_compatibility_check
-inline bool two_lut_compatibility_check(const int* lut_type, const int* flat_node2pin_start_map, const int* flat_node2pin_map, const int* pin2net_map, const int* pin_typeIds, const int* sorted_net_map, const int lutAId, const int lutBId) 
+inline bool two_lut_compatibility_check(const int* lut_type, const int* flat_node2pin_start_map, const int* flat_node2pin_map, const int* pin2net_map, const int* pin_typeIds, const int* sorted_net_map, const int* node2shape_map, const int* node_z, const int lutAId, const int lutBId) 
 {
     if (lut_type[lutAId] == 6 || lut_type[lutBId] == 6)
+    {
+        return false;
+    }
+
+    // if (node2shape_map[lutAId] != INVALID && node2shape_map[lutBId] != INVALID)
+    // {   
+    //     int lutABel = node_z[lutAId]/2;
+    //     int lutBBel = node_z[lutBId]/2;
+    //     if (lutABel!=lutBBel) return false;
+    // }
+
+     if (node2shape_map[lutAId] != INVALID || node2shape_map[lutBId] != INVALID)
     {
         return false;
     }
@@ -326,7 +347,7 @@ inline bool add_inst_to_sig(const int node2prclstrCount, const int* flat_node2pr
 }
 
 //define add_flop_to_candidate_impl
-inline bool add_flop_to_candidate_impl(const int ffCKSR, const int ffCE, const int ffId, const int HALF_SLICE_CAPACITY, const int CKSR_IN_CLB, int* res_ff, int* res_cksr, int* res_ce)
+inline bool add_flop_to_candidate_impl(const int ffCKSR, const int ffCE, const int ffId, const int HALF_SLICE_CAPACITY, const int CKSR_IN_CLB, const int* unavail_ff, int* res_ff, int* res_cksr, int* res_ce)
 {
     for (int i = 0; i < CKSR_IN_CLB; ++i)
     {
@@ -349,7 +370,7 @@ inline bool add_flop_to_candidate_impl(const int ffCKSR, const int ffCE, const i
             int end = beg + HALF_SLICE_CAPACITY;
             for (int k = beg; k < end; k += BLE_CAPACITY)
             {
-                if (res_ff[k] == INVALID)
+                if (res_ff[k] == INVALID && unavail_ff[k] == 0)
                 {
                     res_ff[k] = ffId;
                     res_cksr[i] = ffCKSR;
@@ -497,25 +518,52 @@ void compute_wirelength_improv(const T* pos_x, const T* pos_y, const T* net_bbox
 }
 
 //addLUTToCandidateImpl
-inline bool add_lut_to_cand_impl(const int* lut_type, const int* flat_node2pin_start_map, const int* flat_node2pin_map, const int* node2pincount, const int* net2pincount, const int* pin2net_map, const int* pin_typeIds, const int* sorted_net_map, const int lutId, int* res_lut)
+inline bool add_lut_to_cand_impl(const int* lut_type, const int* flat_node2pin_start_map, const int* flat_node2pin_map, const int* node2pincount, const int* net2pincount, const int* pin2net_map, const int* pin_typeIds, const int* sorted_net_map, const int* node2shape_map, const int* node_z, const int* unavail_lut, const bool siteHasSpecialNode, const int lutId, int* res_lut)
 {
-    for (int i=0; i < SLICE_CAPACITY; i += BLE_CAPACITY)
+    if (!siteHasSpecialNode)
+    {   
+        for (int i=0; i < SLICE_CAPACITY; i += BLE_CAPACITY)
+        {
+            if (res_lut[i] == INVALID)
+            {
+                res_lut[i] = lutId;
+                return true;
+            }
+        }
+        for (int i=1; i < SLICE_CAPACITY; i += BLE_CAPACITY)
+        {    
+            if (res_lut[i] == INVALID && 
+                two_lut_compatibility_check(lut_type, flat_node2pin_start_map, flat_node2pin_map, pin2net_map, pin_typeIds, sorted_net_map, node2shape_map, node_z, res_lut[i-1], lutId))
+            {
+                res_lut[i] = lutId;
+                return true;
+            }
+        }
+        return false;
+    // If the site has special nodes such as MUX and CARRY8
+    //, avoid adding luts to the BLE with shape instances
+    } else
     {
-        if (res_lut[i] == INVALID)
+        for (int i=0; i < SLICE_CAPACITY; i += BLE_CAPACITY)
         {
-            res_lut[i] = lutId;
-            return true;
+            if (unavail_lut[i] == 0 && res_lut[i] == INVALID)
+            {
+                res_lut[i] = lutId;
+                return true;
+            }
         }
-    }
-    for (int i=1; i < SLICE_CAPACITY; i += BLE_CAPACITY)
-    {    
-        if (res_lut[i] == INVALID && 
-            two_lut_compatibility_check(lut_type, flat_node2pin_start_map, flat_node2pin_map, pin2net_map, pin_typeIds, sorted_net_map, res_lut[i-1], lutId))
+        for (int i=1; i < SLICE_CAPACITY; i += BLE_CAPACITY)
         {
-            res_lut[i] = lutId;
-            return true;
+            if (unavail_lut[i] == 0 && res_lut[i] == INVALID && 
+                two_lut_compatibility_check(lut_type, flat_node2pin_start_map, flat_node2pin_map, pin2net_map, pin_typeIds, sorted_net_map, node2shape_map, node_z, res_lut[i-1], lutId))
+            {
+                res_lut[i] = lutId;
+                return true;
+            }
         }
-    }
+        return false;
+    }  
+    
     return false;
 }
 
@@ -756,7 +804,7 @@ inline void compute_ble_score(const int* flat_node2pin_start_map, const int* fla
 }
 
 //fitLUTsToCandidateImpl
-inline bool fit_luts_to_candidate_impl(const int* lut_type, const int* node2pincount, const int* net2pincount, const int* pin2net_map, const int* pin_typeIds, const int* flat_node2pin_start_map, const int* flat_node2pin_map, const int* flat_node2precluster_map, const int* node2fence_region_map, const int* sorted_net_map, const int instPcl, const int node2prclstrCount, const int NUM_BLE_PER_SLICE, int* res_lut)
+inline bool fit_luts_to_candidate_impl(const int* lut_type, const int* node2pincount, const int* net2pincount, const int* pin2net_map, const int* pin_typeIds, const int* flat_node2pin_start_map, const int* flat_node2pin_map, const int* flat_node2precluster_map, const int* node2fence_region_map, const int* sorted_net_map, const int* node2shape_map, const int* node_z, const int instPcl, const int node2prclstrCount, const int NUM_BLE_PER_SLICE, const int lutId, int* res_lut)
 {
     //std::chrono::steady_clock::time_point start= std::chrono::steady_clock::now();
     std::vector<int> luts, lut6s;
@@ -777,7 +825,7 @@ inline bool fit_luts_to_candidate_impl(const int* lut_type, const int* node2pinc
     for (int idx = 0; idx < node2prclstrCount; ++idx)
     {
         int clInstId = flat_node2precluster_map[instPcl + idx];
-        if (node2fence_region_map[clInstId] == 0)
+        if (node2fence_region_map[clInstId] == lutId)
         {
             if (lut_type[clInstId] < 6)
             {
@@ -818,7 +866,7 @@ inline bool fit_luts_to_candidate_impl(const int* lut_type, const int* node2pinc
     {
         for(int rl = ll+1; rl < n; ++rl)
         {
-            if (two_lut_compatibility_check(lut_type, flat_node2pin_start_map, flat_node2pin_map, pin2net_map, pin_typeIds, sorted_net_map, luts[ll], luts[rl]))
+            if (two_lut_compatibility_check(lut_type, flat_node2pin_start_map, flat_node2pin_map, pin2net_map, pin_typeIds, sorted_net_map, node2shape_map, node_z, luts[ll], luts[rl]))
             {
                 edges.emplace_back(graph.addEdge(nodes[ll], nodes[rl]));
                 edgePairs.emplace_back(ll, rl);
@@ -868,18 +916,21 @@ inline bool fit_luts_to_candidate_impl(const int* lut_type, const int* node2pinc
 }
 
 //template <typename T>
-inline bool is_inst_in_cand_feasible(const int* node2fence_region_map, const int* lut_type, const int* flat_node2pin_start_map, const int* flat_node2pin_map, const int* node2pincount, const int* net2pincount, const int* pin2net_map, const int* pin_typeIds, const int* sorted_net_map, const int* flat_node2prclstrCount, const int* flat_node2precluster_map, const int* flop2ctrlSetId_map, const int* flop_ctrlSets, const int* site_det_impl_lut, const int* site_det_impl_ff, const int* site_det_impl_cksr, const int* site_det_impl_ce,
-    const int siteId, const int instId, const int HALF_SLICE_CAPACITY, const int NUM_BLE_PER_SLICE, const int CKSR_IN_CLB, const int CE_IN_CLB)
+inline bool is_inst_in_cand_feasible(const int* node2fence_region_map, const int* lut_type, const int* flat_node2pin_start_map, const int* flat_node2pin_map, const int* node2pincount, const int* net2pincount, const int* pin2net_map, const int* pin_typeIds, const int* sorted_net_map, const int* flat_node2prclstrCount, const int* flat_node2precluster_map, const int* flop2ctrlSetId_map, const int* flop_ctrlSets, const int* site_det_impl_lut, const int* site_unavail_lut, const int* site_det_impl_ff, const int* site_unavail_ff, 
+    const int* site_det_impl_cksr, const int* site_det_impl_ce, const int* sites_with_carry, const int* sites_with_muxshape, const int* node2shape_map, const int* node_z, const int siteId, const int instId, const int HALF_SLICE_CAPACITY, const int NUM_BLE_PER_SLICE, const int CKSR_IN_CLB, const int CE_IN_CLB, const int lutId, const int ffId)
 {
     int instPcl = instId*3;
 
     int sdlutId = siteId*SLICE_CAPACITY;
     int sdckId = siteId*CKSR_IN_CLB;
     int sdceId = siteId*CE_IN_CLB;
+    bool siteHasSpecialNode = (sites_with_carry[siteId] == 1 || sites_with_muxshape[siteId] == 1);
 
     /////
     int res_lut[SLICE_CAPACITY];
     int res_ff[SLICE_CAPACITY];
+    int unavail_lut[SLICE_CAPACITY];
+    int unavail_ff[SLICE_CAPACITY];
     int res_cksr[2];
     int res_ce[4];
 
@@ -887,6 +938,8 @@ inline bool is_inst_in_cand_feasible(const int* node2fence_region_map, const int
     {
         res_lut[sg] = site_det_impl_lut[sdlutId + sg];
         res_ff[sg] = site_det_impl_ff[sdlutId + sg];
+        unavail_lut[sg] = site_unavail_lut[sdlutId + sg];
+        unavail_ff[sg] = site_unavail_ff[sdlutId + sg];
     }
     for(int sg = 0; sg < CKSR_IN_CLB; ++sg)
     {
@@ -904,40 +957,38 @@ inline bool is_inst_in_cand_feasible(const int* node2fence_region_map, const int
         int clInstId = flat_node2precluster_map[instPcl + idx];
         int clInstCKSR = flop2ctrlSetId_map[clInstId]*3 + 1;
         int clInstCE = flop2ctrlSetId_map[clInstId]*3 + 2;
-        switch(node2fence_region_map[clInstId])
-        {
-            case 0: //LUT
-                {
-                    if (!lutFail && !add_lut_to_cand_impl(lut_type, flat_node2pin_start_map, flat_node2pin_map, node2pincount, net2pincount, pin2net_map, pin_typeIds, sorted_net_map, clInstId, res_lut))
 
-                    {
-                        lutFail = true;
-                    }
-                    break;
-                }
-            case 1: //FF
-                {
-                    if(!add_flop_to_candidate_impl(flop_ctrlSets[clInstCKSR], flop_ctrlSets[clInstCE], clInstId, HALF_SLICE_CAPACITY, CKSR_IN_CLB, res_ff, res_cksr, res_ce))
-                    {
-                        return false;
-                    }
-                    break;
-                }
-            default:
-                {
-                    break;
-                }
+        if (node2fence_region_map[clInstId] == lutId) //LUT
+        {
+            if (!lutFail && !add_lut_to_cand_impl(lut_type, flat_node2pin_start_map, flat_node2pin_map, node2pincount, net2pincount, pin2net_map, pin_typeIds, sorted_net_map, node2shape_map, node_z, unavail_lut, siteHasSpecialNode, clInstId, res_lut))
+            {
+                lutFail = true;
+            }
+        } else if (node2fence_region_map[clInstId] == ffId) //FF
+        {
+            if(!add_flop_to_candidate_impl(flop_ctrlSets[clInstCKSR], flop_ctrlSets[clInstCE], clInstId, HALF_SLICE_CAPACITY, CKSR_IN_CLB, unavail_ff, res_ff, res_cksr, res_ce))
+            {
+                return false;
+            }
         }
+
     }
     if (!lutFail)
     {
         return true;
+    // Avoid doing graph matching for sites with special nodes, otherwise the lut position will be changed
+    } else if (siteHasSpecialNode)
+    {
+        return false;
+    } else
+    {
+        return fit_luts_to_candidate_impl(lut_type, node2pincount, net2pincount, pin2net_map, pin_typeIds, flat_node2pin_start_map, flat_node2pin_map, flat_node2precluster_map, node2fence_region_map, sorted_net_map, node2shape_map, node_z, instPcl, flat_node2prclstrCount[instId], NUM_BLE_PER_SLICE, lutId, res_lut);
     }
-
-    return fit_luts_to_candidate_impl(lut_type, node2pincount, net2pincount, pin2net_map, pin_typeIds, flat_node2pin_start_map, flat_node2pin_map, flat_node2precluster_map, node2fence_region_map, sorted_net_map, instPcl, flat_node2prclstrCount[instId], NUM_BLE_PER_SLICE, res_lut);
+    // return fit_luts_to_candidate_impl(lut_type, node2pincount, net2pincount, pin2net_map, pin_typeIds, flat_node2pin_start_map, flat_node2pin_map, flat_node2precluster_map, node2fence_region_map, sorted_net_map, node2shape_map, node_z, instPcl, flat_node2prclstrCount[instId], NUM_BLE_PER_SLICE, lutId, res_lut);
 }
 
-inline bool add_inst_to_cand_impl(const int* lut_type, const int* flat_node2pin_start_map, const int* flat_node2pin_map, const int* node2pincount, const int* net2pincount, const int* pin2net_map, const int* pin_typeIds, const int* sorted_net_map, const int* flat_node2prclstrCount, const int* flat_node2precluster_map, const int* flop2ctrlSetId_map, const int* node2fence_region_map, const int* flop_ctrlSets, const int instId, const int CKSR_IN_CLB, const int CE_IN_CLB, const int HALF_SLICE_CAPACITY, const int NUM_BLE_PER_SLICE, int* nwCand_lut, int* nwCand_ff, int* nwCand_cksr, int* nwCand_ce)
+inline bool add_inst_to_cand_impl(const int* lut_type, const int* flat_node2pin_start_map, const int* flat_node2pin_map, const int* node2pincount, const int* net2pincount, const int* pin2net_map, const int* pin_typeIds, const int* sorted_net_map, const int* flat_node2prclstrCount, const int* flat_node2precluster_map, const int* flop2ctrlSetId_map, const int* node2fence_region_map, const int* flop_ctrlSets, const int* node2shape_map, const int* node_z, const int* unavail_lut, const int* unavail_ff, const bool siteHasSpecialNode, 
+    const int instId, const int lutId, const int ffId, const int CKSR_IN_CLB, const int CE_IN_CLB, const int HALF_SLICE_CAPACITY, const int NUM_BLE_PER_SLICE, int* nwCand_lut, int* nwCand_ff, int* nwCand_cksr, int* nwCand_ce)
 {
     int instPcl = instId*3;
 
@@ -966,28 +1017,19 @@ inline bool add_inst_to_cand_impl(const int* lut_type, const int* flat_node2pin_
         int clInstId = flat_node2precluster_map[instPcl + idx];
         int clInstCKSR = flop2ctrlSetId_map[clInstId]*3 + 1;
         int clInstCE = flop2ctrlSetId_map[clInstId]*3 + 2;
-        switch(node2fence_region_map[clInstId])
+
+        if (node2fence_region_map[clInstId] == lutId) //LUT
         {
-            case 1: //FF
-                {
-                    if(!add_flop_to_candidate_impl(flop_ctrlSets[clInstCKSR], flop_ctrlSets[clInstCE], clInstId, HALF_SLICE_CAPACITY, CKSR_IN_CLB, res_ff, res_cksr, res_ce))
-                    {
-                        return false;
-                    }
-                    break;
-                }
-            case 0: //LUT
-                {
-                    if (!lutFail && !add_lut_to_cand_impl(lut_type, flat_node2pin_start_map, flat_node2pin_map, node2pincount, net2pincount, pin2net_map, pin_typeIds, sorted_net_map, clInstId, res_lut))
-                    {
-                        lutFail = true;
-                    }
-                    break;
-                }
-            default:
-                {
-                    break;
-                }
+            if (!lutFail && !add_lut_to_cand_impl(lut_type, flat_node2pin_start_map, flat_node2pin_map, node2pincount, net2pincount, pin2net_map, pin_typeIds, sorted_net_map, node2shape_map, node_z, unavail_lut, siteHasSpecialNode, clInstId, res_lut))
+            {
+                lutFail = true;
+            }
+        } else if (node2fence_region_map[clInstId] == ffId) //FF
+        {
+            if(!add_flop_to_candidate_impl(flop_ctrlSets[clInstCKSR], flop_ctrlSets[clInstCE], clInstId, HALF_SLICE_CAPACITY, CKSR_IN_CLB, unavail_ff, res_ff, res_cksr, res_ce))
+            {
+                return false;
+            }
         }
     }
     if (!lutFail)
@@ -1007,7 +1049,12 @@ inline bool add_inst_to_cand_impl(const int* lut_type, const int* flat_node2pin_
         }
         return true;
     } 
-    if (fit_luts_to_candidate_impl(lut_type, node2pincount, net2pincount, pin2net_map, pin_typeIds, flat_node2pin_start_map, flat_node2pin_map, flat_node2precluster_map, node2fence_region_map, sorted_net_map, instPcl, flat_node2prclstrCount[instId], NUM_BLE_PER_SLICE, res_lut))
+    else if (siteHasSpecialNode)
+    {
+        return false;
+    }
+
+    if (fit_luts_to_candidate_impl(lut_type, node2pincount, net2pincount, pin2net_map, pin_typeIds, flat_node2pin_start_map, flat_node2pin_map, flat_node2precluster_map, node2fence_region_map, sorted_net_map, node2shape_map, node_z, instPcl, flat_node2prclstrCount[instId], NUM_BLE_PER_SLICE, lutId, res_lut))
     {
         for (int sg = 0; sg < SLICE_CAPACITY; ++sg)
         {
@@ -1028,8 +1075,8 @@ inline bool add_inst_to_cand_impl(const int* lut_type, const int* flat_node2pin_
 }
 
 //template <typename T>
-inline void remove_incompatible_neighbors(const int* node2fence_region_map, const int* lut_type, const int* flat_node2pin_start_map, const int* flat_node2pin_map, const int* node2pincount, const int* net2pincount, const int* pin2net_map, const int* pin_typeIds, const int* sorted_net_map, const int* flat_node2prclstrCount, const int* flat_node2precluster_map, const int* flop2ctrlSetId_map, const int* flop_ctrlSets, const int* site_det_impl_lut, const int* site_det_impl_ff, const int* site_det_impl_cksr, const int* site_det_impl_ce, const int* site_det_sig, 
-    const int* site_det_sig_idx, const int siteId, const int sNbrIdx, const int HALF_SLICE_CAPACITY, const int NUM_BLE_PER_SLICE, const int SIG_IDX, const int CKSR_IN_CLB, const int CE_IN_CLB, int* site_nbr_idx, int* site_nbr)
+inline void remove_incompatible_neighbors(const int* node2fence_region_map, const int* lut_type, const int* flat_node2pin_start_map, const int* flat_node2pin_map, const int* node2pincount, const int* net2pincount, const int* pin2net_map, const int* pin_typeIds, const int* sorted_net_map, const int* flat_node2prclstrCount, const int* flat_node2precluster_map, const int* flop2ctrlSetId_map, const int* flop_ctrlSets, const int* site_det_impl_lut, const int* site_unavail_lut, const int* site_det_impl_ff, const int* site_unavail_ff, const int* site_det_impl_cksr, const int* site_det_impl_ce, const int* site_det_sig, 
+    const int* site_det_sig_idx, const int* sites_with_carry,const int* node_z, const int* sites_with_muxshape, const int* node2shape_map, const int siteId, const int sNbrIdx, const int HALF_SLICE_CAPACITY, const int NUM_BLE_PER_SLICE, const int SIG_IDX, const int CKSR_IN_CLB, const int CE_IN_CLB, const int lutId, const int ffId, int* site_nbr_idx, int* site_nbr)
 {
     int sdtopId = siteId*SIG_IDX;
     for (int nbrId = 0; nbrId < site_nbr_idx[siteId]; ++nbrId)
@@ -1037,8 +1084,8 @@ inline void remove_incompatible_neighbors(const int* node2fence_region_map, cons
         int instId = site_nbr[sNbrIdx + nbrId];
 
         if (inst_in_sig(instId, site_det_sig_idx[siteId], site_det_sig, sdtopId) || 
-            !is_inst_in_cand_feasible(node2fence_region_map, lut_type, flat_node2pin_start_map, flat_node2pin_map, node2pincount, net2pincount, pin2net_map, pin_typeIds, sorted_net_map, flat_node2prclstrCount, flat_node2precluster_map, flop2ctrlSetId_map, flop_ctrlSets, site_det_impl_lut, site_det_impl_ff, site_det_impl_cksr, site_det_impl_ce,
-            siteId, instId, HALF_SLICE_CAPACITY, NUM_BLE_PER_SLICE, CKSR_IN_CLB, CE_IN_CLB))
+            !is_inst_in_cand_feasible(node2fence_region_map, lut_type, flat_node2pin_start_map, flat_node2pin_map, node2pincount, net2pincount, pin2net_map, pin_typeIds, sorted_net_map, flat_node2prclstrCount, flat_node2precluster_map, flop2ctrlSetId_map, flop_ctrlSets, site_det_impl_lut, site_unavail_lut, site_det_impl_ff, site_unavail_ff, site_det_impl_cksr, site_det_impl_ce, 
+            sites_with_carry, sites_with_muxshape, node2shape_map, node_z, siteId, instId, HALF_SLICE_CAPACITY, NUM_BLE_PER_SLICE, CKSR_IN_CLB, CE_IN_CLB, lutId, ffId))
         {
             site_nbr[sNbrIdx + nbrId] = INVALID;
         }
@@ -1048,7 +1095,7 @@ inline void remove_incompatible_neighbors(const int* node2fence_region_map, cons
 }
 
 template <typename T>
-inline void computeBLEScore(const int* pin2node_map, const int* flat_net2pin_start_map, const int* flat_net2pin_map, const int* node2outpinIdx_map, const int* sorted_net_map, const int* pin2net_map, const int* lut_type, const int* pin_typeIds, const int* flat_node2pin_start_map, const int* flat_node2pin_map, const int lutA, const int lutB, const int ffA, const int ffB, T& score)
+inline void computeBLEScore(const int* pin2node_map, const int* flat_net2pin_start_map, const int* flat_net2pin_map, const int* node2outpinIdx_map, const int* sorted_net_map, const int* pin2net_map, const int* lut_type, const int* pin_typeIds, const int* flat_node2pin_start_map, const int* flat_node2pin_map, const int* node2shape_map, const int* node_z, const int lutA, const int lutB, const int ffA, const int ffB, T& score)
 {
     int numLUTShareInputs = 0;
     if (lutA != INVALID && lutB != INVALID && lut_type[lutA] > 0 && lut_type[lutB] > 0)
@@ -1137,13 +1184,87 @@ inline void computeBLEScore(const int* pin2node_map, const int* flat_net2pin_sta
                 ++numIntNets;
             }
         }
+
+        // add internal nets score for shapes
+        if (node2shape_map[id] != INVALID)
+        {
+            int lutBel = node_z[id]/2;
+            int ffABel = node_z[ffA]/2;
+            if ((node2shape_map[ffA] == node2shape_map[id] && lutBel == ffABel))
+            {
+                ++numIntNets;
+            }
+
+            if (ffB != INVALID)
+            {
+                int ffBBel = node_z[ffB]/2;
+                if ((node2shape_map[ffB] == node2shape_map[id] && lutBel == ffBBel))
+                {
+                    ++numIntNets;
+                }
+            }
+        } 
     }
     T numFF = (ffA == INVALID ? 0:1) + (ffB == INVALID ? 0 : 1);
     score = T(0.1) * numLUTShareInputs + numIntNets - T(0.01)*numFF;
 }
 
+// template <typename T>
+inline bool bleHasShapeInst(const int* node2shape_map, const int lutA, const int lutB, const int ffA, const int ffB)
+{
+    for (int id : {lutA, lutB, ffA, ffB})
+    {
+        if (id != INVALID && node2shape_map[id] != INVALID)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+inline bool slotHasShapeInst(const int* node2shape_map, const int lut, const int ff)
+{
+    for (int id : {lut, ff})
+    {
+        if (id != INVALID && node2shape_map[id] != INVALID)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+inline bool flipShapeLuts(const int* node2shape_map, const int* node_z, const int lutA, const int lutB)
+{   
+    // one of the LUT is empty
+    if (lutA == INVALID || lutB == INVALID)
+    {   
+        if (lutA == INVALID)
+        {
+            return node_z[lutB] % 2 == 0;
+        } else
+        {
+            return node_z[lutA] % 2 == 1;
+        }
+    }
+    
+    // both LUTs are not empty
+    if (lutA != INVALID && lutB != INVALID)
+    {
+        if (node_z[lutA] > node_z[lutB])
+        {
+            return true;
+        } else if (node_z[lutA] == node_z[lutB] && node2shape_map[lutB] != INVALID)
+        {
+            return true;
+        } 
+    }
+
+    return false; 
+}
+
 template <typename T>
-inline void findBestFFs(const int* flop_ctrlSets, const int* flop2ctrlSetId_map, const int* flat_node2pin_start_map, const int* flat_node2pin_map, const int* flat_net2pin_start_map, const int* flat_net2pin_map, const int* pin2net_map, const int* node2pincount, const int* pin_typeIds, const int* net2pincount, const int* node2outpinIdx_map, const int* pin2node_map, const int* sorted_net_map, const int* lut_type, const std::vector<int> &ff, const int cksr, const int ce0, const int ce1, BLE<T>& ble)
+inline void findBestFFs(const int* flop_ctrlSets, const int* flop2ctrlSetId_map, const int* flat_node2pin_start_map, const int* flat_node2pin_map, const int* node2shape_map, const int* node_z, const int* flat_net2pin_start_map, const int* flat_net2pin_map, const int* pin2net_map, const int* node2pincount, const int* pin_typeIds, const int* net2pincount, const int* node2outpinIdx_map, const int* pin2node_map, const int* sorted_net_map, const int* lut_type, const std::vector<int> &ff, const int cksr, const int ce0, const int ce1, BLE<T>& ble)
 {
     ble.score = 0.0;
     ble.ff[0] = INVALID;
@@ -1158,7 +1279,7 @@ inline void findBestFFs(const int* flop_ctrlSets, const int* flop2ctrlSetId_map,
         if (cksrA == cksr && (ceA == ce0 || ceA == ce1))
         {
             T score = 0.0; 
-            computeBLEScore(pin2node_map, flat_net2pin_start_map, flat_net2pin_map, node2outpinIdx_map, sorted_net_map, pin2net_map, lut_type, pin_typeIds, flat_node2pin_start_map, flat_node2pin_map, ble.lut[0], ble.lut[1], ffA, INVALID, score);
+            computeBLEScore(pin2node_map, flat_net2pin_start_map, flat_net2pin_map, node2outpinIdx_map, sorted_net_map, pin2net_map, lut_type, pin_typeIds, flat_node2pin_start_map, flat_node2pin_map, node2shape_map, node_z, ble.lut[0], ble.lut[1], ffA, INVALID, score);
 
             if (score > ble.score)
             {
@@ -1180,7 +1301,7 @@ inline void findBestFFs(const int* flop_ctrlSets, const int* flop2ctrlSetId_map,
             if (cksrA == cksr && cksrB == cksr && ((ceA == ce0 && ceB == ce1) || (ceA == ce1 && ceB == ce0)))
             {
                 T score = 0.0; 
-                computeBLEScore(pin2node_map, flat_net2pin_start_map, flat_net2pin_map, node2outpinIdx_map, sorted_net_map, pin2net_map, lut_type, pin_typeIds, flat_node2pin_start_map, flat_node2pin_map, ble.lut[0], ble.lut[1], ffA, ffB, score);
+                computeBLEScore(pin2node_map, flat_net2pin_start_map, flat_net2pin_map, node2outpinIdx_map, sorted_net_map, pin2net_map, lut_type, pin_typeIds, flat_node2pin_start_map, flat_node2pin_map, node2shape_map, node_z, ble.lut[0], ble.lut[1], ffA, ffB, score);
 
                 if (score > ble.score)
                 {
@@ -1331,78 +1452,79 @@ inline bool compare_pq_tops(
     return false;
 }
 
-template <typename T>
-inline bool createRipUpCand(const T* pos_x, const T* pos_y, const T* net_bbox, const T* pin_offset_x, const T* pin_offset_y, const T* net_weights, const T* tnet_weights, const T* site_xy, const T* inst_areas, const int* site2addr_map, const T* site_det_score, const int* site_det_siteId, const int* site_det_sig_idx, const int* site_det_sig, const int* site_det_impl_lut, const int* site_det_impl_ff, const int* site_det_impl_cksr, const int* site_det_impl_ce, const int* net_pinIdArrayX, const int* net_pinIdArrayY, const int* lut_type, const int* flat_node2pin_start_map, const int* flat_node2pin_map, const int* node2pincount, const int* net2pincount, const int* pin2net_map, const int* snkpin2tnet_map, const int* pin_typeIds, const int* sorted_net_map, const int* flat_node2prclstrCount, const int* flat_node2precluster_map, const int* flop2ctrlSetId_map, const int* node2fence_region_map, const int* flop_ctrlSets, const int* net2tnet_start, const int* flat_net2pin_start_map, const int* flat_tnet2pin_map, const int* pin2node_map, const int* sorted_node_map, const int* node_names, const T xWirelenWt, const T yWirelenWt, const T extNetCountWt, const T wirelenImprovWt, const T timing_alpha, const T timing_beta, const int netShareScoreMaxNetDegree, const int wlScoreMaxNetDegree, const int siteId, const int instId, const int SIG_IDX, const int CKSR_IN_CLB, const int CE_IN_CLB, const int HALF_SLICE_CAPACITY, const int NUM_BLE_PER_SLICE, RipUpCand<T>& rpCand)
-{
-    int instPcl = instId*3;
-    int sIdx = site2addr_map[siteId];
+// template <typename T>
+// inline bool createRipUpCand(const T* pos_x, const T* pos_y, const T* net_bbox, const T* pin_offset_x, const T* pin_offset_y, const T* net_weights, const T* tnet_weights, const T* site_xy, const T* inst_areas, const int* site2addr_map, const T* site_det_score, const int* site_det_siteId, const int* site_det_sig_idx, const int* site_det_sig, const int* site_det_impl_lut, const int* site_det_impl_ff, const int* site_det_impl_cksr, const int* site_det_impl_ce, const int* sites_with_carry, const int* sites_with_muxshape, const int* node2shape_map, const int* node_z, const int* net_pinIdArrayX, const int* net_pinIdArrayY, const int* lut_type, const int* flat_node2pin_start_map, const int* flat_node2pin_map, const int* node2pincount, const int* net2pincount, const int* pin2net_map, const int* snkpin2tnet_map, const int* pin_typeIds, const int* sorted_net_map, const int* flat_node2prclstrCount, const int* flat_node2precluster_map, const int* flop2ctrlSetId_map, const int* node2fence_region_map, const int* flop_ctrlSets, const int* net2tnet_start, const int* flat_net2pin_start_map, const int* flat_tnet2pin_map, const int* pin2node_map, const int* sorted_node_map, const int* node_names, const T xWirelenWt, const T yWirelenWt, const T extNetCountWt, const T wirelenImprovWt, const T timing_alpha, const T timing_beta, const int netShareScoreMaxNetDegree, const int wlScoreMaxNetDegree, const int siteId, const int instId, const int lutId, const int ffId, const int SIG_IDX, const int CKSR_IN_CLB, const int CE_IN_CLB, const int HALF_SLICE_CAPACITY, const int NUM_BLE_PER_SLICE, RipUpCand<T>& rpCand)
+// {
+//     int instPcl = instId*3;
+//     int sIdx = site2addr_map[siteId];
+//     bool siteHasSpecialNode = (sites_with_carry[siteId] == 1 || sites_with_muxshape[siteId] == 1);
 
-    rpCand.siteId = siteId;
-    rpCand.cand.score = site_det_score[sIdx];
-    rpCand.cand.siteId = site_det_siteId[sIdx];
+//     rpCand.siteId = siteId;
+//     rpCand.cand.score = site_det_score[sIdx];
+//     rpCand.cand.siteId = site_det_siteId[sIdx];
 
-    rpCand.cand.sigIdx = site_det_sig_idx[sIdx];
+//     rpCand.cand.sigIdx = site_det_sig_idx[sIdx];
 
-    ///
-    int sdSGId = sIdx*SIG_IDX;
-    int sdLutId = sIdx*SLICE_CAPACITY;
-    int sdCKId = sIdx*CKSR_IN_CLB;
-    int sdCEId = sIdx*CE_IN_CLB;
+//     ///
+//     int sdSGId = sIdx*SIG_IDX;
+//     int sdLutId = sIdx*SLICE_CAPACITY;
+//     int sdCKId = sIdx*CKSR_IN_CLB;
+//     int sdCEId = sIdx*CE_IN_CLB;
 
-    for (int sg = 0; sg < rpCand.cand.sigIdx; ++sg)
-    {
-        rpCand.cand.sig[sg] = site_det_sig[sdSGId + sg];
-    }
-    for (int sg = 0; sg < SLICE_CAPACITY; ++sg)
-    {
-        rpCand.cand.impl_lut[sg] = site_det_impl_lut[sdLutId + sg];
-        rpCand.cand.impl_ff[sg] = site_det_impl_ff[sdLutId + sg];
-    }
-    for (int sg = 0; sg < CKSR_IN_CLB; ++sg)
-    {
-        rpCand.cand.impl_cksr[sg] = site_det_impl_cksr[sdCKId + sg];
-    }
-    for (int sg = 0; sg < CE_IN_CLB; ++sg)
-    {
-        rpCand.cand.impl_ce[sg] = site_det_impl_ce[sdCEId + sg];
-    }
-    ///
+//     for (int sg = 0; sg < rpCand.cand.sigIdx; ++sg)
+//     {
+//         rpCand.cand.sig[sg] = site_det_sig[sdSGId + sg];
+//     }
+//     for (int sg = 0; sg < SLICE_CAPACITY; ++sg)
+//     {
+//         rpCand.cand.impl_lut[sg] = site_det_impl_lut[sdLutId + sg];
+//         rpCand.cand.impl_ff[sg] = site_det_impl_ff[sdLutId + sg];
+//     }
+//     for (int sg = 0; sg < CKSR_IN_CLB; ++sg)
+//     {
+//         rpCand.cand.impl_cksr[sg] = site_det_impl_cksr[sdCKId + sg];
+//     }
+//     for (int sg = 0; sg < CE_IN_CLB; ++sg)
+//     {
+//         rpCand.cand.impl_ce[sg] = site_det_impl_ce[sdCEId + sg];
+//     }
+//     ///
 
-    rpCand.legal = add_inst_to_cand_impl(lut_type, flat_node2pin_start_map, flat_node2pin_map, node2pincount, net2pincount, pin2net_map, pin_typeIds, sorted_net_map, flat_node2prclstrCount, flat_node2precluster_map, flop2ctrlSetId_map, node2fence_region_map, flop_ctrlSets, instId, CKSR_IN_CLB, CE_IN_CLB, HALF_SLICE_CAPACITY, NUM_BLE_PER_SLICE, rpCand.cand.impl_lut, rpCand.cand.impl_ff, rpCand.cand.impl_cksr, rpCand.cand.impl_ce);
+//     rpCand.legal = add_inst_to_cand_impl(lut_type, flat_node2pin_start_map, flat_node2pin_map, node2pincount, net2pincount, pin2net_map, pin_typeIds, sorted_net_map, flat_node2prclstrCount, flat_node2precluster_map, flop2ctrlSetId_map, node2fence_region_map, flop_ctrlSets, node2shape_map, node_z, siteHasSpecialNode, instId, lutId, ffId, CKSR_IN_CLB, CE_IN_CLB, HALF_SLICE_CAPACITY, NUM_BLE_PER_SLICE, rpCand.cand.impl_lut, rpCand.cand.impl_ff, rpCand.cand.impl_cksr, rpCand.cand.impl_ce);
 
-    if (rpCand.legal)
-    {
-        ///
-        if (!add_inst_to_sig(flat_node2prclstrCount[instId], flat_node2precluster_map, sorted_node_map, instPcl, rpCand.cand.sig, rpCand.cand.sigIdx))
-        {
-            std::cout << "ERROR: Unable to add inst_" << node_names[instId] << " to sig" << std::endl;
-        }
+//     if (rpCand.legal)
+//     {
+//         ///
+//         if (!add_inst_to_sig(flat_node2prclstrCount[instId], flat_node2precluster_map, sorted_node_map, instPcl, rpCand.cand.sig, rpCand.cand.sigIdx))
+//         {
+//             std::cout << "ERROR: Unable to add inst_" << node_names[instId] << " to sig" << std::endl;
+//         }
 
-        compute_candidate_score(pos_x, pos_y, pin_offset_x, pin_offset_y, net_bbox, net_weights, tnet_weights, net_pinIdArrayX, net_pinIdArrayY, net2tnet_start, flat_net2pin_start_map, flat_tnet2pin_map, flat_node2pin_start_map, flat_node2pin_map, sorted_net_map, pin2net_map, snkpin2tnet_map, pin2node_map, net2pincount, site_xy, node_names, xWirelenWt, yWirelenWt, extNetCountWt, wirelenImprovWt, timing_alpha, timing_beta, netShareScoreMaxNetDegree, wlScoreMaxNetDegree, rpCand.cand.sig, rpCand.cand.siteId, rpCand.cand.sigIdx, rpCand.cand.score);
+//         compute_candidate_score(pos_x, pos_y, pin_offset_x, pin_offset_y, net_bbox, net_weights, tnet_weights, net_pinIdArrayX, net_pinIdArrayY, net2tnet_start, flat_net2pin_start_map, flat_tnet2pin_map, flat_node2pin_start_map, flat_node2pin_map, sorted_net_map, pin2net_map, snkpin2tnet_map, pin2node_map, net2pincount, site_xy, node_names, xWirelenWt, yWirelenWt, extNetCountWt, wirelenImprovWt, timing_alpha, timing_beta, netShareScoreMaxNetDegree, wlScoreMaxNetDegree, rpCand.cand.sig, rpCand.cand.siteId, rpCand.cand.sigIdx, rpCand.cand.score);
 
-        rpCand.score = rpCand.cand.score - site_det_score[sIdx];
+//         rpCand.score = rpCand.cand.score - site_det_score[sIdx];
 
-    } else
-    {
-        T area = inst_areas[site_det_sig[sdSGId]];
-        for (int sInst = 1; sInst < site_det_sig_idx[sIdx]; ++sInst)
-        {
-            area += inst_areas[site_det_sig[sdSGId + sInst]];
-        }
-        T wirelenImprov(0.0);
-        for (int pId = flat_node2pin_start_map[instId]; pId < flat_node2pin_start_map[instId+1]; ++pId)
-        {
-            int pinId = flat_node2pin_map[pId];
-            int netId = pin2net_map[pinId];
-            if (net2pincount[netId] <= wlScoreMaxNetDegree)
-            {
-                compute_wirelength_improv(pos_x, pos_y, net_bbox, pin_offset_x, pin_offset_y, net_weights, net_pinIdArrayX, net_pinIdArrayY, flat_net2pin_start_map, pin2node_map, net2pincount, site_xy, xWirelenWt, yWirelenWt, netId, siteId, std::vector<int>{pinId}, wirelenImprov);
-            }
-        }
-        rpCand.score = wirelenImprovWt * wirelenImprov - site_det_score[sIdx] - area;
-    }
-    return true;
-}
+//     } else
+//     {
+//         T area = inst_areas[site_det_sig[sdSGId]];
+//         for (int sInst = 1; sInst < site_det_sig_idx[sIdx]; ++sInst)
+//         {
+//             area += inst_areas[site_det_sig[sdSGId + sInst]];
+//         }
+//         T wirelenImprov(0.0);
+//         for (int pId = flat_node2pin_start_map[instId]; pId < flat_node2pin_start_map[instId+1]; ++pId)
+//         {
+//             int pinId = flat_node2pin_map[pId];
+//             int netId = pin2net_map[pinId];
+//             if (net2pincount[netId] <= wlScoreMaxNetDegree)
+//             {
+//                 compute_wirelength_improv(pos_x, pos_y, net_bbox, pin_offset_x, pin_offset_y, net_weights, net_pinIdArrayX, net_pinIdArrayY, flat_net2pin_start_map, pin2node_map, net2pincount, site_xy, xWirelenWt, yWirelenWt, netId, siteId, std::vector<int>{pinId}, wirelenImprov);
+//             }
+//         }
+//         rpCand.score = wirelenImprovWt * wirelenImprov - site_det_score[sIdx] - area;
+//     }
+//     return true;
+// }
 
 //////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////
@@ -1524,6 +1646,9 @@ int preClustering(const T *pos_x,
                   const int *pin2node_map,
                   const int *pin_typeIds,
                   const int *node_names,
+                  const int *node2shape_map,
+                  const int lutId,
+                  const int ffId,
                   const int num_nodes,
                   const T preClusteringMaxDist,
                   const bool enableTimingPreclustering,
@@ -1536,7 +1661,7 @@ int preClustering(const T *pos_x,
     for (int i = 0; i < num_nodes; ++i)
     {
         const int instId = sorted_node_idx[i];
-        if (node2fence_region_map[instId] == 0) //Only consider LUTs
+        if (node2fence_region_map[instId] == lutId && node2shape_map[instId] == INVALID)
         {
             int outPinId = node2outpinIdx_map[instId];
             int outNetId = pin2net_map[outPinId];
@@ -1561,7 +1686,7 @@ int preClustering(const T *pos_x,
 
                 T dist = DREAMPLACE_STD_NAMESPACE::abs(distX) + DREAMPLACE_STD_NAMESPACE::abs(distY);
 
-                if (pin_typeIds[pinIdx] == 1 && node2fence_region_map[nodeIdx] == 1 &&
+                if (pin_typeIds[pinIdx] == 1 && node2fence_region_map[nodeIdx] == ffId &&
                         dist <= preClusteringMaxDist)
                 {
                     ffs.emplace_back(std::make_pair(nodeIdx, dist));
@@ -1650,6 +1775,483 @@ int preClustering(const T *pos_x,
     return 0;
 }
 
+// legalize carry chains
+template <typename T>
+int legalizeCarryChainsLauncher(
+        const T* pos_x,
+        const T* pos_y,
+        const T* site_xy,
+        const T* node_size_x,
+        const T* node_size_y,
+        const T* org_node_x_offset,
+        const T* org_node_y_offset,
+        const int* site2addr_map,
+        const int* carry_indices,
+        const int* spiral_accessor,
+        const int* site_types,
+        const int *flop2ctrlSetId_map,
+        const int *flop_ctrlSets,
+        const int* node2shape_map,
+        const int* flat_shape2org_node_map,
+        const int* flat_shape2org_node_start_map,
+        const int* original_node2node_map,
+        const int* node2fence_region_map,
+        const int* node_z,
+        const int spiralBegin,
+        const int spiralEnd,
+        const int num_carry_chains,
+        const int num_sites_x,
+        const int num_sites_y,
+        const int sliceLId,
+        const int sliceMId,
+        const int lutId,
+        const int SIG_IDX,
+        const int SLICE_CAPACITY,
+        const int CKSR_IN_CLB,
+        const int CE_IN_CLB,
+        const int num_carryInstsInSlice,
+        T* carry_chain_displacements,
+        T* site_det_score,
+        T* inst_curr_bestScoreImprov,
+        T* inst_next_bestScoreImprov,
+        T* legal_carry_x,
+        T* legal_carry_y,
+        int* site_det_siteId,
+        int* site_det_sig_idx,
+        int* site_det_sig,
+        int* site_det_impl_lut,
+        int* site_unavail_lut,
+        int* site_det_impl_ff,
+        int* site_det_impl_cksr,
+        int* site_det_impl_ce,
+        int* inst_curr_detSite,
+        int* inst_curr_bestSite,
+        int* inst_next_detSite,
+        int* inst_next_bestSite,
+        int* sites_with_carry,
+        const int num_threads)
+{
+    int maxRad = DREAMPLACE_STD_NAMESPACE::max(num_sites_x, num_sites_y);
+    int slice_minX = 0;
+    int slice_maxX = num_sites_x - 1;
+    int slice_minY = 0;
+    int slice_maxY = num_sites_y - 1;
+
+    std::vector<std::vector<int> > carry_chain(num_carry_chains);
+    std::vector<int> carry_chain_size(num_carry_chains, 0);
+    std::vector<T> carryX(num_carry_chains, 0.0), carryY(num_carry_chains, 0.0);
+
+    int HALF_SLICE_CAPACITY = int(SLICE_CAPACITY/2);
+
+    uint32_t legalcc = 0;
+
+    int chunk_size = DREAMPLACE_STD_NAMESPACE::max(int(num_carry_chains / num_threads / 16), 1);
+#pragma omp parallel for num_threads(num_threads) schedule(dynamic, chunk_size)
+    for (int i = 0; i < num_carry_chains; ++i)
+    {
+        int instId = carry_indices[i];
+        carryX[i] = pos_x[instId];
+        carryY[i] = pos_y[instId];
+        carry_chain_size[i] = node_size_x[instId] * node_size_y[instId];
+    }
+        
+    //Sort based on carry chain size
+    std::vector<int> sorted_carry_chains(num_carry_chains);
+    std::iota(sorted_carry_chains.begin(),sorted_carry_chains.end(),0); //Initializing
+    std::sort(sorted_carry_chains.begin(),sorted_carry_chains.end(), [&](int i,int j){return carry_chain_size[i]>carry_chain_size[j];} );
+
+    for (int i = 0; i < num_carry_chains; ++i)
+    {
+        const int idx = sorted_carry_chains[i];
+        int elCount = carry_chain_size[idx];
+        dreamplaceAssertMsg(elCount, "Carry chain of size 0 encountered - CHECK");
+        int instId = carry_indices[idx];
+        int shapeId = node2shape_map[instId];
+
+        int sliceSpread = std::ceil(elCount/num_carryInstsInSlice);
+
+        T X = carryX[idx];
+        T Y = carryY[idx];
+
+        int beg(spiralBegin), end(spiralEnd);
+        T bestX = INVALID;
+        T bestY = INVALID;
+        T bestScore = 10000000;
+
+        for (int sId = beg; sId < end; ++sId)
+        {
+            int xVal = X + spiral_accessor[2*sId];
+            int yVal = Y + spiral_accessor[2*sId+1];
+            int siteId = xVal*num_sites_y + yVal;
+            int sIdx = site2addr_map[siteId];
+
+            //Check within bounds
+            if (xVal < slice_minX || xVal > slice_maxX || yVal < slice_minY || yVal > slice_maxY)
+            {
+                continue;
+            }
+
+            int startY = yVal + sliceSpread-1;
+
+            if ((site_types[siteId] == sliceLId || site_types[siteId] == sliceMId) && startY <= slice_maxY)
+            {
+                char space_available = 1;
+                for (int yId = yVal; yId <= startY; ++yId)
+                {
+                    int siteMap = xVal*num_sites_y + yId;
+                    int sMap = site2addr_map[siteMap];
+
+                    if (site_det_sig_idx[sMap] > 0 || sites_with_carry[sMap] == 1)
+                    {
+                        space_available = 0;
+                        break;
+                    }
+                }
+
+                //Legalize carry chain if space is available
+                if (space_available == 1)
+                {
+                    if (bestScore == 10000000)
+                    {
+                        int r = DREAMPLACE_STD_NAMESPACE::abs(spiral_accessor[2*sId]) +
+                            DREAMPLACE_STD_NAMESPACE::abs(spiral_accessor[2*sId+1]); 
+                        r += 2;
+                        int nwR = DREAMPLACE_STD_NAMESPACE::min(maxRad, r);
+                        end = nwR ? 2 * (nwR + 1) * nwR + 1 : 1;
+                    }
+                    
+
+                    T dist_score = DREAMPLACE_STD_NAMESPACE::abs(X - (site_xy[siteId*2])) +
+                                DREAMPLACE_STD_NAMESPACE::abs(Y - (site_xy[siteId*2+1]));
+
+                    for (int orgIdx = flat_shape2org_node_start_map[shapeId]; orgIdx < flat_shape2org_node_start_map[shapeId+1]; ++orgIdx)
+                    {
+                        int org_nodeId = flat_shape2org_node_map[orgIdx];
+                        int nodeId = original_node2node_map[org_nodeId];
+                        T x_offset = org_node_x_offset[org_nodeId];
+                        T y_offset = org_node_y_offset[org_nodeId];
+
+                        //Skip the carry chain node
+                        if (nodeId == instId)
+                        {
+                            continue;
+                        }
+                        
+                        T dist = DREAMPLACE_STD_NAMESPACE::abs(pos_x[nodeId] - (site_xy[siteId*2] + x_offset)) +
+                                DREAMPLACE_STD_NAMESPACE::abs(pos_y[nodeId] - (site_xy[siteId*2+1] + y_offset));
+                        dist_score += dist;
+                    }
+
+                    if (dist_score < bestScore)
+                    {
+                        bestX = xVal;
+                        bestY = yVal;
+                        bestScore = dist_score;
+                    }
+                }
+                    
+            }
+        }
+    
+
+        if (bestX != INVALID && bestY != INVALID)
+        {
+            carry_chain_displacements[idx] = 0;
+            
+            //legalize carry8 instance first and then the rest luts and ffs
+            int startY = bestY;
+            int endY = bestY + sliceSpread - 1;
+            for (int yId = startY; yId <=endY; ++yId)
+            {   
+                int bSiteId = bestX * num_sites_y + yId;
+                int bSIdx = site2addr_map[bSiteId]; 
+
+                if (site_det_sig_idx[bSIdx] == 0 && sites_with_carry[bSIdx] == 0)
+                {   
+                    legal_carry_x[idx] = bestX;
+                    legal_carry_y[idx] = bestY;
+                } else{
+                    std::cout << "ERROR: More than one carry chain node legalized at site: (" << bestX << ", " << bestY << ")" << std::endl;
+                }
+
+                sites_with_carry[bSIdx] = 1;
+            }
+
+            //Legalize the rest of the nodes
+            for(int orgIdx = flat_shape2org_node_start_map[shapeId]; orgIdx < flat_shape2org_node_start_map[shapeId+1]; ++orgIdx)
+            {
+                int org_nodeId = flat_shape2org_node_map[orgIdx];
+                int nodeId = original_node2node_map[org_nodeId];
+                int yOffset = org_node_y_offset[org_nodeId];
+
+                //Skip the carry chain node
+                if (nodeId == instId)
+                {
+                    continue;
+                }
+
+                int siteId = bestX*num_sites_y + bestY + yOffset;
+                int sIdx = site2addr_map[siteId];
+                int sdtopId = sIdx*SIG_IDX;
+                int sdlutId = sIdx*SLICE_CAPACITY;  
+                int sdckId = sIdx*CKSR_IN_CLB;
+                int sdceId = sIdx*CE_IN_CLB;
+
+                if (site_det_sig_idx[sIdx] == 0)
+                {
+                    sites_with_carry[sIdx] = 1;
+                    site_det_score[sIdx] = 100.0;
+                    site_det_siteId[sIdx] = siteId;
+                } 
+                    
+                int sg = node_z[nodeId];
+                int bleId = sg/BLE_CAPACITY;
+                int instAdd = nodeId;
+                site_det_sig[sdtopId + sg] = instAdd;
+                site_unavail_lut[sdlutId + bleId*BLE_CAPACITY] = 1;
+                site_unavail_lut[sdlutId + bleId*BLE_CAPACITY + 1] = 1;
+
+                if (node2fence_region_map[instAdd] == lutId)
+                {
+                    site_det_impl_lut[sdlutId + sg] = instAdd;
+                } else
+                {
+                    site_det_impl_ff[sdlutId + sg] = instAdd;
+                    int lh = sg / HALF_SLICE_CAPACITY;
+                    int oe = sg % BLE_CAPACITY;
+                    site_det_impl_cksr[sdckId + lh] = flop_ctrlSets[flop2ctrlSetId_map[instAdd]*3 + 1];
+                    site_det_impl_ce[sdceId + 2 * lh + oe] = flop_ctrlSets[flop2ctrlSetId_map[instAdd]*3 + 2];
+                }
+
+                inst_curr_detSite[instAdd] = siteId;
+                inst_curr_bestSite[instAdd] = siteId;
+                inst_curr_bestScoreImprov[instAdd] = 10000.0;
+
+                inst_next_detSite[instAdd] = siteId;
+                inst_next_bestSite[instAdd] = siteId;
+                inst_next_bestScoreImprov[instAdd] = 10000.0;
+
+                carry_chain_displacements[idx] += DREAMPLACE_STD_NAMESPACE::abs(pos_x[instAdd] - site_xy[siteId*2]) + 
+                    DREAMPLACE_STD_NAMESPACE::abs(pos_y[instAdd] - site_xy[siteId*2+1]);
+                
+                site_det_sig_idx[sIdx] += 1;
+            }
+            carry_chain_displacements[idx] /= elCount;
+            ++legalcc;
+        }
+    }
+
+    //DBG
+    if (legalcc != num_carry_chains)
+    {
+        std::cout << "ERROR: Only " << legalcc << " carry chains legalized out of " << num_carry_chains << " - CHECK!" << std::endl;
+    }
+    //DBG
+
+    return 0;
+}
+
+// legalize lutrams
+template <typename T>
+int legalizeLutramsLauncher(
+        const T* pos_x,
+        const T* pos_y,
+        const T* site_xy,
+        const T* lutram_locX,
+        const T* lutram_locY,
+        const int* lutram_indices,
+        const int* site2addr_map,
+        const int num_lutrams,
+        const int num_sites_y,
+        const int SIG_IDX,
+        const int SLICE_CAPACITY,
+        T* dist_moved,
+        T* site_det_score,
+        T* inst_curr_bestScoreImprov,
+        T* inst_next_bestScoreImprov,
+        int* site_det_siteId,
+        int* site_det_sig_idx,
+        int* site_det_sig,
+        int* site_det_impl_lut,
+        int* inst_curr_detSite,
+        int* inst_curr_bestSite,
+        int* inst_next_detSite,
+        int* inst_next_bestSite,
+        int* sites_with_lutram,
+        const int num_threads)
+{
+    //Assign mlabs to site locations provided
+    int chunk_size = DREAMPLACE_STD_NAMESPACE::max(int(num_lutrams/ num_threads / SLICE_CAPACITY), 1);
+#pragma omp parallel for num_threads(num_threads) schedule(dynamic, chunk_size)
+    for (int i = 0; i < num_lutrams; ++i)
+    {
+        const int instId = lutram_indices[i];
+
+        T xVal = lutram_locX[i];
+        T yVal = lutram_locY[i];
+
+        int siteId = xVal * num_sites_y + yVal;
+        int sIdx = site2addr_map[siteId];
+
+        dist_moved[i] = DREAMPLACE_STD_NAMESPACE::abs(pos_x[instId] - site_xy[siteId*2]) + 
+            DREAMPLACE_STD_NAMESPACE::abs(pos_y[instId] - site_xy[siteId*2+1]);
+
+        int sdtopId = sIdx*SIG_IDX;
+        int sdlutId = sIdx*SLICE_CAPACITY;
+
+        if (site_det_sig_idx[sIdx] == 0)
+        {
+            sites_with_lutram[sIdx] = 1;
+            site_det_score[sIdx] = 1000.0;
+            site_det_siteId[sIdx] = siteId;
+
+            site_det_sig_idx[sIdx] = 2*SLICE_CAPACITY;
+            site_det_sig[sdtopId] = instId;
+            site_det_impl_lut[sdlutId] = instId;
+
+            inst_curr_detSite[instId] = siteId;
+            inst_curr_bestSite[instId] = siteId;
+            inst_curr_bestScoreImprov[instId] = 10000.0;
+
+            inst_next_detSite[instId] = siteId;
+            inst_next_bestSite[instId] = siteId;
+            inst_next_bestScoreImprov[instId] = 10000.0;
+        } 
+        //DBG
+        else {
+            std::cout << "ERROR: Slice site not empty - LUTRAM " << instId << " not legalized at (" << xVal << ", " << yVal << ")" << std::endl;
+        }
+        //DBG
+    }
+
+    return 0;
+}
+
+// legalize lutrams
+template <typename T>
+int legalizeMuxshapesLauncher(
+        const T* pos_x,
+        const T* pos_y,
+        const T* site_xy,
+        const T* muxshape_locX,
+        const T* muxshape_locY,
+        const int* muxshape_indices,
+        const int* mux_type,
+        const int* site2addr_map,
+        const int* flat_shape2org_node_start_map,
+        const int* flat_shape2org_node_map,
+        const int* original_node2node_map,
+        const int* node2fence_region_map,
+        const int* node_z,
+        const int* flop2ctrlSetId_map,
+        const int* flop_ctrlSets,
+        const int num_muxshapes,
+        const int num_sites_y,
+        const int SIG_IDX,
+        const int SLICE_CAPACITY,
+        const int CKSR_IN_CLB,
+        const int CE_IN_CLB,
+        const int lutId,
+        const int ffId,
+        const int muxId,
+        T* dist_moved,
+        T* site_det_score,
+        T* inst_curr_bestScoreImprov,
+        T* inst_next_bestScoreImprov,
+        int* site_det_siteId,
+        int* site_det_sig_idx,
+        int* site_det_sig,
+        int* site_det_impl_lut,
+        int* site_det_impl_ff,
+        int* site_unavail_ff,
+        int* site_det_impl_cksr,
+        int* site_det_impl_ce,
+        int* inst_curr_detSite,
+        int* inst_curr_bestSite,
+        int* inst_next_detSite,
+        int* inst_next_bestSite,
+        int* sites_with_muxshape,
+        const int num_threads)
+{   
+    int HALF_SLICE_CAPACITY = int(SLICE_CAPACITY/2);
+    //Assign mlabs to site locations provided
+    int chunk_size = DREAMPLACE_STD_NAMESPACE::max(int(num_muxshapes/ num_threads / SLICE_CAPACITY), 1);
+#pragma omp parallel for num_threads(num_threads) schedule(dynamic, chunk_size)
+    for (int i = 0; i < num_muxshapes; ++i)
+    {
+        const int shapeId = muxshape_indices[i];
+
+        T xVal = muxshape_locX[i];
+        T yVal = muxshape_locY[i];
+
+        int siteId = xVal * num_sites_y + yVal;
+        int sIdx = site2addr_map[siteId];
+        
+        for(int orgIdx = flat_shape2org_node_start_map[shapeId]; orgIdx < flat_shape2org_node_start_map[shapeId+1]; ++orgIdx)
+        {
+            int org_nodeId = flat_shape2org_node_map[orgIdx];
+            int instId = original_node2node_map[org_nodeId];
+
+            dist_moved[i] += DREAMPLACE_STD_NAMESPACE::abs(pos_x[instId] - site_xy[siteId*2]) + 
+                DREAMPLACE_STD_NAMESPACE::abs(pos_y[instId] - site_xy[siteId*2+1]);
+
+            int sdtopId = sIdx*SIG_IDX;
+            int sdlutId = sIdx*SLICE_CAPACITY;
+            int sdckId = sIdx*CKSR_IN_CLB;
+            int sdceId = sIdx*CE_IN_CLB;
+
+            if (node2fence_region_map[instId] == muxId) 
+            {
+                int z_val = node_z[instId];
+                if (mux_type[instId] == 0){
+                    site_unavail_ff[sdlutId+z_val*4] = 1;
+                } else if (mux_type[instId] == 1){
+                    site_unavail_ff[sdlutId+z_val*8+2] = 1;
+                }
+                continue;
+            }
+
+            if (site_det_sig_idx[sIdx] == 0)
+            {
+                sites_with_muxshape[sIdx] = 1;
+                site_det_score[sIdx] = 1000.0;
+                site_det_siteId[sIdx] = siteId;
+
+                int sg = node_z[instId];
+
+                if (node2fence_region_map[instId] == lutId)
+                {   
+                    site_det_sig[sdtopId + sg] = instId;
+                    site_det_impl_lut[sdlutId + sg] = instId;
+                } else if (node2fence_region_map[instId] == ffId)
+                {
+                    site_det_impl_ff[sdlutId + sg] = instId;
+                    int lh = sg / HALF_SLICE_CAPACITY;
+                    int oe = sg % BLE_CAPACITY;
+                    site_det_sig[sdtopId + sg] = instId;
+                    site_det_impl_cksr[sdckId + lh] = flop_ctrlSets[flop2ctrlSetId_map[instId]*3 + 1];
+                    site_det_impl_ce[sdceId + 2 * lh + oe] = flop_ctrlSets[flop2ctrlSetId_map[instId]*3 + 2];
+                }
+
+                inst_curr_detSite[instId] = siteId;
+                inst_curr_bestSite[instId] = siteId;
+                inst_curr_bestScoreImprov[instId] = 10000.0;
+
+                inst_next_detSite[instId] = siteId;
+                inst_next_bestSite[instId] = siteId;
+                inst_next_bestScoreImprov[instId] = 10000.0;
+
+            } 
+            //DBG
+            else {
+                std::cout << "ERROR: Slice site not empty - MUXShape " << instId << " not legalized at (" << xVal << ", " << yVal << ")" << std::endl;
+            }
+            //DBG
+        }
+    }
+
+    return 0;
+}
 
 // initSiteNeighbours
 template <typename T>
@@ -1657,6 +2259,7 @@ int initSiteNeighbours(const T *pos_x,
                        const T *pos_y,
                        const T *wlPrecond,
                        const T *site_xy,
+                       const T* site_det_score,
                        const int *sorted_node_idx,
                        const int *node2fence_region_map,
                        const int *flat_node2precluster_map,
@@ -1665,6 +2268,14 @@ int initSiteNeighbours(const T *pos_x,
                        const int *spiral_accessor,
                        const int *site2addr_map,
                        const int *addr2site_map,
+                       const int *node2shape_map,
+                       const int *sites_with_lutram,
+                       const int *sites_with_carry,
+                       const int *sites_with_muxshape,
+                       const int lutId,
+                       const int ffId,
+                       const int sliceLId,
+                       const int sliceMId,
                        const int num_nodes,
                        const int num_sites_x,
                        const int num_sites_y,
@@ -1674,10 +2285,15 @@ int initSiteNeighbours(const T *pos_x,
                        const int spiralEnd,
                        const int maxList,
                        const int SCL_IDX,
+                       const int SIG_IDX,
+                       const int SLICE_CAPACITY,
+                       const int CKSR_IN_CLB,
+                       const int CE_IN_CLB,
                        const T nbrDistEnd,
                        const T nbrDistBeg,
                        const T nbrDistIncr,
                        const int numGroups,
+                       T* site_curr_scl_score,
                        int *site_nbrList,
                        int *site_nbrRanges,
                        int *site_nbrRanges_idx,
@@ -1685,9 +2301,21 @@ int initSiteNeighbours(const T *pos_x,
                        int *site_nbr_idx,
                        int *site_nbrGroup_idx,
                        int *site_det_siteId,
+                       int* site_det_sig,
+                       int* site_det_sig_idx,
+                       int* site_det_impl_lut,
+                       int* site_det_impl_ff,
+                       int* site_det_impl_cksr,
+                       int* site_det_impl_ce,
                        int *site_curr_scl_siteId,
                        int *site_curr_scl_validIdx,
-                       int *site_curr_scl_idx)
+                       int *site_curr_scl_idx,
+                       int* site_curr_scl_sig,
+                       int* site_curr_scl_sig_idx,
+                       int* site_curr_scl_impl_lut,
+                       int* site_curr_scl_impl_ff,
+                       int* site_curr_scl_impl_cksr,
+                       int* site_curr_scl_impl_ce)
 {
     std::vector<std::vector<std::pair<int, T> > > sites_nbrListMap(num_clb_sites);
     std::vector<int> site_nbrList_idx(num_clb_sites, 0);
@@ -1699,7 +2327,9 @@ int initSiteNeighbours(const T *pos_x,
         int prIdx = instId*3;
 
         //Only consider LUTs & FFs AND first precluster is the same as InstID
-        if (node2fence_region_map[instId] > 1 || flat_node2precluster_map[prIdx] != instId)
+        // if (node2fence_region_map[instId] > 1 || flat_node2precluster_map[prIdx] != instId)
+        if ((node2fence_region_map[instId] != lutId && node2fence_region_map[instId] != ffId) || 
+                flat_node2precluster_map[prIdx] != instId || node2shape_map[instId] != INVALID)
         {
             continue;
         }
@@ -1735,9 +2365,12 @@ int initSiteNeighbours(const T *pos_x,
             }
 
             int siteMapIdx = xVal * num_sites_y + yVal;
+            int siteId = site2addr_map[siteMapIdx];
             int stMpId = siteMapIdx*2;
 
-            if (node2fence_region_map[instId] < 2 && site_types[siteMapIdx] == 1) //Check site type and Inst type (CLB) matches
+            //Check site type and Inst type (CLB) matches
+            if ((node2fence_region_map[instId] == lutId || node2fence_region_map[instId] == ffId) &&
+                (site_types[siteMapIdx] == sliceLId || site_types[siteMapIdx] == sliceMId) && sites_with_lutram[siteId] == 0)
             {
                 T dist = DREAMPLACE_STD_NAMESPACE::abs(cenX - site_xy[stMpId]) + DREAMPLACE_STD_NAMESPACE::abs(cenY - site_xy[stMpId+1]);
                 if (dist < nbrDistEnd)
@@ -1793,6 +2426,7 @@ int initSiteNeighbours(const T *pos_x,
         int sNbrIdx = sIdx*maxList;
 
         int numNbrGroups = (site_nbrRanges_idx[sIdx] == 0) ? 0 : site_nbrRanges_idx[sIdx]-1;
+
         ////Assign site_nbr
         if (numNbrGroups > 0)
         {
@@ -1803,11 +2437,44 @@ int initSiteNeighbours(const T *pos_x,
             }
             site_nbrGroup_idx[sIdx] = 1;
         }
-        int sPQ = sIdx*SCL_IDX;
+        int sSCL = sIdx*SCL_IDX;
         site_det_siteId[sIdx] = addr2site_map[sIdx];
-        site_curr_scl_siteId[sPQ] = addr2site_map[sIdx];
-        site_curr_scl_validIdx[sPQ] = 1;
+        site_curr_scl_siteId[sSCL] = addr2site_map[sIdx];
+        site_curr_scl_validIdx[sSCL] = 1;
         ++site_curr_scl_idx[sIdx];
+
+        if (sites_with_carry[sIdx] == 1 || sites_with_lutram[sIdx] == 1 || sites_with_muxshape[sIdx] == 1)
+        {
+            int sdtopId = sIdx*SIG_IDX;
+            int sdlutId = sIdx*SLICE_CAPACITY;
+            int sdckId = sIdx*CKSR_IN_CLB;
+            int sdceId = sIdx*CE_IN_CLB;
+            int sclSigId = sSCL*SIG_IDX;
+            int scllutIdx = sSCL*SLICE_CAPACITY;
+            int sclckIdx = sSCL*CKSR_IN_CLB;
+            int sclceIdx = sSCL*CE_IN_CLB;
+            //Assign site_det to site_curr_scl
+            site_curr_scl_sig_idx[sSCL] = site_det_sig_idx[sIdx];
+            site_curr_scl_score[sSCL] = site_det_score[sIdx];
+
+            for(int sg = 0; sg < site_det_sig_idx[sIdx]; ++sg)
+            {
+                site_curr_scl_sig[sclSigId + sg] = site_det_sig[sdtopId + sg];
+            }
+            for(int sg = 0; sg < SLICE_CAPACITY; ++sg)
+            {
+                site_curr_scl_impl_lut[scllutIdx + sg] = site_det_impl_lut[sdlutId + sg];
+                site_curr_scl_impl_ff[scllutIdx + sg] = site_det_impl_ff[sdlutId + sg];
+            }
+            for(int sg = 0; sg < CKSR_IN_CLB; ++sg)
+            {
+                site_curr_scl_impl_cksr[sclckIdx + sg] = site_det_impl_cksr[sdckId + sg];
+            }
+            for(int sg = 0; sg < CE_IN_CLB; ++sg)
+            {
+                site_curr_scl_impl_ce[sclceIdx + sg] = site_det_impl_ce[sdceId + sg];
+            }
+        }
     }
     return 0;
 }
@@ -1841,6 +2508,11 @@ int runDLIteration(const T* pos_x,
                    const int* sorted_net_map,
                    const int* flat_node2prclstrCount,
                    const int* flat_node2precluster_map,
+                   const int* node2shape_map,
+                   const int* node_z,
+                   const int* sites_with_lutram,
+                   const int* sites_with_carry,
+                   const int* sites_with_muxshape,
                    const int* site_nbrList,
                    const int* site_nbrRanges,
                    const int* site_nbrRanges_idx,
@@ -1850,7 +2522,7 @@ int runDLIteration(const T* pos_x,
                    const int* node_names,
                    const int num_clb_sites,
                    const int minStableIter,
-                   const int maxList ,
+                   const int maxList,
                    const int HALF_SLICE_CAPACITY,
                    const int NUM_BLE_PER_SLICE,
                    const int minNeighbors,
@@ -1863,6 +2535,8 @@ int runDLIteration(const T* pos_x,
                    const T timing_alpha,
                    const T timing_beta,
                    const T extNetCountWt,
+                   const int lutId,
+                   const int ffId,
                    const int CKSR_IN_CLB,
                    const int CE_IN_CLB,
                    const int SCL_IDX,
@@ -1921,7 +2595,9 @@ int runDLIteration(const T* pos_x,
                    int* site_det_sig_idx,
                    int* site_det_sig,
                    int* site_det_impl_lut,
+                   int* site_unavail_lut,
                    int* site_det_impl_ff,
+                   int* site_unavail_ff,
                    int* site_det_impl_cksr,
                    int* site_det_impl_ce,
                    int* inst_curr_detSite,
@@ -1936,6 +2612,8 @@ int runDLIteration(const T* pos_x,
 #pragma omp parallel for num_threads(num_threads) schedule(dynamic, chunk_size)
     for(int sIdx = 0; sIdx < num_clb_sites; ++sIdx)
     {
+        if(sites_with_lutram[sIdx] == 1) continue;
+        
         int siteId = addr2site_map[sIdx];
         int numNbrGroups = (site_nbrRanges_idx[sIdx] == 0) ? 0 : site_nbrRanges_idx[sIdx]-1;
         int sPQ(sIdx*PQ_IDX), sSCL(sIdx*SCL_IDX), sNbrIdx(sIdx*maxList);
@@ -1948,6 +2626,18 @@ int runDLIteration(const T* pos_x,
         int scllutIdx = sSCL*SLICE_CAPACITY;
         int sclckIdx = sSCL*CKSR_IN_CLB;
         int sclceIdx = sSCL*CE_IN_CLB;
+
+        bool siteHasSpecialNode = (sites_with_carry[sIdx] == 1 || sites_with_muxshape[sIdx] == 1);
+        int unavail_lut[SLICE_CAPACITY];
+        int unavail_ff[SLICE_CAPACITY];
+
+        for(int sg = 0; sg < SLICE_CAPACITY; ++sg)
+        {
+            unavail_lut[sg] = site_unavail_lut[sdlutId + sg];
+            unavail_ff[sg] = site_unavail_ff[sdlutId + sg];
+        }
+
+        // if (sites_with_carry[sIdx] == 1) continue;
 
         //(a)Try to commit Top candidates
         int commitTopCandidate(INVALID);
@@ -2008,8 +2698,8 @@ int runDLIteration(const T* pos_x,
             }
 
             //Remove Incompatible Neighbors
-            remove_incompatible_neighbors(node2fence_region_map, lut_type, flat_node2pin_start_map, flat_node2pin_map, node2pincount, net2pincount, pin2net_map, pin_typeIds, sorted_net_map, flat_node2prclstrCount, flat_node2precluster_map, flop2ctrlSetId_map, flop_ctrlSets, site_det_impl_lut, site_det_impl_ff, site_det_impl_cksr, site_det_impl_ce, site_det_sig, 
-                    site_det_sig_idx, sIdx, sNbrIdx, HALF_SLICE_CAPACITY, NUM_BLE_PER_SLICE, SIG_IDX, CKSR_IN_CLB, CE_IN_CLB, site_nbr_idx, site_nbr);
+            remove_incompatible_neighbors(node2fence_region_map, lut_type, flat_node2pin_start_map, flat_node2pin_map, node2pincount, net2pincount, pin2net_map, pin_typeIds, sorted_net_map, flat_node2prclstrCount, flat_node2precluster_map, flop2ctrlSetId_map, flop_ctrlSets, site_det_impl_lut, site_unavail_lut, site_det_impl_ff, site_unavail_ff, site_det_impl_cksr, site_det_impl_ce, site_det_sig, 
+                    site_det_sig_idx, sites_with_carry, sites_with_muxshape, node2shape_map, node_z, sIdx, sNbrIdx, HALF_SLICE_CAPACITY, NUM_BLE_PER_SLICE, SIG_IDX, CKSR_IN_CLB, CE_IN_CLB, lutId, ffId, site_nbr_idx, site_nbr);
 
             //Clear pq and make scl only contain the committed candidate
             //int sclCount(0);
@@ -2247,8 +2937,8 @@ int runDLIteration(const T* pos_x,
                 int instId = site_nbrList[sNbrIdx + aNIdx];
 
                 if (inst_curr_detSite[instId] == INVALID && 
-                        is_inst_in_cand_feasible(node2fence_region_map, lut_type, flat_node2pin_start_map, flat_node2pin_map, node2pincount, net2pincount, pin2net_map, pin_typeIds, sorted_net_map, flat_node2prclstrCount, flat_node2precluster_map, flop2ctrlSetId_map, flop_ctrlSets, site_det_impl_lut, site_det_impl_ff, site_det_impl_cksr, site_det_impl_ce, 
-                            sIdx, instId, HALF_SLICE_CAPACITY, NUM_BLE_PER_SLICE, CKSR_IN_CLB, CE_IN_CLB))
+                        is_inst_in_cand_feasible(node2fence_region_map, lut_type, flat_node2pin_start_map, flat_node2pin_map, node2pincount, net2pincount, pin2net_map, pin_typeIds, sorted_net_map, flat_node2prclstrCount, flat_node2precluster_map, flop2ctrlSetId_map, flop_ctrlSets, site_det_impl_lut, site_unavail_lut, site_det_impl_ff, site_unavail_ff, site_det_impl_cksr, site_det_impl_ce,
+                            sites_with_carry, sites_with_muxshape, node2shape_map, node_z, sIdx, instId, HALF_SLICE_CAPACITY, NUM_BLE_PER_SLICE, CKSR_IN_CLB, CE_IN_CLB, lutId, ffId))
                 {
                     site_nbr[sNbrIdx + site_nbr_idx[sIdx]] = site_nbrList[sNbrIdx + aNIdx]; 
                     ++site_nbr_idx[sIdx];
@@ -2314,7 +3004,7 @@ int runDLIteration(const T* pos_x,
 
                         if (add_inst_to_sig(flat_node2prclstrCount[instId], flat_node2precluster_map, sorted_node_map, instPcl, nwCand.sig, nwCand.sigIdx) && 
                                 !check_sig_in_site_next_pq_sig(nwCand.sig, nwCand.sigIdx, sPQ, PQ_IDX, site_next_pq_validIdx, site_next_pq_sig, site_next_pq_sig_idx, SIG_IDX) && 
-                                add_inst_to_cand_impl(lut_type, flat_node2pin_start_map, flat_node2pin_map, node2pincount, net2pincount, pin2net_map, pin_typeIds, sorted_net_map, flat_node2prclstrCount, flat_node2precluster_map, flop2ctrlSetId_map, node2fence_region_map, flop_ctrlSets, instId, CKSR_IN_CLB, CE_IN_CLB, HALF_SLICE_CAPACITY, NUM_BLE_PER_SLICE, nwCand.impl_lut, nwCand.impl_ff, nwCand.impl_cksr, nwCand.impl_ce))
+                                add_inst_to_cand_impl(lut_type, flat_node2pin_start_map, flat_node2pin_map, node2pincount, net2pincount, pin2net_map, pin_typeIds, sorted_net_map, flat_node2prclstrCount, flat_node2precluster_map, flop2ctrlSetId_map, node2fence_region_map, flop_ctrlSets, node2shape_map, node_z, unavail_lut, unavail_ff, siteHasSpecialNode, instId, lutId, ffId, CKSR_IN_CLB, CE_IN_CLB, HALF_SLICE_CAPACITY, NUM_BLE_PER_SLICE, nwCand.impl_lut, nwCand.impl_ff, nwCand.impl_cksr, nwCand.impl_ce))
                         {
                             compute_candidate_score(pos_x, pos_y, pin_offset_x, pin_offset_y, net_bbox, net_weights, tnet_weights, net_pinIdArrayX, net_pinIdArrayY, net2tnet_start, flat_net2pin_start_map, flat_tnet2pin_map, flat_node2pin_start_map, flat_node2pin_map, sorted_net_map, pin2net_map, snkpin2tnet_map, pin2node_map, net2pincount, site_xy, node_names, xWirelenWt, yWirelenWt, extNetCountWt, wirelenImprovWt, timing_alpha, timing_beta, netShareScoreMaxNetDegree, wlScoreMaxNetDegree, nwCand.sig, nwCand.siteId, nwCand.sigIdx, nwCand.score);
                             int nxtId(INVALID);
@@ -2573,6 +3263,8 @@ int runDLSynchronize(
                       const int SCL_IDX,
                       const int PQ_IDX,
                       const int SIG_IDX,
+                      const int lutId,
+                      const int ffId,
                       const int num_nodes,
                       const int num_threads,
                       int* site_nbrGroup_idx,
@@ -2832,7 +3524,7 @@ int runDLSynchronize(
     #pragma omp parallel for num_threads(num_threads) schedule(dynamic, chunk_size)
     for(int nIdx = 0; nIdx < num_nodes; ++nIdx)
     {
-        if (node2fence_region_map[nIdx] < 2 && inst_curr_detSite[nIdx] == INVALID) //Only LUT/FF
+        if ((node2fence_region_map[nIdx] == lutId || node2fence_region_map[nIdx] == ffId) && inst_curr_detSite[nIdx] == INVALID) //Only LUT/FF
         {
             //inst.curr = inst.next
             inst_curr_detSite[nIdx] = inst_next_detSite[nIdx];
@@ -2883,6 +3575,11 @@ int ripUp_Greedy_LG(
         const int* flat_tnet2pin_map,
         int* flat_node2prclstrCount,
         int* flat_node2precluster_map,
+        const int* node2shape_map,
+        const int* node_z,
+        const int* sites_with_lutram,
+        const int* sites_with_carry,
+        const int* sites_with_muxshape,
         const int* sorted_node_map,
         const int* sorted_node_idx,
         const int* sorted_net_map,
@@ -2902,6 +3599,10 @@ int ripUp_Greedy_LG(
         const int num_clb_sites,
         const int spiralBegin,
         const int spiralEnd,
+        const int lutId,
+        const int ffId,
+        const int sliceLId,
+        const int sliceMId,
         const int CKSR_IN_CLB,
         const int CE_IN_CLB,
         const int HALF_SLICE_CAPACITY,
@@ -2915,7 +3616,9 @@ int ripUp_Greedy_LG(
         int* site_det_sig_idx,
         int* site_det_sig,
         int* site_det_impl_lut,
+        int* site_unavail_lut,
         int* site_det_impl_ff,
+        int* site_unavail_ff,
         int* site_det_impl_cksr,
         int* site_det_impl_ce,
         int* site_det_siteId,
@@ -2946,15 +3649,21 @@ int ripUp_Greedy_LG(
             for (int y = yLo; y <= yHi; ++y)
             {
                 int siteId = x*num_sites_y + y;
-                if (node2fence_region_map[instId] < 2 && site_types[siteId] == 1)
+                int sIdx = site2addr_map[siteId];
+
+                if((node2fence_region_map[instId] == lutId || node2fence_region_map[instId] == ffId) && (site_types[siteId] == sliceLId || site_types[siteId] == sliceMId) && 
+                sites_with_lutram[sIdx] != 1 && sites_with_carry[sIdx] != 1 && sites_with_muxshape[sIdx] != 1)
                 {
                     int slocId = siteId*2;
+                    bool siteHasSpecialNode = 0;
+                    int unavail_lut[SLICE_CAPACITY] = {0};
+                    int unavail_ff[SLICE_CAPACITY] = {0};
+                    
                     T dist = DREAMPLACE_STD_NAMESPACE::abs(pos_x[instId] - site_xy[slocId]) + DREAMPLACE_STD_NAMESPACE::abs(pos_y[instId] - site_xy[slocId+1]);
                     if (dist < nbrDistEnd)
                     {
                         RipUpCand<T> rpCand;
                         rpCand.reset();
-                        int sIdx = site2addr_map[siteId];
 
                         rpCand.siteId = siteId;
                         rpCand.cand.score = site_det_score[sIdx];
@@ -2987,7 +3696,7 @@ int ripUp_Greedy_LG(
                         }
                         ///
 
-                        rpCand.legal = add_inst_to_cand_impl(lut_type, flat_node2pin_start_map, flat_node2pin_map, node2pincount, net2pincount, pin2net_map, pin_typeIds, sorted_net_map, flat_node2prclstrCount, flat_node2precluster_map, flop2ctrlSetId_map, node2fence_region_map, flop_ctrlSets, instId, CKSR_IN_CLB, CE_IN_CLB, HALF_SLICE_CAPACITY, NUM_BLE_PER_SLICE, rpCand.cand.impl_lut, rpCand.cand.impl_ff, rpCand.cand.impl_cksr, rpCand.cand.impl_ce);
+                        rpCand.legal = add_inst_to_cand_impl(lut_type, flat_node2pin_start_map, flat_node2pin_map, node2pincount, net2pincount, pin2net_map, pin_typeIds, sorted_net_map, flat_node2prclstrCount, flat_node2precluster_map, flop2ctrlSetId_map, node2fence_region_map, flop_ctrlSets, node2shape_map, node_z, unavail_lut, unavail_ff, siteHasSpecialNode, instId, lutId, ffId, CKSR_IN_CLB, CE_IN_CLB, HALF_SLICE_CAPACITY, NUM_BLE_PER_SLICE, rpCand.cand.impl_lut, rpCand.cand.impl_ff, rpCand.cand.impl_cksr, rpCand.cand.impl_ce);
 
                         if (rpCand.legal)
                         {
@@ -3044,6 +3753,9 @@ int ripUp_Greedy_LG(
         {
             int stId = ripUpCd.siteId;
             int stAdId = site2addr_map[stId];
+            bool candSiteHasSpecialNode = (sites_with_carry[stAdId] == 1 || sites_with_muxshape[stAdId] == 1);
+            int unavail_lut[SLICE_CAPACITY] = {0};
+            int unavail_ff[SLICE_CAPACITY] = {0};
 
             int sdSGId = stAdId*SIG_IDX;
             int sdLutId = stAdId*SLICE_CAPACITY;
@@ -3141,7 +3853,8 @@ int ripUp_Greedy_LG(
                             flat_node2pin_map, node2pincount, net2pincount, pin2net_map,
                             pin_typeIds, sorted_net_map, flat_node2prclstrCount,
                             flat_node2precluster_map, flop2ctrlSetId_map,
-                            node2fence_region_map, flop_ctrlSets, instId,
+                            node2fence_region_map, flop_ctrlSets, node2shape_map, node_z,
+                            unavail_lut, unavail_ff, candSiteHasSpecialNode, instId, lutId, ffId,
                             CKSR_IN_CLB, CE_IN_CLB, HALF_SLICE_CAPACITY,
                             NUM_BLE_PER_SLICE, tCand.impl_lut, tCand.impl_ff,
                             tCand.impl_cksr, tCand.impl_ce))
@@ -3234,6 +3947,10 @@ int ripUp_Greedy_LG(
                         int siteMapId = xVal * num_sites_y + yVal;
                         int siteMapAIdx = site2addr_map[siteMapId];
 
+                        bool NbrSiteHasSpecialNode = (sites_with_carry[siteMapAIdx] == 1 || sites_with_muxshape[siteMapAIdx] == 1);
+
+                        if (NbrSiteHasSpecialNode) continue;
+
                         //Check within bounds
                         if (xVal < 0 || xVal >= num_sites_x || yVal < 0 || yVal >= num_sites_y)
                         {
@@ -3269,8 +3986,8 @@ int ripUp_Greedy_LG(
                         }
                         /////
 
-                        if (site_types[siteMapId] == 1 && node2fence_region_map[ruInst] < 2 && 
-                                add_inst_to_cand_impl(lut_type, flat_node2pin_start_map, flat_node2pin_map, node2pincount, net2pincount, pin2net_map, pin_typeIds, sorted_net_map, flat_node2prclstrCount, flat_node2precluster_map, flop2ctrlSetId_map, node2fence_region_map, flop_ctrlSets, ruInst, CKSR_IN_CLB, CE_IN_CLB, HALF_SLICE_CAPACITY, NUM_BLE_PER_SLICE, cand.impl_lut, cand.impl_ff, cand.impl_cksr, cand.impl_ce) && 
+                        if ((site_types[siteMapId] == sliceLId || site_types[siteMapId] == sliceMId) && (node2fence_region_map[ruInst] == lutId || node2fence_region_map[ruInst] == ffId) && 
+                                add_inst_to_cand_impl(lut_type, flat_node2pin_start_map, flat_node2pin_map, node2pincount, net2pincount, pin2net_map, pin_typeIds, sorted_net_map, flat_node2prclstrCount, flat_node2precluster_map, flop2ctrlSetId_map, node2fence_region_map, flop_ctrlSets, node2shape_map, node_z, unavail_lut, unavail_ff, NbrSiteHasSpecialNode, ruInst, lutId, ffId, CKSR_IN_CLB, CE_IN_CLB, HALF_SLICE_CAPACITY, NUM_BLE_PER_SLICE, cand.impl_lut, cand.impl_ff, cand.impl_cksr, cand.impl_ce) && 
                                 add_inst_to_sig(flat_node2prclstrCount[ruInst], flat_node2precluster_map, sorted_node_map, ruInst*3, cand.sig, cand.sigIdx))
                         {
                             // Adding the instance to the site is legal
@@ -3455,6 +4172,11 @@ int ripUp_Greedy_LG(
                 int yVal = cenY + spiral_accessor[saIdx + 1]; 
                 int siteMapIdx = xVal * num_sites_y + yVal;
                 int siteMapAIdx = site2addr_map[siteMapIdx];
+                bool siteHasSpecialNode = (sites_with_carry[siteMapAIdx] == 1 || sites_with_muxshape[siteMapAIdx] == 1);
+                
+                int unavail_lut[SLICE_CAPACITY] = {0};
+                int unavail_ff[SLICE_CAPACITY] = {0};
+
 
                 //Check within bounds
                 if (xVal < 0 || xVal >= num_sites_x || yVal < 0 || yVal >= num_sites_y)
@@ -3478,6 +4200,8 @@ int ripUp_Greedy_LG(
                 {
                     cand.impl_lut[sg] = site_det_impl_lut[sdlutId + sg];
                     cand.impl_ff[sg] = site_det_impl_ff[sdlutId + sg];
+                    unavail_lut[sg] = site_unavail_lut[sdlutId + sg];
+                    unavail_ff[sg] = site_unavail_ff[sdlutId + sg];
                 }
                 for(int sg = 0; sg < CKSR_IN_CLB; ++sg)
                 {
@@ -3489,8 +4213,8 @@ int ripUp_Greedy_LG(
                 }
                 /////
 
-                if (site_types[siteMapIdx] == 1 && node2fence_region_map[instId] < 2 && 
-                        add_inst_to_cand_impl(lut_type, flat_node2pin_start_map, flat_node2pin_map, node2pincount, net2pincount, pin2net_map, pin_typeIds, sorted_net_map, flat_node2prclstrCount, flat_node2precluster_map, flop2ctrlSetId_map, node2fence_region_map, flop_ctrlSets, instId, CKSR_IN_CLB, CE_IN_CLB, HALF_SLICE_CAPACITY, NUM_BLE_PER_SLICE, cand.impl_lut, cand.impl_ff, cand.impl_cksr, cand.impl_ce) && 
+                if ((node2fence_region_map[instId] == lutId || node2fence_region_map[instId] == ffId) && (site_types[siteMapIdx] == sliceLId || site_types[siteMapIdx] == sliceMId) &&
+                        add_inst_to_cand_impl(lut_type, flat_node2pin_start_map, flat_node2pin_map, node2pincount, net2pincount, pin2net_map, pin_typeIds, sorted_net_map, flat_node2prclstrCount, flat_node2precluster_map, flop2ctrlSetId_map, node2fence_region_map, flop_ctrlSets, node2shape_map, node_z, unavail_lut, unavail_ff, siteHasSpecialNode, instId, lutId, ffId, CKSR_IN_CLB, CE_IN_CLB, HALF_SLICE_CAPACITY, NUM_BLE_PER_SLICE, cand.impl_lut, cand.impl_ff, cand.impl_cksr, cand.impl_ce) && 
                         add_inst_to_sig(flat_node2prclstrCount[instId], flat_node2precluster_map, sorted_node_map, instPcl, cand.sig, cand.sigIdx))
                 {
                     // Adding the instance to the site is legal
@@ -3565,7 +4289,17 @@ int ripUp_Greedy_LG(
         if (ripupLegalizeInst != 1 && greedyLegalizeInst != 1)
         {
             //std::cout << "RipUP & Greedy LG failed for inst: " << instId << std::endl;
-            dreamplacePrint(kERROR, "unable to legalize inst_%u \n", node_names[instId]);
+            // dreamplacePrint(kERROR, "unable to legalize inst_%u \n", node_names[instId]);
+            if (node2fence_region_map[instId] == lutId)
+            {
+                dreamplacePrint(kERROR, "unable to legalize LUT inst_%u \n", node_names[instId]);
+            } else if (node2fence_region_map[instId] == ffId)
+            {
+                dreamplacePrint(kERROR, "unable to legalize FF inst_%u \n", node_names[instId]);
+            } else
+            {
+                dreamplacePrint(kERROR, "unable to legalize inst_%u \n", node_names[instId]);
+            }
         }
     }
     //std::chrono::steady_clock::time_point pt4= std::chrono::steady_clock::now();
@@ -3574,863 +4308,879 @@ int ripUp_Greedy_LG(
     return 0;
 }
 
-// DBG
-//run ripup legalization
-template <typename T>
-int ripUp_LG(
-        const T* pos_x,
-        const T* pos_y,
-        const T* pin_offset_x,
-        const T* pin_offset_y,
-        const T* net_weights,
-        const T* tnet_weights,
-        const T* net_bbox,
-        const T* inst_areas,
-        const T* wlPrecond,
-        const T* site_xy,
-        const int* net_pinIdArrayX,
-        const int* net_pinIdArrayY,
-        const int* spiral_accessor,
-        const int* node2fence_region_map,
-        const int* lut_type,
-        const int* site_types,
-        const int* node2pincount,
-        const int* net2pincount,
-        const int* pin2net_map,
-        const int* snkpin2tnet_map,
-        const int* pin2node_map,
-        const int* pin_typeIds,
-        const int* flop2ctrlSetId_map,
-        const int* flop_ctrlSets,
-        const int* flat_node2pin_start_map,
-        const int* flat_node2pin_map,
-        const int* net2tnet_start,
-        const int* flat_net2pin_start_map,
-        const int* flat_tnet2pin_map,
-        int* flat_node2prclstrCount,
-        int* flat_node2precluster_map,
-        const int* sorted_node_map,
-        const int* sorted_node_idx,
-        const int* sorted_net_map,
-        const int* site2addr_map,
-        const int* node_names,
-        const T nbrDistEnd,
-        const T xWirelenWt,
-        const T yWirelenWt,
-        const T extNetCountWt,
-        const T wirelenImprovWt,
-        const T timing_alpha,
-        const T timing_beta,
-        const int num_nodes,
-        const int num_sites_x,
-        const int num_sites_y,
-        const int spiralBegin,
-        const int CKSR_IN_CLB,
-        const int CE_IN_CLB,
-        const int HALF_SLICE_CAPACITY,
-        const int NUM_BLE_PER_SLICE,
-        const int netShareScoreMaxNetDegree,
-        const int wlScoreMaxNetDegree,
-        const int ripupExpansion,
-        const int SIG_IDX,
-        int* inst_curr_detSite,
-        int* site_det_sig_idx,
-        int* site_det_sig,
-        int* site_det_impl_lut,
-        int* site_det_impl_ff,
-        int* site_det_impl_cksr,
-        int* site_det_impl_ce,
-        int* site_det_siteId,
-        T* site_det_score
-        )
-{
-    //std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
-    ////DBG
-
-
-    int maxRad = DREAMPLACE_STD_NAMESPACE::max(num_sites_x, num_sites_y);
-    for (int i = 0; i < num_nodes; ++i)
-    {
-        const int instId = sorted_node_idx[i]; //Remaining insts sorted based on decreasing area
-        if (inst_curr_detSite[instId] != INVALID) continue;
-
-        int instPcl = instId*3;
-
-        //RipUpCandidates
-        std::vector<RipUpCand<T> > ripUpCandidates;
-
-        int xLo = DREAMPLACE_STD_NAMESPACE::max(pos_x[instId] - nbrDistEnd, T(0));
-        int yLo = DREAMPLACE_STD_NAMESPACE::max(pos_y[instId] - nbrDistEnd, T(0));
-        int xHi = DREAMPLACE_STD_NAMESPACE::min(pos_x[instId] + nbrDistEnd, T(num_sites_x - 1));
-        int yHi = DREAMPLACE_STD_NAMESPACE::min(pos_y[instId] + nbrDistEnd, T(num_sites_y - 1));
-
-        for (int x = xLo; x <= xHi; ++x)
-        {
-            for (int y = yLo; y <= yHi; ++y)
-            {
-                int siteId = x*num_sites_y + y;
-                //if (site_types[siteId] == 1)
-                if (node2fence_region_map[instId] < 2 && site_types[siteId] == 1)
-                {
-                    int slocId = siteId*2;
-                    T dist = DREAMPLACE_STD_NAMESPACE::abs(pos_x[instId] - site_xy[slocId]) + DREAMPLACE_STD_NAMESPACE::abs(pos_y[instId] - site_xy[slocId+1]);
-                    if (dist < nbrDistEnd)
-                    {
-                        RipUpCand<T> rpCand;
-                        int sIdx = site2addr_map[siteId];
-
-                        rpCand.siteId = siteId;
-                        rpCand.cand.score = site_det_score[sIdx];
-                        rpCand.cand.siteId = site_det_siteId[sIdx];
-
-                        rpCand.cand.sigIdx = site_det_sig_idx[sIdx];
-
-                        ///
-                        int sdSGId = sIdx*SIG_IDX;
-                        int sdLutId = sIdx*SLICE_CAPACITY;
-                        int sdCKId = sIdx*CKSR_IN_CLB;
-                        int sdCEId = sIdx*CE_IN_CLB;
-
-                        for (int sg = 0; sg < site_det_sig_idx[sIdx]; ++sg)
-                        {
-                            rpCand.cand.sig[sg] = site_det_sig[sdSGId + sg];
-                        }
-                        for (int sg = 0; sg < SLICE_CAPACITY; ++sg)
-                        {
-                            rpCand.cand.impl_lut[sg] = site_det_impl_lut[sdLutId + sg];
-                            rpCand.cand.impl_ff[sg] = site_det_impl_ff[sdLutId + sg];
-                        }
-                        for (int sg = 0; sg < CKSR_IN_CLB; ++sg)
-                        {
-                            rpCand.cand.impl_cksr[sg] = site_det_impl_cksr[sdCKId + sg];
-                        }
-                        for (int sg = 0; sg < CE_IN_CLB; ++sg)
-                        {
-                            rpCand.cand.impl_ce[sg] = site_det_impl_ce[sdCEId + sg];
-                        }
-                        ///
-
-                        rpCand.legal = add_inst_to_cand_impl(lut_type, flat_node2pin_start_map, flat_node2pin_map, node2pincount, net2pincount, pin2net_map, pin_typeIds, sorted_net_map, flat_node2prclstrCount, flat_node2precluster_map, flop2ctrlSetId_map, node2fence_region_map, flop_ctrlSets, instId, CKSR_IN_CLB, CE_IN_CLB, HALF_SLICE_CAPACITY, NUM_BLE_PER_SLICE, rpCand.cand.impl_lut, rpCand.cand.impl_ff, rpCand.cand.impl_cksr, rpCand.cand.impl_ce);
-
-                        if (rpCand.legal)
-                        {
-                            ///
-                            bool addInstToSig = add_inst_to_sig(flat_node2prclstrCount[instId], flat_node2precluster_map, sorted_node_map, instPcl, rpCand.cand.sig, rpCand.cand.sigIdx);
-                            //DBG
-                            if (!addInstToSig)
-                            {
-                                std::cout << "ERROR: Unable to add inst_" << node_names[instId] << " to sig" << std::endl;
-                            }
-                            //DBG
-
-                            compute_candidate_score(pos_x, pos_y, pin_offset_x, pin_offset_y, net_bbox, net_weights, tnet_weights, net_pinIdArrayX, net_pinIdArrayY, net2tnet_start, flat_net2pin_start_map, flat_tnet2pin_map, flat_node2pin_start_map, flat_node2pin_map, sorted_net_map, pin2net_map, snkpin2tnet_map, pin2node_map, net2pincount, site_xy, node_names, xWirelenWt, yWirelenWt, extNetCountWt, wirelenImprovWt, timing_alpha, timing_beta, netShareScoreMaxNetDegree, wlScoreMaxNetDegree, rpCand.cand.sig, rpCand.cand.siteId, rpCand.cand.sigIdx, rpCand.cand.score);
-
-                            rpCand.score = rpCand.cand.score - site_det_score[sIdx];
-
-                        } else
-                        {
-                            T area = inst_areas[site_det_sig[sdSGId]];
-                            for (int sInst = 1; sInst < site_det_sig_idx[sIdx]; ++sInst)
-                            {
-                                area += inst_areas[site_det_sig[sdSGId + sInst]];
-                            }
-                            T wirelenImprov(0.0);
-                            int pStart = flat_node2pin_start_map[instId]; 
-                            int pEnd =  flat_node2pin_start_map[instId+1];
-                            for (int pId = pStart; pId < pEnd; ++pId)
-                            {
-                                int pinId = flat_node2pin_map[pId];
-                                int netId = pin2net_map[pinId];
-                                if (net2pincount[netId] <= wlScoreMaxNetDegree)
-                                {
-                                    compute_wirelength_improv(pos_x, pos_y, net_bbox, pin_offset_x, pin_offset_y, net_weights, net_pinIdArrayX, net_pinIdArrayY, flat_net2pin_start_map, pin2node_map, net2pincount, site_xy, xWirelenWt, yWirelenWt, netId, siteId, std::vector<int>{pinId}, wirelenImprov);
-                                }
-                            }
-                            rpCand.score = wirelenImprovWt * wirelenImprov - site_det_score[sIdx] - area;
-                        }
-                        ripUpCandidates.emplace_back(rpCand);
-                    }
-                }
-            }
-        }
-
-        //Sort ripup candidate indices based on legal and score
-        std::sort(ripUpCandidates.begin(), ripUpCandidates.end());
-
-        int ripupLegalizeInst(INVALID);
-
-        for (const auto &ripUpCd : ripUpCandidates)
-        {
-            int stId = ripUpCd.siteId;
-            int stAdId = site2addr_map[stId];
-
-            int sdSGId = stAdId*SIG_IDX;
-            int sdLutId = stAdId*SLICE_CAPACITY;
-            int sdCKId = stAdId*CKSR_IN_CLB;
-            int sdCEId = stAdId*CE_IN_CLB;
-
-            if (ripUpCd.legal)
-            {
-                site_det_score[stAdId] = ripUpCd.cand.score;
-                site_det_siteId[stAdId] = ripUpCd.cand.siteId;
-                site_det_sig_idx[stAdId] = ripUpCd.cand.sigIdx;
-
-                for (auto sg = 0; sg < ripUpCd.cand.sigIdx; ++sg)
-                {
-                    site_det_sig[sdSGId + sg] = ripUpCd.cand.sig[sg];
-                }
-                for (int sg = 0; sg < SLICE_CAPACITY; ++sg)
-                {
-                    site_det_impl_lut[sdLutId + sg] = ripUpCd.cand.impl_lut[sg];
-                    site_det_impl_ff[sdLutId + sg] = ripUpCd.cand.impl_ff[sg];
-                }
-                for (int sg = 0; sg < CKSR_IN_CLB; ++sg)
-                {
-                    site_det_impl_cksr[sdCKId + sg] = ripUpCd.cand.impl_cksr[sg];
-                }
-                for (int sg = 0; sg < CE_IN_CLB; ++sg)
-                {
-                    site_det_impl_ce[sdCEId + sg] = ripUpCd.cand.impl_ce[sg];
-                }
-                ///
-                for (int idx = 0; idx < flat_node2prclstrCount[instId]; ++idx)
-                {
-                    int clInstId = flat_node2precluster_map[instPcl + idx];
-                    inst_curr_detSite[clInstId] = ripUpCd.siteId;
-                }
-
-                ripupLegalizeInst = 1;
-            } else
-            {
-                int ripupSiteLegalizeInst(INVALID);
-                std::vector<Candidate<T> > dets;
-                dets.reserve(site_det_sig_idx[stAdId]);
-
-                Candidate<T> tCand;
-                tCand.reset();
-                tCand.score = site_det_score[stAdId];
-                tCand.siteId = site_det_siteId[stAdId];
-                tCand.sigIdx = site_det_sig_idx[stAdId];
-
-                for(int sg = 0; sg < tCand.sigIdx; ++sg)
-                {
-                    tCand.sig[sg] = site_det_sig[sdSGId + sg];
-                }
-                for(int sg = 0; sg < SLICE_CAPACITY; ++sg)
-                {
-                    tCand.impl_lut[sg] = site_det_impl_lut[sdLutId+ sg];
-                    tCand.impl_ff[sg] = site_det_impl_ff[sdLutId+ sg];
-                }
-                for(int sg = 0; sg < CKSR_IN_CLB; ++sg)
-                {
-                    tCand.impl_cksr[sg] = site_det_impl_cksr[sdCKId+ sg];
-                }
-                for(int sg = 0; sg < CE_IN_CLB; ++sg)
-                {
-                    tCand.impl_ce[sg] = site_det_impl_ce[sdCEId+ sg];
-                }
-                dets.emplace_back(tCand);
-                tCand.reset();
-
-                //Rip Up site
-                for(int sg = 0; sg < site_det_sig_idx[stAdId]; ++sg)
-                {
-                    inst_curr_detSite[site_det_sig[sdSGId + sg]] = INVALID;
-                }
-
-                //Reset tCand to site_det
-                site_det_sig_idx[stAdId] = flat_node2prclstrCount[instId];
-                tCand.sigIdx = flat_node2prclstrCount[instId];
-
-                for (int idx = 0; idx < flat_node2prclstrCount[instId]; ++idx)
-                {
-                    int clInstId = flat_node2precluster_map[instPcl + idx];
-                    site_det_sig[sdSGId + idx] = clInstId;
-                    tCand.sig[idx] = clInstId;
-                }
-
-                for(int sg = 0; sg < SLICE_CAPACITY; ++sg)
-                {
-                    site_det_impl_lut[sdLutId+ sg] = INVALID;
-                    site_det_impl_ff[sdLutId+ sg] = INVALID;
-                }
-                for(int sg = 0; sg < CKSR_IN_CLB; ++sg)
-                {
-                    site_det_impl_cksr[sdCKId+ sg] = INVALID;
-                }
-                for(int sg = 0; sg < CE_IN_CLB; ++sg)
-                {
-                    site_det_impl_ce[sdCEId+ sg] = INVALID;
-                }
-                ///
-
-                if (add_inst_to_cand_impl(lut_type, flat_node2pin_start_map, flat_node2pin_map, node2pincount, net2pincount, pin2net_map, pin_typeIds, sorted_net_map, flat_node2prclstrCount, flat_node2precluster_map, flop2ctrlSetId_map, node2fence_region_map, flop_ctrlSets, instId, CKSR_IN_CLB, CE_IN_CLB, HALF_SLICE_CAPACITY, NUM_BLE_PER_SLICE, tCand.impl_lut, tCand.impl_ff, tCand.impl_cksr, tCand.impl_ce))
-                {
-                    ///
-                    site_det_sig_idx[stAdId] = tCand.sigIdx;
-
-                    for (int sg = 0; sg < tCand.sigIdx; ++sg)
-                    {
-                        site_det_sig[sdSGId + sg] = tCand.sig[sg];
-                    }
-                    for (int sg = 0; sg < SLICE_CAPACITY; ++sg)
-                    {
-                        site_det_impl_lut[sdLutId+ sg] = tCand.impl_lut[sg];
-                        site_det_impl_ff[sdLutId+ sg] = tCand.impl_ff[sg];
-                    }
-                    for (int sg = 0; sg < CKSR_IN_CLB; ++sg)
-                    {
-                        site_det_impl_cksr[sdCKId+ sg] = tCand.impl_cksr[sg];
-                    }
-                    for (int sg = 0; sg < CE_IN_CLB; ++sg)
-                    {
-                        site_det_impl_ce[sdCEId+ sg] = tCand.impl_ce[sg];
-                    }
-                    ///
-                } else
-                {
-                    //Should not reach here
-                    std::cout << "ERROR: Could not add " << instId << " (inst_" << node_names[instId] << ") of type " << node2fence_region_map[instId] << " to site: " << stId << std::endl;
-                    //if (node2fence_region_map[instId])
-                    //{
-                    //    int flopCtrlMap = flop2ctrlSetId_map[instId];
-                    //    std::cout << "\tFF Inst: " << instId << " has CK: " << flop_ctrlSets[flopCtrlMap*3 + 1] << " and CE: " <<  flop_ctrlSets[flopCtrlMap*3 + 2] << std::endl;
-                    //}
-
-                    //std::cout << "Existing LUTs: ";
-                    //for(int sg = 0; sg < SLICE_CAPACITY; ++sg)
-                    //{
-                    //    std::cout << " " << tCand.impl_lut[sg];
-                    //}
-                    //std::cout << std::endl;
-                    //std::cout << "Existing FFs: ";
-                    //for(int sg = 0; sg < SLICE_CAPACITY; ++sg)
-                    //{
-                    //    std::cout << " " << tCand.impl_ff[sg];
-                    //}
-                    //std::cout << std::endl;
-                    //std::cout << "Existing CKSR: ";
-                    //for(int sg = 0; sg < CKSR_IN_CLB; ++sg)
-                    //{
-                    //    std::cout << " " << tCand.impl_cksr[sg];
-                    //}
-                    //std::cout << std::endl;
-                    //std::cout << "Existing CE: ";
-                    //for(int sg = 0; sg < CE_IN_CLB; ++sg)
-                    //{
-                    //    std::cout << " " << tCand.impl_ce[sg];
-                    //}
-                    //std::cout << std::endl;
-                    //exit(0);
-                }
-
-                compute_candidate_score(pos_x, pos_y, pin_offset_x, pin_offset_y, net_bbox, net_weights, tnet_weights, net_pinIdArrayX, net_pinIdArrayY, net2tnet_start, flat_net2pin_start_map, flat_tnet2pin_map, flat_node2pin_start_map, flat_node2pin_map, sorted_net_map, pin2net_map, snkpin2tnet_map, pin2node_map, net2pincount, site_xy, node_names, xWirelenWt, yWirelenWt, extNetCountWt, wirelenImprovWt, timing_alpha, timing_beta, netShareScoreMaxNetDegree, wlScoreMaxNetDegree, tCand.sig, stId, tCand.sigIdx, site_det_score[stAdId]);
-
-                for (int idx = 0; idx < flat_node2prclstrCount[instId]; ++idx)
-                {
-                    int clInst = flat_node2precluster_map[instPcl + idx];
-                    inst_curr_detSite[clInst] = stId;
-                }
-
-                int sig[2*SLICE_CAPACITY];
-                for (int sg = 0; sg < dets[0].sigIdx; ++sg)
-                {
-                    sig[sg] = dets[0].sig[sg];
-                }
-
-                for (int rIdx = 0; rIdx < dets[0].sigIdx; ++rIdx)
-                {
-                    int ruInst = sig[rIdx];
-                    if (inst_curr_detSite[ruInst] != INVALID)
-                    {
-                        continue;
-                    }
-                    int beg = spiralBegin;
-                    int r = DREAMPLACE_STD_NAMESPACE::ceil(nbrDistEnd + 1.0);
-                    int end = r ? 2 * (r + 1) * r + 1 : 1;
-
-                    int ruInstPcl = flat_node2precluster_map[ruInst*3];
-                    T cenX(pos_x[ruInstPcl]), cenY(pos_y[ruInstPcl]);
-
-                    if (flat_node2prclstrCount[ruInst] > 1)
-                    {
-                        cenX *= wlPrecond[ruInstPcl];
-                        cenY *= wlPrecond[ruInstPcl];
-                        T totalWt = wlPrecond[ruInstPcl];
-
-                        for (int idx = 1; idx < flat_node2prclstrCount[ruInst]; ++idx)
-                        {
-                            int clInst = flat_node2precluster_map[ruInst*3 + idx];
-                            cenX += pos_x[clInst] * wlPrecond[clInst];
-                            cenY += pos_y[clInst] * wlPrecond[clInst];
-                            totalWt += wlPrecond[clInst];
-                        }
-
-                        cenX /= totalWt;
-                        cenY /= totalWt;
-                    }
-
-                    //BestCandidate
-                    Candidate<T> bestCand;
-                    bestCand.reset();
-                    T bestScoreImprov(-10000.0);
-
-                    for (int spId = beg; spId < end; ++spId)
-                    {
-                        int slocIdx = spId*2;
-                        int xVal = cenX + spiral_accessor[slocIdx]; 
-                        int yVal = cenY + spiral_accessor[slocIdx + 1]; 
-
-                        int siteMapId = xVal * num_sites_y + yVal;
-                        int siteMapAIdx = site2addr_map[siteMapId];
-
-                        //Check within bounds and inst-site compatibility
-                        if (xVal < 0 || xVal >= num_sites_x || yVal < 0 || yVal >= num_sites_y)
-                        {
-                            continue;
-                        }
-
-                        Candidate<T> cand;
-                        cand.reset();
-                        cand.score = site_det_score[siteMapAIdx];
-                        cand.siteId = site_det_siteId[siteMapAIdx];
-                        cand.sigIdx = site_det_sig_idx[siteMapAIdx];
-
-                        //array instantiation
-                        int sdId(siteMapAIdx*SIG_IDX), sdlutId(siteMapAIdx*SLICE_CAPACITY);
-                        int sdckId(siteMapAIdx*CKSR_IN_CLB), sdceId(siteMapAIdx*CE_IN_CLB);
-
-                        for(int sg = 0; sg < cand.sigIdx; ++sg)
-                        {
-                            cand.sig[sg] = site_det_sig[sdId + sg];
-                        }
-                        for(int sg = 0; sg < SLICE_CAPACITY; ++sg)
-                        {
-                            cand.impl_lut[sg] = site_det_impl_lut[sdlutId + sg];
-                            cand.impl_ff[sg] = site_det_impl_ff[sdlutId + sg];
-                        }
-                        for(int sg = 0; sg < CKSR_IN_CLB; ++sg)
-                        {
-                            cand.impl_cksr[sg] = site_det_impl_cksr[sdckId + sg];
-                        }
-                        for(int sg = 0; sg < CE_IN_CLB; ++sg)
-                        {
-                            cand.impl_ce[sg] = site_det_impl_ce[sdceId + sg];
-                        }
-                        /////
-
-                        if (site_types[siteMapId] == 1 && node2fence_region_map[ruInst] < 2 && add_inst_to_cand_impl(lut_type, flat_node2pin_start_map, flat_node2pin_map, node2pincount, net2pincount, pin2net_map, pin_typeIds, sorted_net_map, flat_node2prclstrCount, flat_node2precluster_map, flop2ctrlSetId_map, node2fence_region_map, flop_ctrlSets, ruInst, CKSR_IN_CLB, CE_IN_CLB, HALF_SLICE_CAPACITY, NUM_BLE_PER_SLICE, cand.impl_lut, cand.impl_ff, cand.impl_cksr, cand.impl_ce) && 
-                                add_inst_to_sig(flat_node2prclstrCount[ruInst], flat_node2precluster_map, sorted_node_map, ruInst*3, cand.sig, cand.sigIdx))
-                        {
-                            // Adding the instance to the site is legal
-                            // If this is the first legal position found, set the expansion search radius
-                            if (bestScoreImprov == -10000.0)
-                            {
-                                int r = DREAMPLACE_STD_NAMESPACE::abs(spiral_accessor[slocIdx]) + DREAMPLACE_STD_NAMESPACE::abs(spiral_accessor[slocIdx+ 1]); 
-                                r += ripupExpansion;
-
-                                int nwR = DREAMPLACE_STD_NAMESPACE::min(maxRad, r);
-                                end = nwR ? 2 * (nwR + 1) * nwR + 1 : 1;
-                            }
-                            compute_candidate_score(pos_x, pos_y, pin_offset_x, pin_offset_y, net_bbox, net_weights, tnet_weights, net_pinIdArrayX, net_pinIdArrayY, net2tnet_start, flat_net2pin_start_map, flat_tnet2pin_map, flat_node2pin_start_map, flat_node2pin_map, sorted_net_map, pin2net_map, snkpin2tnet_map, pin2node_map, net2pincount, site_xy, node_names, xWirelenWt, yWirelenWt, extNetCountWt, wirelenImprovWt, timing_alpha, timing_beta, netShareScoreMaxNetDegree, wlScoreMaxNetDegree, cand.sig, cand.siteId, cand.sigIdx, cand.score);
-
-                            T scoreImprov = cand.score - site_det_score[siteMapAIdx];
-                            if (scoreImprov > bestScoreImprov)
-                            {
-                                bestCand = cand;
-                                bestScoreImprov = scoreImprov;
-                            }
-                        } 
-
-                    }
-                    if (bestCand.siteId == INVALID)
-                    {
-                        // Cannot find a legal position for this rip-up instance, so moving the instance to the site is illegal
-                        //
-                        // Revert all affected sites' clusters
-                        for (auto rit = dets.rbegin(); rit != dets.rend(); ++rit)
-                        {
-                            int sId = rit->siteId;
-                            int sAId = site2addr_map[sId];
-                            int sdId(sAId*SIG_IDX), sdlutId(sAId*SLICE_CAPACITY);
-                            int sdckId(sAId*CKSR_IN_CLB), sdceId(sAId*CE_IN_CLB);
-
-                            site_det_score[sAId] = rit->score;
-                            site_det_siteId[sAId] = rit->siteId;
-                            site_det_sig_idx[sAId] = rit->sigIdx;
-
-                            for(int sg = 0; sg < rit->sigIdx; ++sg)
-                            {
-                                site_det_sig[sdId + sg] = rit->sig[sg];
-                            }
-                            for(int sg = 0; sg < SLICE_CAPACITY; ++sg)
-                            {
-                                site_det_impl_lut[sdlutId + sg] = rit->impl_lut[sg];
-                                site_det_impl_ff[sdlutId + sg] = rit->impl_ff[sg];
-                            }
-                            for(int sg = 0; sg < CKSR_IN_CLB; ++sg)
-                            {
-                                site_det_impl_cksr[sdckId + sg] = rit->impl_cksr[sg];
-                            }
-                            for(int sg = 0; sg < CE_IN_CLB; ++sg)
-                            {
-                                site_det_impl_ce[sdceId + sg] = rit->impl_ce[sg];
-                            }
-                        }
-                        // Move all ripped instances back to their original sites
-                        int sdId(stAdId*SIG_IDX);
-                        for (int sg = 0; sg < site_det_sig_idx[stAdId]; ++sg)
-                        {
-                            int sdInst = site_det_sig[sdId + sg];
-                            inst_curr_detSite[sdInst] = stId;
-                        }
-                        // Set the instance as illegal
-                        for (int idx = 0; idx < flat_node2prclstrCount[instId]; ++idx)
-                        {
-                            int prclInst = flat_node2precluster_map[instPcl + idx];
-                            inst_curr_detSite[prclInst] = INVALID;
-                        }
-                        ripupSiteLegalizeInst = 0;
-                        break;
-                    } else
-                    {
-                        int sbId = bestCand.siteId;
-                        int sbAId = site2addr_map[sbId];
-
-                        Candidate<T> tCand;
-                        tCand.reset();
-                        ///
-                        tCand.score = site_det_score[sbAId];
-                        tCand.siteId = site_det_siteId[sbAId];
-                        tCand.sigIdx = site_det_sig_idx[sbAId];
-
-                        int sbSGId = sbAId*SIG_IDX;
-                        int sbLutId = sbAId*SLICE_CAPACITY;
-                        int sbCKId = sbAId*CKSR_IN_CLB;
-                        int sbCEId = sbAId*CE_IN_CLB;
-
-                        for(int sg = 0; sg < tCand.sigIdx; ++sg)
-                        {
-                            tCand.sig[sg] = site_det_sig[sbSGId + sg];
-                        }
-                        for(int sg = 0; sg < SLICE_CAPACITY; ++sg)
-                        {
-                            tCand.impl_lut[sg] = site_det_impl_lut[sbLutId+ sg];
-                            tCand.impl_ff[sg] = site_det_impl_ff[sbLutId+ sg];
-                        }
-                        for(int sg = 0; sg < CKSR_IN_CLB; ++sg)
-                        {
-                            tCand.impl_cksr[sg] = site_det_impl_cksr[sbCKId+ sg];
-                        }
-                        for(int sg = 0; sg < CE_IN_CLB; ++sg)
-                        {
-                            tCand.impl_ce[sg] = site_det_impl_ce[sbCEId+ sg];
-                        }
-                        dets.emplace_back(tCand);
-
-                        //Move ripped instances to this site
-                        site_det_score[sbAId] = bestCand.score;
-                        site_det_siteId[sbAId] = bestCand.siteId;
-                        site_det_sig_idx[sbAId] = bestCand.sigIdx;
-
-                        for(auto sg = 0; sg < bestCand.sigIdx; ++sg)
-                        {
-                            site_det_sig[sbSGId + sg] = bestCand.sig[sg];
-                        }
-                        for(int sg = 0; sg < SLICE_CAPACITY; ++sg)
-                        {
-                            site_det_impl_lut[sbLutId+ sg] = bestCand.impl_lut[sg];
-                            site_det_impl_ff[sbLutId+ sg] = bestCand.impl_ff[sg];
-                        }
-                        for(int sg = 0; sg < CKSR_IN_CLB; ++sg)
-                        {
-                            site_det_impl_cksr[sbCKId+ sg] = bestCand.impl_cksr[sg];
-                        }
-                        for(int sg = 0; sg < CE_IN_CLB; ++sg)
-                        {
-                            site_det_impl_ce[sbCEId+ sg] = bestCand.impl_ce[sg];
-                        }
-                        ///
-                        for (int idx = 0; idx < flat_node2prclstrCount[ruInst]; ++idx)
-                        {
-                            int clInst = flat_node2precluster_map[ruInst*3 + idx];
-                            inst_curr_detSite[clInst] = sbId;
-                        }
-                    }
-                }
-                if (ripupSiteLegalizeInst == INVALID)
-                {
-                    ripupLegalizeInst = 1;
-                }
-            }
-
-            if (ripupLegalizeInst == 1) break;
-        }
-
-        //DBG
-        if (ripupLegalizeInst != 1)
-        {
-            inst_curr_detSite[instId] = INVALID;
-            //dreamplacePrint(kERROR, "unable to legalize inst_%u \n", node_names[instId]);
-        }
-    }
-    //std::cout << "Total time for RipUP LG is " << std::chrono::duration_cast<std::chrono::microseconds>(pt4-begin).count()/1000000.0 << " (s)" << std::endl;
-
-    return 0;
-}
-
-//run greedy legalization
-template <typename T>
-int greedy_LG(
-              const T* pos_x,
-              const T* pos_y,
-              const T* pin_offset_x,
-              const T* pin_offset_y,
-              const T* net_weights,
-              const T* tnet_weights,
-              const T* net_bbox,
-              const T* wlPrecond,
-              const T* site_xy,
-              const int* net_pinIdArrayX,
-              const int* net_pinIdArrayY,
-              const int* spiral_accessor,
-              const int* node2fence_region_map,
-              const int* lut_type,
-              const int* site_types,
-              const int* node2pincount,
-              const int* net2pincount,
-              const int* pin2net_map,
-              const int* snkpin2tnet_map,
-              const int* pin2node_map,
-              const int* pin_typeIds,
-              const int* flop2ctrlSetId_map,
-              const int* flop_ctrlSets,
-              const int* net2tnet_start,
-              const int* flat_net2pin_start_map,
-              const int* flat_tnet2pin_map,
-              const int* flat_node2pin_start_map,
-              const int* flat_node2pin_map,
-              int* flat_node2prclstrCount,
-              int* flat_node2precluster_map,
-              const int* sorted_net_map,
-              const int* sorted_node_map,
-              const int* sorted_remNode_idx,
-              const int* site2addr_map,
-              const int* node_names,
-              const T xWirelenWt,
-              const T yWirelenWt,
-              const T extNetCountWt,
-              const T wirelenImprovWt,
-              const T timing_alpha,
-              const T timing_beta,
-              const int num_remInsts,
-              const int num_sites_x,
-              const int num_sites_y,
-              const int spiralBegin,
-              const int spiralEnd,
-              const int SIG_IDX,
-              const int CE_IN_CLB,
-              const int CKSR_IN_CLB,
-              const int HALF_SLICE_CAPACITY,
-              const int NUM_BLE_PER_SLICE,
-              const int greedyExpansion,
-              const int netShareScoreMaxNetDegree,
-              const int wlScoreMaxNetDegree,
-              int* inst_curr_detSite,
-              int* site_det_sig_idx,
-              int* site_det_sig,
-              int* site_det_impl_lut,
-              int* site_det_impl_ff,
-              int* site_det_impl_cksr,
-              int* site_det_impl_ce,
-              int* site_det_siteId,
-              T* site_det_score
-              )
-{
-    int maxRad = DREAMPLACE_STD_NAMESPACE::max(num_sites_x, num_sites_y);
-
-    for (int i = 0; i < num_remInsts; ++i)
-    {
-        const int instId = sorted_remNode_idx[i];
-
-        int greedyLegalizeInst(INVALID);
-
-        int beg(spiralBegin), end(spiralEnd), instPcl(instId*3);
-
-        T cenX(pos_x[flat_node2precluster_map[instPcl]]);
-        T cenY(pos_y[flat_node2precluster_map[instPcl]]);
-
-        if (flat_node2prclstrCount[instId] > 1)
-        {
-            cenX *= wlPrecond[flat_node2precluster_map[instPcl]];
-            cenY *= wlPrecond[flat_node2precluster_map[instPcl]];
-            T totalWt(wlPrecond[flat_node2precluster_map[instPcl]]);
-
-            for (int cl = 1; cl < flat_node2prclstrCount[instId]; ++cl)
-            {
-                int pclInst = flat_node2precluster_map[instPcl + cl];
-                cenX += pos_x[pclInst] * wlPrecond[pclInst];
-                cenY += pos_y[pclInst] * wlPrecond[pclInst];
-                totalWt += wlPrecond[pclInst];
-            }
-
-            cenX /= totalWt;
-            cenY /= totalWt;
-        }
-
-        //BestCandidate
-        //Candidate<T> bestCand;
-        T bestScore = 0.0;
-        int bestSite = INVALID;
-        int bestCandLUT[SLICE_CAPACITY];
-        int bestCandFF[SLICE_CAPACITY];
-        int bestCandCK[2];
-        int bestCandCE[4];
-        int bestCandSig[2*SLICE_CAPACITY];
-        int bestCandSigSize = 0;
-
-        T bestScoreImprov(-10000.0);
-
-        //DBG
-        int cnt = 0;
-        for (int sIdx = beg; sIdx < end; ++sIdx)
-        {
-            //DBG
-            ++cnt;
-
-            int saIdx = sIdx*2;
-            int xVal = cenX + spiral_accessor[saIdx]; 
-            int yVal = cenY + spiral_accessor[saIdx + 1]; 
-            int siteMapIdx = xVal * num_sites_y + yVal;
-            int siteMapAIdx = site2addr_map[siteMapIdx];
-
-            //Check within bounds and site-inst compatibility
-            if (xVal < 0 || xVal >= num_sites_x || yVal < 0 || yVal >= num_sites_y
-                    || site_types[siteMapIdx] != 1 || node2fence_region_map[instId] > 1)
-            {
-                continue;
-            }
-
-            T candScore = site_det_score[siteMapAIdx];
-            int candSite = site_det_siteId[siteMapAIdx];
-            int candLUT[SLICE_CAPACITY];
-            int candFF[SLICE_CAPACITY];
-            int candCK[2];
-            int candCE[4];
-            int candSig[2*SLICE_CAPACITY];
-            int candSigSize = site_det_sig_idx[siteMapAIdx];
-
-            int sdId(siteMapAIdx*SIG_IDX), sdlutId(siteMapAIdx*SLICE_CAPACITY);
-            int sdckId(siteMapAIdx*CKSR_IN_CLB), sdceId(siteMapAIdx*CE_IN_CLB);
-
-            for(int sg = 0; sg < candSigSize; ++sg)
-            {
-                candSig[sg] = site_det_sig[sdId + sg];
-            }
-            for(int sg = 0; sg < SLICE_CAPACITY; ++sg)
-            {
-                candLUT[sg] = site_det_impl_lut[sdlutId + sg];
-                candFF[sg] = site_det_impl_ff[sdlutId + sg];
-            }
-            for(int sg = 0; sg < CKSR_IN_CLB; ++sg)
-            {
-                candCK[sg] = site_det_impl_cksr[sdckId + sg];
-            }
-            for(int sg = 0; sg < CE_IN_CLB; ++sg)
-            {
-                candCE[sg] = site_det_impl_ce[sdceId + sg];
-            }
-            if (add_inst_to_cand_impl(lut_type, flat_node2pin_start_map, flat_node2pin_map, node2pincount, net2pincount, pin2net_map, pin_typeIds, sorted_net_map, flat_node2prclstrCount, flat_node2precluster_map, flop2ctrlSetId_map, node2fence_region_map, flop_ctrlSets, instId, CKSR_IN_CLB, CE_IN_CLB, HALF_SLICE_CAPACITY, NUM_BLE_PER_SLICE, candLUT, candFF, candCK, candCE) && 
-                    add_inst_to_sig(flat_node2prclstrCount[instId], flat_node2precluster_map, sorted_node_map, instPcl, candSig, candSigSize))
-            {
-                // Adding the instance to the site is legal
-                // If this is the first legal position found, set the expansion search radius
-                if (bestScoreImprov == -10000.0)
-                {
-                    int r = DREAMPLACE_STD_NAMESPACE::abs(spiral_accessor[saIdx]) + DREAMPLACE_STD_NAMESPACE::abs(spiral_accessor[saIdx + 1]); 
-                    r += greedyExpansion;
-
-                    int nwR = DREAMPLACE_STD_NAMESPACE::min(maxRad, r);
-                    end = nwR ? 2 * (nwR + 1) * nwR + 1 : 1;
-                }
-                //cand_score = computeCandidateScore(cand);
-                compute_candidate_score(pos_x, pos_y, pin_offset_x, pin_offset_y, net_bbox, net_weights, tnet_weights, net_pinIdArrayX, net_pinIdArrayY, net2tnet_start, flat_net2pin_start_map, flat_tnet2pin_map, flat_node2pin_start_map, flat_node2pin_map, sorted_net_map, pin2net_map, snkpin2tnet_map, pin2node_map, net2pincount, site_xy, node_names, xWirelenWt, yWirelenWt, extNetCountWt, wirelenImprovWt, timing_alpha, timing_beta, netShareScoreMaxNetDegree, wlScoreMaxNetDegree, candSig, candSite, candSigSize, candScore);
-
-                T scoreImprov = candScore - site_det_score[siteMapAIdx];
-                if (scoreImprov > bestScoreImprov)
-                {
-                    //std::cout << "Found best candidate for " << idx << std::endl;
-                    //bestCand = cand;
-                    bestScore = candScore;
-                    bestSite = candSite;
-                    bestCandSigSize = candSigSize;
-
-                    for(int sg = 0; sg < candSigSize; ++sg)
-                    {
-                        bestCandSig[sg] = candSig[sg];
-                    }
-                    for(int sg = 0; sg < SLICE_CAPACITY; ++sg)
-                    {
-                        bestCandLUT[sg] = candLUT[sg];
-                        bestCandFF[sg] = candFF[sg];
-                    }
-                    for(int sg = 0; sg < CKSR_IN_CLB; ++sg)
-                    {
-                        bestCandCK[sg] = candCK[sg];
-                    }
-                    for(int sg = 0; sg < CE_IN_CLB; ++sg)
-                    {
-                        bestCandCE[sg] = candCE[sg];
-                    }
-
-                    bestScoreImprov = scoreImprov;
-                }
-            } 
-        }
-
-        // Commit the found best legal solution
-        if (bestSite != INVALID)
-        {
-            int stId = bestSite;
-            int stAId = site2addr_map[stId];
-
-            site_det_score[stAId] = bestScore;
-            site_det_siteId[stAId] = bestSite;
-            site_det_sig_idx[stAId] = bestCandSigSize;
-
-            int sdId(stAId*SIG_IDX), sdlutId(stAId*SLICE_CAPACITY);
-            int sdckId(stAId*CKSR_IN_CLB), sdceId(stAId*CE_IN_CLB);
-
-            for (auto sg = 0; sg < bestCandSigSize; ++sg)
-            {
-                site_det_sig[sdId + sg] = bestCandSig[sg];
-            }
-            for (int sg = 0; sg < SLICE_CAPACITY; ++sg)
-            {
-                site_det_impl_lut[sdlutId + sg] = bestCandLUT[sg];
-                site_det_impl_ff[sdlutId + sg] = bestCandFF[sg];
-            }
-            for (int sg = 0; sg < CKSR_IN_CLB; ++sg)
-            {
-                site_det_impl_cksr[sdckId + sg] = bestCandCK[sg];
-            }
-            for (int sg = 0; sg < CE_IN_CLB; ++sg)
-            {
-                site_det_impl_ce[sdceId + sg] = bestCandCE[sg];
-            }
-            /////
-
-            for (int cl = 0; cl < flat_node2prclstrCount[instId]; ++cl)
-            {
-                int prclInst = flat_node2precluster_map[instPcl + cl];
-                inst_curr_detSite[prclInst] = bestSite;
-            }
-            greedyLegalizeInst = 1;
-        }
-    }
-
-    return 0;
-}
+// // DBG
+// //run ripup legalization
+// template <typename T>
+// int ripUp_LG(
+//         const T* pos_x,
+//         const T* pos_y,
+//         const T* pin_offset_x,
+//         const T* pin_offset_y,
+//         const T* net_weights,
+//         const T* tnet_weights,
+//         const T* net_bbox,
+//         const T* inst_areas,
+//         const T* wlPrecond,
+//         const T* site_xy,
+//         const int* net_pinIdArrayX,
+//         const int* net_pinIdArrayY,
+//         const int* spiral_accessor,
+//         const int* node2fence_region_map,
+//         const int* node2shape_map,
+//         const int* node_z,
+//         const int* lut_type,
+//         const int* site_types,
+//         const int* node2pincount,
+//         const int* net2pincount,
+//         const int* pin2net_map,
+//         const int* snkpin2tnet_map,
+//         const int* pin2node_map,
+//         const int* pin_typeIds,
+//         const int* flop2ctrlSetId_map,
+//         const int* flop_ctrlSets,
+//         const int* flat_node2pin_start_map,
+//         const int* flat_node2pin_map,
+//         const int* net2tnet_start,
+//         const int* flat_net2pin_start_map,
+//         const int* flat_tnet2pin_map,
+//         int* flat_node2prclstrCount,
+//         int* flat_node2precluster_map,
+//         const int* sorted_node_map,
+//         const int* sorted_node_idx,
+//         const int* sorted_net_map,
+//         const int* site2addr_map,
+//         const int* node_names,
+//         const T nbrDistEnd,
+//         const T xWirelenWt,
+//         const T yWirelenWt,
+//         const T extNetCountWt,
+//         const T wirelenImprovWt,
+//         const T timing_alpha,
+//         const T timing_beta,
+//         const int num_nodes,
+//         const int num_sites_x,
+//         const int num_sites_y,
+//         const int spiralBegin,
+//         const int lutId,
+//         const int ffId,
+//         const int sliceLId,
+//         const int sliceMId,
+//         const int CKSR_IN_CLB,
+//         const int CE_IN_CLB,
+//         const int HALF_SLICE_CAPACITY,
+//         const int NUM_BLE_PER_SLICE,
+//         const int netShareScoreMaxNetDegree,
+//         const int wlScoreMaxNetDegree,
+//         const int ripupExpansion,
+//         const int SIG_IDX,
+//         int* inst_curr_detSite,
+//         int* site_det_sig_idx,
+//         int* site_det_sig,
+//         int* site_det_impl_lut,
+//         int* site_det_impl_ff,
+//         int* site_det_impl_cksr,
+//         int* site_det_impl_ce,
+//         int* site_det_siteId,
+//         T* site_det_score
+//         )
+// {
+//     //std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
+//     ////DBG
+
+
+//     int maxRad = DREAMPLACE_STD_NAMESPACE::max(num_sites_x, num_sites_y);
+//     for (int i = 0; i < num_nodes; ++i)
+//     {
+//         const int instId = sorted_node_idx[i]; //Remaining insts sorted based on decreasing area
+//         if (inst_curr_detSite[instId] != INVALID) continue;
+
+//         int instPcl = instId*3;
+
+//         //RipUpCandidates
+//         std::vector<RipUpCand<T> > ripUpCandidates;
+
+//         int xLo = DREAMPLACE_STD_NAMESPACE::max(pos_x[instId] - nbrDistEnd, T(0));
+//         int yLo = DREAMPLACE_STD_NAMESPACE::max(pos_y[instId] - nbrDistEnd, T(0));
+//         int xHi = DREAMPLACE_STD_NAMESPACE::min(pos_x[instId] + nbrDistEnd, T(num_sites_x - 1));
+//         int yHi = DREAMPLACE_STD_NAMESPACE::min(pos_y[instId] + nbrDistEnd, T(num_sites_y - 1));
+
+//         for (int x = xLo; x <= xHi; ++x)
+//         {
+//             for (int y = yLo; y <= yHi; ++y)
+//             {
+//                 int siteId = x*num_sites_y + y;
+
+//                 if ((node2fence_region_map[instId] == lutId || node2fence_region_map[instId] == ffId) && (site_types[siteId] == sliceLId || site_types[siteId] == sliceMId))
+//                 {
+//                     int slocId = siteId*2;
+//                     T dist = DREAMPLACE_STD_NAMESPACE::abs(pos_x[instId] - site_xy[slocId]) + DREAMPLACE_STD_NAMESPACE::abs(pos_y[instId] - site_xy[slocId+1]);
+//                     if (dist < nbrDistEnd)
+//                     {
+//                         RipUpCand<T> rpCand;
+//                         int sIdx = site2addr_map[siteId];
+//                         bool siteHasSpecialNode(false);
+
+//                         rpCand.siteId = siteId;
+//                         rpCand.cand.score = site_det_score[sIdx];
+//                         rpCand.cand.siteId = site_det_siteId[sIdx];
+
+//                         rpCand.cand.sigIdx = site_det_sig_idx[sIdx];
+
+//                         ///
+//                         int sdSGId = sIdx*SIG_IDX;
+//                         int sdLutId = sIdx*SLICE_CAPACITY;
+//                         int sdCKId = sIdx*CKSR_IN_CLB;
+//                         int sdCEId = sIdx*CE_IN_CLB;
+
+//                         for (int sg = 0; sg < site_det_sig_idx[sIdx]; ++sg)
+//                         {
+//                             rpCand.cand.sig[sg] = site_det_sig[sdSGId + sg];
+//                         }
+//                         for (int sg = 0; sg < SLICE_CAPACITY; ++sg)
+//                         {
+//                             rpCand.cand.impl_lut[sg] = site_det_impl_lut[sdLutId + sg];
+//                             rpCand.cand.impl_ff[sg] = site_det_impl_ff[sdLutId + sg];
+//                         }
+//                         for (int sg = 0; sg < CKSR_IN_CLB; ++sg)
+//                         {
+//                             rpCand.cand.impl_cksr[sg] = site_det_impl_cksr[sdCKId + sg];
+//                         }
+//                         for (int sg = 0; sg < CE_IN_CLB; ++sg)
+//                         {
+//                             rpCand.cand.impl_ce[sg] = site_det_impl_ce[sdCEId + sg];
+//                         }
+//                         ///
+
+//                         rpCand.legal = add_inst_to_cand_impl(lut_type, flat_node2pin_start_map, flat_node2pin_map, node2pincount, net2pincount, pin2net_map, pin_typeIds, sorted_net_map, flat_node2prclstrCount, flat_node2precluster_map, flop2ctrlSetId_map, node2fence_region_map, flop_ctrlSets, node2shape_map, node_z, siteHasSpecialNode, instId, lutId, ffId, CKSR_IN_CLB, CE_IN_CLB, HALF_SLICE_CAPACITY, NUM_BLE_PER_SLICE, rpCand.cand.impl_lut, rpCand.cand.impl_ff, rpCand.cand.impl_cksr, rpCand.cand.impl_ce);
+
+//                         if (rpCand.legal)
+//                         {
+//                             ///
+//                             bool addInstToSig = add_inst_to_sig(flat_node2prclstrCount[instId], flat_node2precluster_map, sorted_node_map, instPcl, rpCand.cand.sig, rpCand.cand.sigIdx);
+//                             //DBG
+//                             if (!addInstToSig)
+//                             {
+//                                 std::cout << "ERROR: Unable to add inst_" << node_names[instId] << " to sig" << std::endl;
+//                             }
+//                             //DBG
+
+//                             compute_candidate_score(pos_x, pos_y, pin_offset_x, pin_offset_y, net_bbox, net_weights, tnet_weights, net_pinIdArrayX, net_pinIdArrayY, net2tnet_start, flat_net2pin_start_map, flat_tnet2pin_map, flat_node2pin_start_map, flat_node2pin_map, sorted_net_map, pin2net_map, snkpin2tnet_map, pin2node_map, net2pincount, site_xy, node_names, xWirelenWt, yWirelenWt, extNetCountWt, wirelenImprovWt, timing_alpha, timing_beta, netShareScoreMaxNetDegree, wlScoreMaxNetDegree, rpCand.cand.sig, rpCand.cand.siteId, rpCand.cand.sigIdx, rpCand.cand.score);
+
+//                             rpCand.score = rpCand.cand.score - site_det_score[sIdx];
+
+//                         } else
+//                         {
+//                             T area = inst_areas[site_det_sig[sdSGId]];
+//                             for (int sInst = 1; sInst < site_det_sig_idx[sIdx]; ++sInst)
+//                             {
+//                                 area += inst_areas[site_det_sig[sdSGId + sInst]];
+//                             }
+//                             T wirelenImprov(0.0);
+//                             int pStart = flat_node2pin_start_map[instId]; 
+//                             int pEnd =  flat_node2pin_start_map[instId+1];
+//                             for (int pId = pStart; pId < pEnd; ++pId)
+//                             {
+//                                 int pinId = flat_node2pin_map[pId];
+//                                 int netId = pin2net_map[pinId];
+//                                 if (net2pincount[netId] <= wlScoreMaxNetDegree)
+//                                 {
+//                                     compute_wirelength_improv(pos_x, pos_y, net_bbox, pin_offset_x, pin_offset_y, net_weights, net_pinIdArrayX, net_pinIdArrayY, flat_net2pin_start_map, pin2node_map, net2pincount, site_xy, xWirelenWt, yWirelenWt, netId, siteId, std::vector<int>{pinId}, wirelenImprov);
+//                                 }
+//                             }
+//                             rpCand.score = wirelenImprovWt * wirelenImprov - site_det_score[sIdx] - area;
+//                         }
+//                         ripUpCandidates.emplace_back(rpCand);
+//                     }
+//                 }
+//             }
+//         }
+
+//         //Sort ripup candidate indices based on legal and score
+//         std::sort(ripUpCandidates.begin(), ripUpCandidates.end());
+
+//         int ripupLegalizeInst(INVALID);
+
+//         for (const auto &ripUpCd : ripUpCandidates)
+//         {
+//             int stId = ripUpCd.siteId;
+//             int stAdId = site2addr_map[stId];
+//             bool siteHasSpecialNode(false);
+
+//             int sdSGId = stAdId*SIG_IDX;
+//             int sdLutId = stAdId*SLICE_CAPACITY;
+//             int sdCKId = stAdId*CKSR_IN_CLB;
+//             int sdCEId = stAdId*CE_IN_CLB;
+
+//             if (ripUpCd.legal)
+//             {
+//                 site_det_score[stAdId] = ripUpCd.cand.score;
+//                 site_det_siteId[stAdId] = ripUpCd.cand.siteId;
+//                 site_det_sig_idx[stAdId] = ripUpCd.cand.sigIdx;
+
+//                 for (auto sg = 0; sg < ripUpCd.cand.sigIdx; ++sg)
+//                 {
+//                     site_det_sig[sdSGId + sg] = ripUpCd.cand.sig[sg];
+//                 }
+//                 for (int sg = 0; sg < SLICE_CAPACITY; ++sg)
+//                 {
+//                     site_det_impl_lut[sdLutId + sg] = ripUpCd.cand.impl_lut[sg];
+//                     site_det_impl_ff[sdLutId + sg] = ripUpCd.cand.impl_ff[sg];
+//                 }
+//                 for (int sg = 0; sg < CKSR_IN_CLB; ++sg)
+//                 {
+//                     site_det_impl_cksr[sdCKId + sg] = ripUpCd.cand.impl_cksr[sg];
+//                 }
+//                 for (int sg = 0; sg < CE_IN_CLB; ++sg)
+//                 {
+//                     site_det_impl_ce[sdCEId + sg] = ripUpCd.cand.impl_ce[sg];
+//                 }
+//                 ///
+//                 for (int idx = 0; idx < flat_node2prclstrCount[instId]; ++idx)
+//                 {
+//                     int clInstId = flat_node2precluster_map[instPcl + idx];
+//                     inst_curr_detSite[clInstId] = ripUpCd.siteId;
+//                 }
+
+//                 ripupLegalizeInst = 1;
+//             } else
+//             {
+//                 int ripupSiteLegalizeInst(INVALID);
+//                 std::vector<Candidate<T> > dets;
+//                 dets.reserve(site_det_sig_idx[stAdId]);
+
+//                 Candidate<T> tCand;
+//                 tCand.reset();
+//                 tCand.score = site_det_score[stAdId];
+//                 tCand.siteId = site_det_siteId[stAdId];
+//                 tCand.sigIdx = site_det_sig_idx[stAdId];
+
+//                 for(int sg = 0; sg < tCand.sigIdx; ++sg)
+//                 {
+//                     tCand.sig[sg] = site_det_sig[sdSGId + sg];
+//                 }
+//                 for(int sg = 0; sg < SLICE_CAPACITY; ++sg)
+//                 {
+//                     tCand.impl_lut[sg] = site_det_impl_lut[sdLutId+ sg];
+//                     tCand.impl_ff[sg] = site_det_impl_ff[sdLutId+ sg];
+//                 }
+//                 for(int sg = 0; sg < CKSR_IN_CLB; ++sg)
+//                 {
+//                     tCand.impl_cksr[sg] = site_det_impl_cksr[sdCKId+ sg];
+//                 }
+//                 for(int sg = 0; sg < CE_IN_CLB; ++sg)
+//                 {
+//                     tCand.impl_ce[sg] = site_det_impl_ce[sdCEId+ sg];
+//                 }
+//                 dets.emplace_back(tCand);
+//                 tCand.reset();
+
+//                 //Rip Up site
+//                 for(int sg = 0; sg < site_det_sig_idx[stAdId]; ++sg)
+//                 {
+//                     inst_curr_detSite[site_det_sig[sdSGId + sg]] = INVALID;
+//                 }
+
+//                 //Reset tCand to site_det
+//                 site_det_sig_idx[stAdId] = flat_node2prclstrCount[instId];
+//                 tCand.sigIdx = flat_node2prclstrCount[instId];
+
+//                 for (int idx = 0; idx < flat_node2prclstrCount[instId]; ++idx)
+//                 {
+//                     int clInstId = flat_node2precluster_map[instPcl + idx];
+//                     site_det_sig[sdSGId + idx] = clInstId;
+//                     tCand.sig[idx] = clInstId;
+//                 }
+
+//                 for(int sg = 0; sg < SLICE_CAPACITY; ++sg)
+//                 {
+//                     site_det_impl_lut[sdLutId+ sg] = INVALID;
+//                     site_det_impl_ff[sdLutId+ sg] = INVALID;
+//                 }
+//                 for(int sg = 0; sg < CKSR_IN_CLB; ++sg)
+//                 {
+//                     site_det_impl_cksr[sdCKId+ sg] = INVALID;
+//                 }
+//                 for(int sg = 0; sg < CE_IN_CLB; ++sg)
+//                 {
+//                     site_det_impl_ce[sdCEId+ sg] = INVALID;
+//                 }
+//                 ///
+
+//                 if (add_inst_to_cand_impl(lut_type, flat_node2pin_start_map, flat_node2pin_map, node2pincount, net2pincount, pin2net_map, pin_typeIds, sorted_net_map, flat_node2prclstrCount, flat_node2precluster_map, flop2ctrlSetId_map, node2fence_region_map, flop_ctrlSets, node2shape_map, node_z, siteHasSpecialNode, instId, lutId, ffId, CKSR_IN_CLB, CE_IN_CLB, HALF_SLICE_CAPACITY, NUM_BLE_PER_SLICE, tCand.impl_lut, tCand.impl_ff, tCand.impl_cksr, tCand.impl_ce))
+//                 {
+//                     ///
+//                     site_det_sig_idx[stAdId] = tCand.sigIdx;
+
+//                     for (int sg = 0; sg < tCand.sigIdx; ++sg)
+//                     {
+//                         site_det_sig[sdSGId + sg] = tCand.sig[sg];
+//                     }
+//                     for (int sg = 0; sg < SLICE_CAPACITY; ++sg)
+//                     {
+//                         site_det_impl_lut[sdLutId+ sg] = tCand.impl_lut[sg];
+//                         site_det_impl_ff[sdLutId+ sg] = tCand.impl_ff[sg];
+//                     }
+//                     for (int sg = 0; sg < CKSR_IN_CLB; ++sg)
+//                     {
+//                         site_det_impl_cksr[sdCKId+ sg] = tCand.impl_cksr[sg];
+//                     }
+//                     for (int sg = 0; sg < CE_IN_CLB; ++sg)
+//                     {
+//                         site_det_impl_ce[sdCEId+ sg] = tCand.impl_ce[sg];
+//                     }
+//                     ///
+//                 } else
+//                 {
+//                     //Should not reach here
+//                     std::cout << "ERROR: Could not add " << instId << " (inst_" << node_names[instId] << ") of type " << node2fence_region_map[instId] << " to site: " << stId << std::endl;
+//                     //if (node2fence_region_map[instId])
+//                     //{
+//                     //    int flopCtrlMap = flop2ctrlSetId_map[instId];
+//                     //    std::cout << "\tFF Inst: " << instId << " has CK: " << flop_ctrlSets[flopCtrlMap*3 + 1] << " and CE: " <<  flop_ctrlSets[flopCtrlMap*3 + 2] << std::endl;
+//                     //}
+
+//                     //std::cout << "Existing LUTs: ";
+//                     //for(int sg = 0; sg < SLICE_CAPACITY; ++sg)
+//                     //{
+//                     //    std::cout << " " << tCand.impl_lut[sg];
+//                     //}
+//                     //std::cout << std::endl;
+//                     //std::cout << "Existing FFs: ";
+//                     //for(int sg = 0; sg < SLICE_CAPACITY; ++sg)
+//                     //{
+//                     //    std::cout << " " << tCand.impl_ff[sg];
+//                     //}
+//                     //std::cout << std::endl;
+//                     //std::cout << "Existing CKSR: ";
+//                     //for(int sg = 0; sg < CKSR_IN_CLB; ++sg)
+//                     //{
+//                     //    std::cout << " " << tCand.impl_cksr[sg];
+//                     //}
+//                     //std::cout << std::endl;
+//                     //std::cout << "Existing CE: ";
+//                     //for(int sg = 0; sg < CE_IN_CLB; ++sg)
+//                     //{
+//                     //    std::cout << " " << tCand.impl_ce[sg];
+//                     //}
+//                     //std::cout << std::endl;
+//                     //exit(0);
+//                 }
+
+//                 compute_candidate_score(pos_x, pos_y, pin_offset_x, pin_offset_y, net_bbox, net_weights, tnet_weights, net_pinIdArrayX, net_pinIdArrayY, net2tnet_start, flat_net2pin_start_map, flat_tnet2pin_map, flat_node2pin_start_map, flat_node2pin_map, sorted_net_map, pin2net_map, snkpin2tnet_map, pin2node_map, net2pincount, site_xy, node_names, xWirelenWt, yWirelenWt, extNetCountWt, wirelenImprovWt, timing_alpha, timing_beta, netShareScoreMaxNetDegree, wlScoreMaxNetDegree, tCand.sig, stId, tCand.sigIdx, site_det_score[stAdId]);
+
+//                 for (int idx = 0; idx < flat_node2prclstrCount[instId]; ++idx)
+//                 {
+//                     int clInst = flat_node2precluster_map[instPcl + idx];
+//                     inst_curr_detSite[clInst] = stId;
+//                 }
+
+//                 int sig[2*SLICE_CAPACITY];
+//                 for (int sg = 0; sg < dets[0].sigIdx; ++sg)
+//                 {
+//                     sig[sg] = dets[0].sig[sg];
+//                 }
+
+//                 for (int rIdx = 0; rIdx < dets[0].sigIdx; ++rIdx)
+//                 {
+//                     int ruInst = sig[rIdx];
+//                     if (inst_curr_detSite[ruInst] != INVALID)
+//                     {
+//                         continue;
+//                     }
+//                     int beg = spiralBegin;
+//                     int r = DREAMPLACE_STD_NAMESPACE::ceil(nbrDistEnd + 1.0);
+//                     int end = r ? 2 * (r + 1) * r + 1 : 1;
+
+//                     int ruInstPcl = flat_node2precluster_map[ruInst*3];
+//                     T cenX(pos_x[ruInstPcl]), cenY(pos_y[ruInstPcl]);
+
+//                     if (flat_node2prclstrCount[ruInst] > 1)
+//                     {
+//                         cenX *= wlPrecond[ruInstPcl];
+//                         cenY *= wlPrecond[ruInstPcl];
+//                         T totalWt = wlPrecond[ruInstPcl];
+
+//                         for (int idx = 1; idx < flat_node2prclstrCount[ruInst]; ++idx)
+//                         {
+//                             int clInst = flat_node2precluster_map[ruInst*3 + idx];
+//                             cenX += pos_x[clInst] * wlPrecond[clInst];
+//                             cenY += pos_y[clInst] * wlPrecond[clInst];
+//                             totalWt += wlPrecond[clInst];
+//                         }
+
+//                         cenX /= totalWt;
+//                         cenY /= totalWt;
+//                     }
+
+//                     //BestCandidate
+//                     Candidate<T> bestCand;
+//                     bestCand.reset();
+//                     T bestScoreImprov(-10000.0);
+
+//                     for (int spId = beg; spId < end; ++spId)
+//                     {
+//                         int slocIdx = spId*2;
+//                         int xVal = cenX + spiral_accessor[slocIdx]; 
+//                         int yVal = cenY + spiral_accessor[slocIdx + 1]; 
+
+//                         int siteMapId = xVal * num_sites_y + yVal;
+//                         int siteMapAIdx = site2addr_map[siteMapId];
+
+//                         //Check within bounds and inst-site compatibility
+//                         if (xVal < 0 || xVal >= num_sites_x || yVal < 0 || yVal >= num_sites_y)
+//                         {
+//                             continue;
+//                         }
+
+//                         Candidate<T> cand;
+//                         cand.reset();
+//                         cand.score = site_det_score[siteMapAIdx];
+//                         cand.siteId = site_det_siteId[siteMapAIdx];
+//                         cand.sigIdx = site_det_sig_idx[siteMapAIdx];
+
+//                         //array instantiation
+//                         int sdId(siteMapAIdx*SIG_IDX), sdlutId(siteMapAIdx*SLICE_CAPACITY);
+//                         int sdckId(siteMapAIdx*CKSR_IN_CLB), sdceId(siteMapAIdx*CE_IN_CLB);
+
+//                         for(int sg = 0; sg < cand.sigIdx; ++sg)
+//                         {
+//                             cand.sig[sg] = site_det_sig[sdId + sg];
+//                         }
+//                         for(int sg = 0; sg < SLICE_CAPACITY; ++sg)
+//                         {
+//                             cand.impl_lut[sg] = site_det_impl_lut[sdlutId + sg];
+//                             cand.impl_ff[sg] = site_det_impl_ff[sdlutId + sg];
+//                         }
+//                         for(int sg = 0; sg < CKSR_IN_CLB; ++sg)
+//                         {
+//                             cand.impl_cksr[sg] = site_det_impl_cksr[sdckId + sg];
+//                         }
+//                         for(int sg = 0; sg < CE_IN_CLB; ++sg)
+//                         {
+//                             cand.impl_ce[sg] = site_det_impl_ce[sdceId + sg];
+//                         }
+//                         /////
+
+//                         if ((site_types[siteMapId] == sliceLId || site_types[siteMapId] == sliceMId) && (node2fence_region_map[ruInst] == lutId || node2fence_region_map[ruInst] == ffId) && 
+//                                 add_inst_to_cand_impl(lut_type, flat_node2pin_start_map, flat_node2pin_map, node2pincount, net2pincount, pin2net_map, pin_typeIds, sorted_net_map, flat_node2prclstrCount, flat_node2precluster_map, flop2ctrlSetId_map, node2fence_region_map, flop_ctrlSets, node2shape_map, node_z, siteHasSpecialNode, ruInst, lutId, ffId, CKSR_IN_CLB, CE_IN_CLB, HALF_SLICE_CAPACITY, NUM_BLE_PER_SLICE, cand.impl_lut, cand.impl_ff, cand.impl_cksr, cand.impl_ce) && 
+//                                 add_inst_to_sig(flat_node2prclstrCount[ruInst], flat_node2precluster_map, sorted_node_map, ruInst*3, cand.sig, cand.sigIdx))
+//                         {
+//                             // Adding the instance to the site is legal
+//                             // If this is the first legal position found, set the expansion search radius
+//                             if (bestScoreImprov == -10000.0)
+//                             {
+//                                 int r = DREAMPLACE_STD_NAMESPACE::abs(spiral_accessor[slocIdx]) + DREAMPLACE_STD_NAMESPACE::abs(spiral_accessor[slocIdx+ 1]); 
+//                                 r += ripupExpansion;
+
+//                                 int nwR = DREAMPLACE_STD_NAMESPACE::min(maxRad, r);
+//                                 end = nwR ? 2 * (nwR + 1) * nwR + 1 : 1;
+//                             }
+//                             compute_candidate_score(pos_x, pos_y, pin_offset_x, pin_offset_y, net_bbox, net_weights, tnet_weights, net_pinIdArrayX, net_pinIdArrayY, net2tnet_start, flat_net2pin_start_map, flat_tnet2pin_map, flat_node2pin_start_map, flat_node2pin_map, sorted_net_map, pin2net_map, snkpin2tnet_map, pin2node_map, net2pincount, site_xy, node_names, xWirelenWt, yWirelenWt, extNetCountWt, wirelenImprovWt, timing_alpha, timing_beta, netShareScoreMaxNetDegree, wlScoreMaxNetDegree, cand.sig, cand.siteId, cand.sigIdx, cand.score);
+
+//                             T scoreImprov = cand.score - site_det_score[siteMapAIdx];
+//                             if (scoreImprov > bestScoreImprov)
+//                             {
+//                                 bestCand = cand;
+//                                 bestScoreImprov = scoreImprov;
+//                             }
+//                         } 
+
+//                     }
+//                     if (bestCand.siteId == INVALID)
+//                     {
+//                         // Cannot find a legal position for this rip-up instance, so moving the instance to the site is illegal
+//                         //
+//                         // Revert all affected sites' clusters
+//                         for (auto rit = dets.rbegin(); rit != dets.rend(); ++rit)
+//                         {
+//                             int sId = rit->siteId;
+//                             int sAId = site2addr_map[sId];
+//                             int sdId(sAId*SIG_IDX), sdlutId(sAId*SLICE_CAPACITY);
+//                             int sdckId(sAId*CKSR_IN_CLB), sdceId(sAId*CE_IN_CLB);
+
+//                             site_det_score[sAId] = rit->score;
+//                             site_det_siteId[sAId] = rit->siteId;
+//                             site_det_sig_idx[sAId] = rit->sigIdx;
+
+//                             for(int sg = 0; sg < rit->sigIdx; ++sg)
+//                             {
+//                                 site_det_sig[sdId + sg] = rit->sig[sg];
+//                             }
+//                             for(int sg = 0; sg < SLICE_CAPACITY; ++sg)
+//                             {
+//                                 site_det_impl_lut[sdlutId + sg] = rit->impl_lut[sg];
+//                                 site_det_impl_ff[sdlutId + sg] = rit->impl_ff[sg];
+//                             }
+//                             for(int sg = 0; sg < CKSR_IN_CLB; ++sg)
+//                             {
+//                                 site_det_impl_cksr[sdckId + sg] = rit->impl_cksr[sg];
+//                             }
+//                             for(int sg = 0; sg < CE_IN_CLB; ++sg)
+//                             {
+//                                 site_det_impl_ce[sdceId + sg] = rit->impl_ce[sg];
+//                             }
+//                         }
+//                         // Move all ripped instances back to their original sites
+//                         int sdId(stAdId*SIG_IDX);
+//                         for (int sg = 0; sg < site_det_sig_idx[stAdId]; ++sg)
+//                         {
+//                             int sdInst = site_det_sig[sdId + sg];
+//                             inst_curr_detSite[sdInst] = stId;
+//                         }
+//                         // Set the instance as illegal
+//                         for (int idx = 0; idx < flat_node2prclstrCount[instId]; ++idx)
+//                         {
+//                             int prclInst = flat_node2precluster_map[instPcl + idx];
+//                             inst_curr_detSite[prclInst] = INVALID;
+//                         }
+//                         ripupSiteLegalizeInst = 0;
+//                         break;
+//                     } else
+//                     {
+//                         int sbId = bestCand.siteId;
+//                         int sbAId = site2addr_map[sbId];
+
+//                         Candidate<T> tCand;
+//                         tCand.reset();
+//                         ///
+//                         tCand.score = site_det_score[sbAId];
+//                         tCand.siteId = site_det_siteId[sbAId];
+//                         tCand.sigIdx = site_det_sig_idx[sbAId];
+
+//                         int sbSGId = sbAId*SIG_IDX;
+//                         int sbLutId = sbAId*SLICE_CAPACITY;
+//                         int sbCKId = sbAId*CKSR_IN_CLB;
+//                         int sbCEId = sbAId*CE_IN_CLB;
+
+//                         for(int sg = 0; sg < tCand.sigIdx; ++sg)
+//                         {
+//                             tCand.sig[sg] = site_det_sig[sbSGId + sg];
+//                         }
+//                         for(int sg = 0; sg < SLICE_CAPACITY; ++sg)
+//                         {
+//                             tCand.impl_lut[sg] = site_det_impl_lut[sbLutId+ sg];
+//                             tCand.impl_ff[sg] = site_det_impl_ff[sbLutId+ sg];
+//                         }
+//                         for(int sg = 0; sg < CKSR_IN_CLB; ++sg)
+//                         {
+//                             tCand.impl_cksr[sg] = site_det_impl_cksr[sbCKId+ sg];
+//                         }
+//                         for(int sg = 0; sg < CE_IN_CLB; ++sg)
+//                         {
+//                             tCand.impl_ce[sg] = site_det_impl_ce[sbCEId+ sg];
+//                         }
+//                         dets.emplace_back(tCand);
+
+//                         //Move ripped instances to this site
+//                         site_det_score[sbAId] = bestCand.score;
+//                         site_det_siteId[sbAId] = bestCand.siteId;
+//                         site_det_sig_idx[sbAId] = bestCand.sigIdx;
+
+//                         for(auto sg = 0; sg < bestCand.sigIdx; ++sg)
+//                         {
+//                             site_det_sig[sbSGId + sg] = bestCand.sig[sg];
+//                         }
+//                         for(int sg = 0; sg < SLICE_CAPACITY; ++sg)
+//                         {
+//                             site_det_impl_lut[sbLutId+ sg] = bestCand.impl_lut[sg];
+//                             site_det_impl_ff[sbLutId+ sg] = bestCand.impl_ff[sg];
+//                         }
+//                         for(int sg = 0; sg < CKSR_IN_CLB; ++sg)
+//                         {
+//                             site_det_impl_cksr[sbCKId+ sg] = bestCand.impl_cksr[sg];
+//                         }
+//                         for(int sg = 0; sg < CE_IN_CLB; ++sg)
+//                         {
+//                             site_det_impl_ce[sbCEId+ sg] = bestCand.impl_ce[sg];
+//                         }
+//                         ///
+//                         for (int idx = 0; idx < flat_node2prclstrCount[ruInst]; ++idx)
+//                         {
+//                             int clInst = flat_node2precluster_map[ruInst*3 + idx];
+//                             inst_curr_detSite[clInst] = sbId;
+//                         }
+//                     }
+//                 }
+//                 if (ripupSiteLegalizeInst == INVALID)
+//                 {
+//                     ripupLegalizeInst = 1;
+//                 }
+//             }
+
+//             if (ripupLegalizeInst == 1) break;
+//         }
+
+//         //DBG
+//         if (ripupLegalizeInst != 1)
+//         {
+//             inst_curr_detSite[instId] = INVALID;
+//             //dreamplacePrint(kERROR, "unable to legalize inst_%u \n", node_names[instId]);
+//         }
+//     }
+//     //std::cout << "Total time for RipUP LG is " << std::chrono::duration_cast<std::chrono::microseconds>(pt4-begin).count()/1000000.0 << " (s)" << std::endl;
+
+//     return 0;
+// }
+
+// //run greedy legalization
+// template <typename T>
+// int greedy_LG(
+//               const T* pos_x,
+//               const T* pos_y,
+//               const T* pin_offset_x,
+//               const T* pin_offset_y,
+//               const T* net_weights,
+//               const T* tnet_weights,
+//               const T* net_bbox,
+//               const T* wlPrecond,
+//               const T* site_xy,
+//               const int* net_pinIdArrayX,
+//               const int* net_pinIdArrayY,
+//               const int* spiral_accessor,
+//               const int* node2fence_region_map,
+//               const int* node2shape_map,
+//               const int* node_z,
+//               const int* lut_type,
+//               const int* site_types,
+//               const int* node2pincount,
+//               const int* net2pincount,
+//               const int* pin2net_map,
+//               const int* snkpin2tnet_map,
+//               const int* pin2node_map,
+//               const int* pin_typeIds,
+//               const int* flop2ctrlSetId_map,
+//               const int* flop_ctrlSets,
+//               const int* net2tnet_start,
+//               const int* flat_net2pin_start_map,
+//               const int* flat_tnet2pin_map,
+//               const int* flat_node2pin_start_map,
+//               const int* flat_node2pin_map,
+//               int* flat_node2prclstrCount,
+//               int* flat_node2precluster_map,
+//               const int* sorted_net_map,
+//               const int* sorted_node_map,
+//               const int* sorted_remNode_idx,
+//               const int* site2addr_map,
+//               const int* node_names,
+//               const T xWirelenWt,
+//               const T yWirelenWt,
+//               const T extNetCountWt,
+//               const T wirelenImprovWt,
+//               const T timing_alpha,
+//               const T timing_beta,
+//               const int num_remInsts,
+//               const int num_sites_x,
+//               const int num_sites_y,
+//               const int spiralBegin,
+//               const int spiralEnd,
+//               const int lutId,
+//               const int ffId,
+//               const int sliceLId,
+//               const int sliceMId,
+//               const int SIG_IDX,
+//               const int CE_IN_CLB,
+//               const int CKSR_IN_CLB,
+//               const int HALF_SLICE_CAPACITY,
+//               const int NUM_BLE_PER_SLICE,
+//               const int greedyExpansion,
+//               const int netShareScoreMaxNetDegree,
+//               const int wlScoreMaxNetDegree,
+//               int* inst_curr_detSite,
+//               int* site_det_sig_idx,
+//               int* site_det_sig,
+//               int* site_det_impl_lut,
+//               int* site_det_impl_ff,
+//               int* site_det_impl_cksr,
+//               int* site_det_impl_ce,
+//               int* site_det_siteId,
+//               T* site_det_score
+//               )
+// {
+//     int maxRad = DREAMPLACE_STD_NAMESPACE::max(num_sites_x, num_sites_y);
+
+//     for (int i = 0; i < num_remInsts; ++i)
+//     {
+//         const int instId = sorted_remNode_idx[i];
+
+//         int greedyLegalizeInst(INVALID);
+
+//         int beg(spiralBegin), end(spiralEnd), instPcl(instId*3);
+
+//         T cenX(pos_x[flat_node2precluster_map[instPcl]]);
+//         T cenY(pos_y[flat_node2precluster_map[instPcl]]);
+
+//         if (flat_node2prclstrCount[instId] > 1)
+//         {
+//             cenX *= wlPrecond[flat_node2precluster_map[instPcl]];
+//             cenY *= wlPrecond[flat_node2precluster_map[instPcl]];
+//             T totalWt(wlPrecond[flat_node2precluster_map[instPcl]]);
+
+//             for (int cl = 1; cl < flat_node2prclstrCount[instId]; ++cl)
+//             {
+//                 int pclInst = flat_node2precluster_map[instPcl + cl];
+//                 cenX += pos_x[pclInst] * wlPrecond[pclInst];
+//                 cenY += pos_y[pclInst] * wlPrecond[pclInst];
+//                 totalWt += wlPrecond[pclInst];
+//             }
+
+//             cenX /= totalWt;
+//             cenY /= totalWt;
+//         }
+
+//         //BestCandidate
+//         //Candidate<T> bestCand;
+//         T bestScore = 0.0;
+//         int bestSite = INVALID;
+//         int bestCandLUT[SLICE_CAPACITY];
+//         int bestCandFF[SLICE_CAPACITY];
+//         int bestCandCK[2];
+//         int bestCandCE[4];
+//         int bestCandSig[2*SLICE_CAPACITY];
+//         int bestCandSigSize = 0;
+
+//         T bestScoreImprov(-10000.0);
+
+//         //DBG
+//         int cnt = 0;
+//         for (int sIdx = beg; sIdx < end; ++sIdx)
+//         {
+//             //DBG
+//             ++cnt;
+
+//             int saIdx = sIdx*2;
+//             int xVal = cenX + spiral_accessor[saIdx]; 
+//             int yVal = cenY + spiral_accessor[saIdx + 1]; 
+//             int siteMapIdx = xVal * num_sites_y + yVal;
+//             int siteMapAIdx = site2addr_map[siteMapIdx];
+//             bool siteHasSpecialNode(false);
+
+//             //Check within bounds and site-inst compatibility
+//             if (xVal < 0 || xVal >= num_sites_x || yVal < 0 || yVal >= num_sites_y
+//                     || (site_types[siteMapIdx] != sliceLId && site_types[siteMapIdx] != sliceMId) || (node2fence_region_map[instId] != lutId && node2fence_region_map[instId] != ffId))
+//             {
+//                 continue;
+//             }
+
+//             T candScore = site_det_score[siteMapAIdx];
+//             int candSite = site_det_siteId[siteMapAIdx];
+//             int candLUT[SLICE_CAPACITY];
+//             int candFF[SLICE_CAPACITY];
+//             int candCK[2];
+//             int candCE[4];
+//             int candSig[2*SLICE_CAPACITY];
+//             int candSigSize = site_det_sig_idx[siteMapAIdx];
+
+//             int sdId(siteMapAIdx*SIG_IDX), sdlutId(siteMapAIdx*SLICE_CAPACITY);
+//             int sdckId(siteMapAIdx*CKSR_IN_CLB), sdceId(siteMapAIdx*CE_IN_CLB);
+
+//             for(int sg = 0; sg < candSigSize; ++sg)
+//             {
+//                 candSig[sg] = site_det_sig[sdId + sg];
+//             }
+//             for(int sg = 0; sg < SLICE_CAPACITY; ++sg)
+//             {
+//                 candLUT[sg] = site_det_impl_lut[sdlutId + sg];
+//                 candFF[sg] = site_det_impl_ff[sdlutId + sg];
+//             }
+//             for(int sg = 0; sg < CKSR_IN_CLB; ++sg)
+//             {
+//                 candCK[sg] = site_det_impl_cksr[sdckId + sg];
+//             }
+//             for(int sg = 0; sg < CE_IN_CLB; ++sg)
+//             {
+//                 candCE[sg] = site_det_impl_ce[sdceId + sg];
+//             }
+//             if (add_inst_to_cand_impl(lut_type, flat_node2pin_start_map, flat_node2pin_map, node2pincount, net2pincount, pin2net_map, pin_typeIds, sorted_net_map, flat_node2prclstrCount, flat_node2precluster_map, flop2ctrlSetId_map, node2fence_region_map, flop_ctrlSets, node2shape_map, node_z, siteHasSpecialNode, instId, lutId, ffId, CKSR_IN_CLB, CE_IN_CLB, HALF_SLICE_CAPACITY, NUM_BLE_PER_SLICE, candLUT, candFF, candCK, candCE) && 
+//                     add_inst_to_sig(flat_node2prclstrCount[instId], flat_node2precluster_map, sorted_node_map, instPcl, candSig, candSigSize))
+//             {
+//                 // Adding the instance to the site is legal
+//                 // If this is the first legal position found, set the expansion search radius
+//                 if (bestScoreImprov == -10000.0)
+//                 {
+//                     int r = DREAMPLACE_STD_NAMESPACE::abs(spiral_accessor[saIdx]) + DREAMPLACE_STD_NAMESPACE::abs(spiral_accessor[saIdx + 1]); 
+//                     r += greedyExpansion;
+
+//                     int nwR = DREAMPLACE_STD_NAMESPACE::min(maxRad, r);
+//                     end = nwR ? 2 * (nwR + 1) * nwR + 1 : 1;
+//                 }
+//                 //cand_score = computeCandidateScore(cand);
+//                 compute_candidate_score(pos_x, pos_y, pin_offset_x, pin_offset_y, net_bbox, net_weights, tnet_weights, net_pinIdArrayX, net_pinIdArrayY, net2tnet_start, flat_net2pin_start_map, flat_tnet2pin_map, flat_node2pin_start_map, flat_node2pin_map, sorted_net_map, pin2net_map, snkpin2tnet_map, pin2node_map, net2pincount, site_xy, node_names, xWirelenWt, yWirelenWt, extNetCountWt, wirelenImprovWt, timing_alpha, timing_beta, netShareScoreMaxNetDegree, wlScoreMaxNetDegree, candSig, candSite, candSigSize, candScore);
+
+//                 T scoreImprov = candScore - site_det_score[siteMapAIdx];
+//                 if (scoreImprov > bestScoreImprov)
+//                 {
+//                     //std::cout << "Found best candidate for " << idx << std::endl;
+//                     //bestCand = cand;
+//                     bestScore = candScore;
+//                     bestSite = candSite;
+//                     bestCandSigSize = candSigSize;
+
+//                     for(int sg = 0; sg < candSigSize; ++sg)
+//                     {
+//                         bestCandSig[sg] = candSig[sg];
+//                     }
+//                     for(int sg = 0; sg < SLICE_CAPACITY; ++sg)
+//                     {
+//                         bestCandLUT[sg] = candLUT[sg];
+//                         bestCandFF[sg] = candFF[sg];
+//                     }
+//                     for(int sg = 0; sg < CKSR_IN_CLB; ++sg)
+//                     {
+//                         bestCandCK[sg] = candCK[sg];
+//                     }
+//                     for(int sg = 0; sg < CE_IN_CLB; ++sg)
+//                     {
+//                         bestCandCE[sg] = candCE[sg];
+//                     }
+
+//                     bestScoreImprov = scoreImprov;
+//                 }
+//             } 
+//         }
+
+//         // Commit the found best legal solution
+//         if (bestSite != INVALID)
+//         {
+//             int stId = bestSite;
+//             int stAId = site2addr_map[stId];
+
+//             site_det_score[stAId] = bestScore;
+//             site_det_siteId[stAId] = bestSite;
+//             site_det_sig_idx[stAId] = bestCandSigSize;
+
+//             int sdId(stAId*SIG_IDX), sdlutId(stAId*SLICE_CAPACITY);
+//             int sdckId(stAId*CKSR_IN_CLB), sdceId(stAId*CE_IN_CLB);
+
+//             for (auto sg = 0; sg < bestCandSigSize; ++sg)
+//             {
+//                 site_det_sig[sdId + sg] = bestCandSig[sg];
+//             }
+//             for (int sg = 0; sg < SLICE_CAPACITY; ++sg)
+//             {
+//                 site_det_impl_lut[sdlutId + sg] = bestCandLUT[sg];
+//                 site_det_impl_ff[sdlutId + sg] = bestCandFF[sg];
+//             }
+//             for (int sg = 0; sg < CKSR_IN_CLB; ++sg)
+//             {
+//                 site_det_impl_cksr[sdckId + sg] = bestCandCK[sg];
+//             }
+//             for (int sg = 0; sg < CE_IN_CLB; ++sg)
+//             {
+//                 site_det_impl_ce[sdceId + sg] = bestCandCE[sg];
+//             }
+//             /////
+
+//             for (int cl = 0; cl < flat_node2prclstrCount[instId]; ++cl)
+//             {
+//                 int prclInst = flat_node2precluster_map[instPcl + cl];
+//                 inst_curr_detSite[prclInst] = bestSite;
+//             }
+//             greedyLegalizeInst = 1;
+//         }
+//     }
+
+//     return 0;
+// }
 
 // slot assignment
 template <typename T>
@@ -4456,6 +5206,11 @@ int slotAssign(
         const int* sorted_net_map,
         const int* addr2site_map,
         const int* node_names,
+        const int* node2shape_map,
+        const int* node_z,
+        const int* sites_with_lutram,
+        const int* sites_with_carry,
+        const int* sites_with_muxshape,
         const T slotAssignFlowWeightScale,
         const T slotAssignFlowWeightIncr,
         const int num_sites_x,
@@ -4469,7 +5224,9 @@ int slotAssign(
         const int num_threads,
         int* site_det_sig_idx,
         int* site_det_impl_lut,
+        int* site_unavail_lut,
         int* site_det_impl_ff,
+        int* site_unavail_ff,
         int* site_det_impl_cksr,
         int* site_det_impl_ce,
         int* site_det_siteId
@@ -4480,9 +5237,10 @@ int slotAssign(
     #pragma omp parallel for num_threads(num_threads) schedule(dynamic, chunk_size)
     for(int sIdx = 0; sIdx < num_clb_sites; ++sIdx)
     {
-        if (site_det_sig_idx[sIdx] > 0)
+        if (site_det_sig_idx[sIdx] > 0 && sites_with_lutram[sIdx] != 1)
         {
             int siteId = addr2site_map[sIdx];
+            bool siteHasSpecialNode = (sites_with_carry[sIdx] == 1 || sites_with_muxshape[sIdx] == 1);
 
             //initSlotAssign
             int sdlutId(sIdx*SLICE_CAPACITY);
@@ -4494,10 +5252,14 @@ int slotAssign(
             {
                 if (site_det_impl_lut[sdlutId + sg] != INVALID)
                 {
+                    // skip the LUTs that are shape instances
+                    if (node2shape_map[site_det_impl_lut[sdlutId + sg]] != INVALID) continue;
                     lut.push_back(site_det_impl_lut[sdlutId + sg]);
                 }
                 if (site_det_impl_ff[sdlutId + sg] != INVALID)
                 {
+                    // skip the FFs that are shape instances
+                    if (node2shape_map[site_det_impl_ff[sdlutId + sg]] != INVALID) continue;
                     ff.push_back(site_det_impl_ff[sdlutId + sg]);
                 }
             }
@@ -4544,11 +5306,10 @@ int slotAssign(
 
                 BLE<T> tempBLE(ble);
                 //findBestFFs(ff, cksr[0], ce[0], ce[1], bleS[i])
-                findBestFFs(flop_ctrlSets, flop2ctrlSetId_map, flat_node2pin_start_map, flat_node2pin_map, flat_net2pin_start_map, flat_net2pin_map, pin2net_map, node2pincount, pin_typeIds, net2pincount, node2outpinIdx_map, pin2node_map, sorted_net_map, lut_type, ff, cksr[0], ce[0], ce[1], ble);
+                findBestFFs(flop_ctrlSets, flop2ctrlSetId_map, flat_node2pin_start_map, flat_node2pin_map, node2shape_map, node_z, flat_net2pin_start_map, flat_net2pin_map, pin2net_map, node2pincount, pin_typeIds, net2pincount, node2outpinIdx_map, pin2node_map, sorted_net_map, lut_type, ff, cksr[0], ce[0], ce[1], ble);
 
                 //findBestFFs(ff, cksr[1], ce[2], ce[3], tempBLE)
-                findBestFFs(flop_ctrlSets, flop2ctrlSetId_map, flat_node2pin_start_map, flat_node2pin_map, flat_net2pin_start_map, flat_net2pin_map, pin2net_map, node2pincount, pin_typeIds, net2pincount, node2outpinIdx_map, pin2node_map, sorted_net_map, lut_type, ff, cksr[1], ce[2], ce[3], tempBLE);
-
+                findBestFFs(flop_ctrlSets, flop2ctrlSetId_map, flat_node2pin_start_map, flat_node2pin_map, node2shape_map, node_z, flat_net2pin_start_map, flat_net2pin_map, pin2net_map, node2pincount, pin_typeIds, net2pincount, node2outpinIdx_map, pin2node_map, sorted_net_map, lut_type, ff, cksr[1], ce[2], ce[3], tempBLE);              
                 if (tempBLE.score > ble.score)
                 {
                     ble = tempBLE;
@@ -4563,7 +5324,7 @@ int slotAssign(
                 for(unsigned int bIdx = aIdx + 1; bIdx < lut.size(); ++bIdx)
                 {
                     const int lutB = lut[bIdx];
-                    if (two_lut_compatibility_check(lut_type, flat_node2pin_start_map, flat_node2pin_map, pin2net_map, pin_typeIds, sorted_net_map, lutA, lutB))
+                    if (two_lut_compatibility_check(lut_type, flat_node2pin_start_map, flat_node2pin_map, pin2net_map, pin_typeIds, sorted_net_map, node2shape_map, node_z, lutA, lutB))
                     {
                         bleP.emplace_back();
 
@@ -4574,10 +5335,10 @@ int slotAssign(
                         BLE<T> tempBLE(ble);
 
                         //findBestFFs(ff, cksr[0], ce[0], ce[1], bleS[i])
-                        findBestFFs(flop_ctrlSets, flop2ctrlSetId_map, flat_node2pin_start_map, flat_node2pin_map, flat_net2pin_start_map, flat_net2pin_map, pin2net_map, node2pincount, pin_typeIds, net2pincount, node2outpinIdx_map, pin2node_map, sorted_net_map, lut_type, ff, cksr[0], ce[0], ce[1], ble);
+                        findBestFFs(flop_ctrlSets, flop2ctrlSetId_map, flat_node2pin_start_map, flat_node2pin_map, node2shape_map, node_z, flat_net2pin_start_map, flat_net2pin_map, pin2net_map, node2pincount, pin_typeIds, net2pincount, node2outpinIdx_map, pin2node_map, sorted_net_map, lut_type, ff, cksr[0], ce[0], ce[1], ble);
 
                         //findBestFFs(ff, cksr[1], ce[2], ce[3], tempBLE)
-                        findBestFFs(flop_ctrlSets, flop2ctrlSetId_map, flat_node2pin_start_map, flat_node2pin_map, flat_net2pin_start_map, flat_net2pin_map, pin2net_map, node2pincount, pin_typeIds, net2pincount, node2outpinIdx_map, pin2node_map, sorted_net_map, lut_type, ff, cksr[1], ce[2], ce[3], tempBLE);
+                        findBestFFs(flop_ctrlSets, flop2ctrlSetId_map, flat_node2pin_start_map, flat_node2pin_map, node2shape_map, node_z, flat_net2pin_start_map, flat_net2pin_map, pin2net_map, node2pincount, pin_typeIds, net2pincount, node2outpinIdx_map, pin2node_map, sorted_net_map, lut_type, ff, cksr[1], ce[2], ce[3], tempBLE);
 
                         if (tempBLE.score > ble.score)
                         {
@@ -4589,7 +5350,6 @@ int slotAssign(
                     }
                 }
             }
-
             //pairLUTs
             pairLUTs(lut, bleP, bleS, slotAssignFlowWeightScale, slotAssignFlowWeightIncr, NUM_BLE_PER_SLICE, bleLP);
 
@@ -4597,6 +5357,10 @@ int slotAssign(
             // Reset the existing slot assignment in site.det
             for (int sg = 0; sg < SLICE_CAPACITY; ++sg)
             {
+                if (slotHasShapeInst(node2shape_map, site_det_impl_lut[sdlutId + sg], site_det_impl_ff[sdlutId + sg]))
+                {
+                    continue;
+                }
                 site_det_impl_lut[sdlutId + sg] = INVALID;
                 site_det_impl_ff[sdlutId + sg] = INVALID;
             }
@@ -4609,15 +5373,158 @@ int slotAssign(
                 site_det_impl_ce[sdceId + sg] = INVALID;
             }
 
+            // Set the control sets from shape FFs
+            for (int sg = 0; sg < SLICE_CAPACITY; ++sg)
+            {   
+                if (site_det_impl_ff[sdlutId + sg] != INVALID)
+                {
+                    int ffId = site_det_impl_ff[sdlutId + sg];
+                    int lh = sg / HALF_SLICE_CAPACITY;
+                    int oe = sg % BLE_CAPACITY;
+                    site_det_impl_cksr[sdckId + lh]= flop_ctrlSets[flop2ctrlSetId_map[ffId]*3 + 1];
+                    site_det_impl_ce[sdceId + 2*lh + oe]= flop_ctrlSets[flop2ctrlSetId_map[ffId]*3 + 2];
+                }
+            }
+
             std::vector<T> scores;
             scores.assign(NUM_BLE_PER_SLICE, 0.0);
 
+            // iterate through bleLP and find the BLEs that have shape instances
+            // std::vector<BLE<T> > bleLP_shape;
+            // std::vector<BLE<T> > bleLP_no_shape;
+            // for (const auto &ble : bleLP)
+            // {   
+            //     if (bleHasShapeInst(node2shape_map, ble.lut[0], ble.lut[1], ble.ff[0], ble.ff[1]))
+            //     {
+            //         bleLP_shape.push_back(ble);          
+            //     } else
+            //     {
+            //         bleLP_no_shape.push_back(ble);
+            //     }
+            // }
+
             // Sort legal LUT/LUT pairs by their score from high to low
             std::sort(bleLP.begin(), bleLP.end(), [&](const BLE<T> &a, const BLE<T> &b){ return a.score > b.score; });
+            // std::sort(bleLP_shape.begin(), bleLP_shape.end(), [&](const BLE<T> &a, const BLE<T> &b){ return a.score > b.score; });
+            // std::sort(bleLP_no_shape.begin(), bleLP_no_shape.end(), [&](const BLE<T> &a, const BLE<T> &b){ return a.score > b.score; });
 
             // Record the number of available LUT pair slots in low/high half of the slice
             int availLo = NUM_BLE_PER_HALF_SLICE;
             int availHi = NUM_BLE_PER_HALF_SLICE;
+
+            /// Update the slot availability based on the existing slot assignment with shape instances
+            for (int idx = 0; idx < SLICE_CAPACITY; idx += BLE_CAPACITY)
+            {
+                int lh = idx / HALF_SLICE_CAPACITY;
+                if (bleHasShapeInst(node2shape_map, site_det_impl_lut[sdlutId + idx], site_det_impl_lut[sdlutId + idx + 1], site_det_impl_ff[sdlutId + idx], site_det_impl_ff[sdlutId + idx + 1]))
+                {
+                    (lh ? availHi : availLo) -= 1;
+                }
+            }
+            
+            // // If the site containes carry chain, we need to assign BLEs that has shape instances first and then assign the rest
+            // if (siteHasSpecialNode)
+            // {
+            //     for(const auto &estBLE : bleLP_shape)
+            //     {
+            //         BLE<T> bleLo(estBLE);
+            //         BLE<T> bleHi(estBLE);
+                    
+            //         findBestFFs(flop_ctrlSets, flop2ctrlSetId_map, flat_node2pin_start_map, flat_node2pin_map, node2shape_map, node_z, flat_net2pin_start_map, flat_net2pin_map, pin2net_map, node2pincount, pin_typeIds, net2pincount, node2outpinIdx_map, pin2node_map, sorted_net_map, lut_type, ff, cksr[0], ce[0], ce[1], bleLo);
+
+            //         findBestFFs(flop_ctrlSets, flop2ctrlSetId_map, flat_node2pin_start_map, flat_node2pin_map, node2shape_map, node_z, flat_net2pin_start_map, flat_net2pin_map, pin2net_map, node2pincount, pin_typeIds, net2pincount, node2outpinIdx_map, pin2node_map, sorted_net_map, lut_type, ff, cksr[1], ce[2], ce[3], bleHi);
+                    
+            //         // find the index of the bleLP
+            //         std::vector<int> bleInsts;
+            //         bleInsts.push_back(estBLE.lut[0]);
+            //         bleInsts.push_back(estBLE.lut[1]);
+            //         int z = 0;
+
+            //         for (const auto &inst : bleInsts)
+            //         {
+            //             if (inst != INVALID){
+            //                 if (node2shape_map[inst] != INVALID)
+            //                 {
+            //                     z = node_z[inst];
+            //                     break;
+            //                 }
+            //             }
+            //         }
+
+            //         int idx = z/BLE_CAPACITY;
+            //         int pos = idx * BLE_CAPACITY;
+            //         int lh = pos / HALF_SLICE_CAPACITY;
+            //         const auto &ble = (lh ? bleHi : bleLo);
+            //         (lh ? availHi : availLo) -= 1;
+            //         if (site_det_impl_lut[sdlutId + pos] == INVALID && site_det_impl_lut[sdlutId + pos + 1] == INVALID)
+            //         {
+            //             // Realize LUT assignment
+            //             int flip = flipShapeLuts(node2shape_map, node_z, ble.lut[0], ble.lut[1]) ? 1 : 0;
+
+            //             site_det_impl_lut[sdlutId + pos] = ble.lut[flip];
+            //             site_det_impl_lut[sdlutId + pos + 1] = ble.lut[1-flip];
+
+            //             // Realize FF assignment
+            //             int flipFF = ble.ff[0] != INVALID && ble.ff[1] != INVALID ? (node_z[ble.ff[0]] > node_z[ble.ff[1]] ? 1 : 0) : 0;
+
+            //             for (int k : {0, 1})
+            //             {   
+            //                 if (ble.ff[k] != INVALID)
+            //                 {
+            //                     const int ffId = ble.ff[k];
+
+            //                     // rip up the FF if it is conflicting with the shape instance
+            //                     // if (site_unavail_ff[sdlutId + pos + k] == 1 && node2shape_map[ffId] == INVALID) continue;
+            //                     if (node_z[ffId] != (pos + k) && node2shape_map[ffId] != INVALID) flipFF = 1;
+
+            //                     if (flipFF == 1)
+            //                     {   
+            //                         if (site_unavail_ff[sdlutId + pos + 1 - k] == 1 && node2shape_map[ffId] == INVALID) continue;
+            //                         site_det_impl_ff[sdlutId + pos + 1 - k] = ble.ff[k];
+            //                         site_det_impl_cksr[sdckId + lh]= flop_ctrlSets[flop2ctrlSetId_map[ffId]*3 + 1];
+            //                         site_det_impl_ce[sdceId + 2*lh + 1 - k]= flop_ctrlSets[flop2ctrlSetId_map[ffId]*3 + 2];
+            //                         // update ce since the FF is flipped
+            //                         int temp = ce[2*lh + 1 - k];
+            //                         ce[2*lh + 1 - k] = flop_ctrlSets[flop2ctrlSetId_map[ffId]*3 + 2];
+            //                         ce[2*lh + k] = temp;
+            //                         ff.erase(std::find(ff.begin(), ff.end(), ble.ff[k]));
+            //                     } else
+            //                     {
+            //                         if (site_unavail_ff[sdlutId + pos + k] == 1 && node2shape_map[ffId] == INVALID) continue;
+            //                         site_det_impl_ff[sdlutId + pos + k] = ble.ff[k];
+            //                         site_det_impl_cksr[sdckId + lh]= flop_ctrlSets[flop2ctrlSetId_map[ffId]*3 + 1];
+            //                         site_det_impl_ce[sdceId + 2*lh + k]= flop_ctrlSets[flop2ctrlSetId_map[ffId]*3 + 2];
+            //                         ff.erase(std::find(ff.begin(), ff.end(), ble.ff[k]));
+            //                     }
+            //                 }
+            //             }
+            //             scores[pos / BLE_CAPACITY] = ble.score;
+            //         }
+            //     }
+            //     // Assign the rest of unassigned FFs that belong to shape instances
+            //     for (const auto &flop : ff)
+            //     {
+            //         if (node2shape_map[flop]!= INVALID)
+            //         {
+            //             int pos = node_z[flop];
+            //             int lh = pos / HALF_SLICE_CAPACITY;
+            //             int oe = pos % BLE_CAPACITY;
+            //             (lh ? availHi : availLo) -= 1;
+            //             if (site_det_impl_ff[sdlutId + pos] == INVALID)
+            //             {
+            //                 site_det_impl_ff[sdlutId + pos] = flop;
+            //                 site_det_impl_cksr[sdckId + lh]= flop_ctrlSets[flop2ctrlSetId_map[flop]*3 + 1];
+            //                 site_det_impl_ce[sdceId + 2*lh + oe]= flop_ctrlSets[flop2ctrlSetId_map[flop]*3 + 2];
+            //                 // update ce since the FF could be flipped
+            //                 int temp = ce[2*lh + oe];
+            //                 ce[2*lh + oe] = flop_ctrlSets[flop2ctrlSetId_map[flop]*3 + 2];
+            //                 ce[2*lh + 1 - oe] = temp;
+            //                 // Remove the FF assigned from the active list
+            //                 ff.erase(std::find(ff.begin(), ff.end(), flop));
+            //             }
+            //         }
+            //     }
+            // }
 
             // Assign LUTs one by one and determine thier best FFs at the same time
             for(const auto &estBLE : bleLP)
@@ -4625,9 +5532,9 @@ int slotAssign(
                 BLE<T> bleLo(estBLE);
                 BLE<T> bleHi(estBLE);
 
-                findBestFFs(flop_ctrlSets, flop2ctrlSetId_map, flat_node2pin_start_map, flat_node2pin_map, flat_net2pin_start_map, flat_net2pin_map, pin2net_map, node2pincount, pin_typeIds, net2pincount, node2outpinIdx_map, pin2node_map, sorted_net_map, lut_type, ff, cksr[0], ce[0], ce[1], bleLo);
+                findBestFFs(flop_ctrlSets, flop2ctrlSetId_map, flat_node2pin_start_map, flat_node2pin_map, node2shape_map, node_z, flat_net2pin_start_map, flat_net2pin_map, pin2net_map, node2pincount, pin_typeIds, net2pincount, node2outpinIdx_map, pin2node_map, sorted_net_map, lut_type, ff, cksr[0], ce[0], ce[1], bleLo);
 
-                findBestFFs(flop_ctrlSets, flop2ctrlSetId_map, flat_node2pin_start_map, flat_node2pin_map, flat_net2pin_start_map, flat_net2pin_map, pin2net_map, node2pincount, pin_typeIds, net2pincount, node2outpinIdx_map, pin2node_map, sorted_net_map, lut_type, ff, cksr[1], ce[2], ce[3], bleHi);
+                findBestFFs(flop_ctrlSets, flop2ctrlSetId_map, flat_node2pin_start_map, flat_node2pin_map, node2shape_map, node_z, flat_net2pin_start_map, flat_net2pin_map, pin2net_map, node2pincount, pin_typeIds, net2pincount, node2outpinIdx_map, pin2node_map, sorted_net_map, lut_type, ff, cksr[1], ce[2], ce[3], bleHi);
 
                 // Try to fit the found BLE in the preferred feasible half slice
                 int lh = ((availLo && bleLo.score > bleHi.score) || !availHi ? 0 : 1);
@@ -4640,7 +5547,7 @@ int slotAssign(
                 for (int idx = beg; idx < end; idx += BLE_CAPACITY)
                 {
                     int pos = idx % SLICE_CAPACITY;
-                    if (site_det_impl_lut[sdlutId + pos] == INVALID && site_det_impl_lut[sdlutId + pos + 1] == INVALID)
+                    if (site_det_impl_lut[sdlutId + pos] == INVALID && site_det_impl_lut[sdlutId + pos + 1] == INVALID && site_unavail_lut[sdlutId + pos] == 0 && site_unavail_lut[sdlutId + pos +1] == 0)
                     {
 
                         // Realize LUT assignment
@@ -4654,7 +5561,8 @@ int slotAssign(
 
                         // Realize FF assignment
                         for (int k : {0, 1})
-                        {
+                        {   
+                            if (site_det_impl_ff[sdlutId + pos + k] != INVALID || site_unavail_ff[sdlutId + pos + k] == 1) continue;
                             site_det_impl_ff[sdlutId + pos + k] = ble.ff[k];
                             if (ble.ff[k] != INVALID)
                             {
@@ -4692,7 +5600,7 @@ int slotAssign(
                         int lh = pos / HALF_SLICE_CAPACITY;
                         int oe = pos % BLE_CAPACITY;
 
-                        if (site_det_impl_ff[sdlutId + pos] == INVALID && ffcksr == cksr[lh] && ffce == ce[2 * lh + oe])
+                        if (site_det_impl_ff[sdlutId + pos] == INVALID && ffcksr == cksr[lh] && ffce == ce[2 * lh + oe] && site_unavail_ff[sdlutId + pos] == 0)
                         {
                             int k = pos / BLE_CAPACITY * BLE_CAPACITY;
                             site_det_impl_ff[sdlutId + pos] = ffI;
@@ -4726,8 +5634,42 @@ int slotAssign(
                 scores[bestPos/BLE_CAPACITY] += bestImprov;
             }
 
+
+            // For Debug
+            if (siteHasSpecialNode)
+            {
+                for (int sg = 0; sg < SLICE_CAPACITY; ++sg)
+                {   
+                    int lutId = site_det_impl_lut[sdlutId + sg];
+                    if (lutId != INVALID)
+                    {
+                        if (node2shape_map[lutId] != INVALID && node_z[lutId] != sg)
+                        {
+                            std::cout << "ERROR: Shape LUT " << lutId << " was assigned to wrong pos " << sg << " instead of " << node_z[lutId] << std::endl;
+                        } else if (node2shape_map[lutId] == INVALID && site_unavail_lut[sdlutId + sg] == 1)
+                        {
+                           std::cout << "ERROR: Non-shape LUT " << lutId << " was assigned to unavailable pos " << sg << " at site " << sIdx << std::endl;
+                        }
+                    }
+                    int ffId = site_det_impl_ff[sdlutId + sg];
+                    if (ffId != INVALID)
+                    {
+                        if (node2shape_map[ffId] != INVALID && node_z[ffId] != sg)
+                        {
+                            std::cout << "ERROR: Shape FF " << ffId << " was assigned to wrong pos " << sg << " instead of " << node_z[ffId] << std::endl;
+                        } else if (node2shape_map[ffId] == INVALID && site_unavail_ff[sdlutId + sg] == 1)
+                        {
+                           std::cout << "ERROR: Non-shape FF " << ffId << " was assigned to unavailable pos " << sg << " at site " << sIdx << std::endl;
+                        }
+                    }
+                }
+            }
+            // For Debug
+
             //order BLEs
             // Sort BLEs in each half slice by their Y centroid coordinates (cen.y - site.y)
+            if (siteHasSpecialNode) continue;  // Skip the reordering for sites with special nodes
+
             T siteY = site_xy[2*site_det_siteId[sIdx] + 1];
             for (int lh : {0, 1})
             {
@@ -4797,311 +5739,313 @@ int slotAssign(
 
 //Only focus on FFs
 // slot assignment
-template <typename T>
-int slotAssignUpd(
-        const T* pos_x,
-        const T* pos_y,
-        const T* wlPrecond,
-        const T* site_xy,
-        const int* flop_ctrlSets,
-        const int* flop2ctrlSetId_map,
-        const int* flat_node2pin_start_map,
-        const int* flat_node2pin_map,
-        const int* flat_net2pin_start_map,
-        const int* flat_net2pin_map,
-        const int* pin2net_map,
-        const int* pin2node_map,
-        const int* node2pincount,
-        const int* net2pincount,
-        const int* node2outpinIdx_map,
-        const int* pin_typeIds,
-        const int* lut_type,
-        const int* site_types,
-        const int* sorted_net_map,
-        const int* addr2site_map,
-        const int* node_names,
-        const T slotAssignFlowWeightScale,
-        const T slotAssignFlowWeightIncr,
-        const int num_sites_x,
-        const int num_sites_y,
-        const int num_clb_sites,
-        const int CKSR_IN_CLB,
-        const int CE_IN_CLB,
-        const int HALF_SLICE_CAPACITY,
-        const int NUM_BLE_PER_SLICE,
-        const int NUM_BLE_PER_HALF_SLICE,
-        const int num_threads,
-        int* site_det_sig_idx,
-        int* site_det_impl_lut,
-        int* site_det_impl_ff,
-        int* site_det_impl_cksr,
-        int* site_det_impl_ce,
-        int* site_det_siteId
-        )
-{
-    int chunk_size = DREAMPLACE_STD_NAMESPACE::max(int(num_clb_sites / num_threads / 16), 1);
+// template <typename T>
+// int slotAssignUpd(
+//         const T* pos_x,
+//         const T* pos_y,
+//         const T* wlPrecond,
+//         const T* site_xy,
+//         const int* flop_ctrlSets,
+//         const int* flop2ctrlSetId_map,
+//         const int* flat_node2pin_start_map,
+//         const int* flat_node2pin_map,
+//         const int* flat_net2pin_start_map,
+//         const int* flat_net2pin_map,
+//         const int* pin2net_map,
+//         const int* pin2node_map,
+//         const int* node2pincount,
+//         const int* net2pincount,
+//         const int* node2outpinIdx_map,
+//         const int* node2shape_map,
+//         const int* node_z,
+//         const int* pin_typeIds,
+//         const int* lut_type,
+//         const int* site_types,
+//         const int* sorted_net_map,
+//         const int* addr2site_map,
+//         const int* node_names,
+//         const T slotAssignFlowWeightScale,
+//         const T slotAssignFlowWeightIncr,
+//         const int num_sites_x,
+//         const int num_sites_y,
+//         const int num_clb_sites,
+//         const int CKSR_IN_CLB,
+//         const int CE_IN_CLB,
+//         const int HALF_SLICE_CAPACITY,
+//         const int NUM_BLE_PER_SLICE,
+//         const int NUM_BLE_PER_HALF_SLICE,
+//         const int num_threads,
+//         int* site_det_sig_idx,
+//         int* site_det_impl_lut,
+//         int* site_det_impl_ff,
+//         int* site_det_impl_cksr,
+//         int* site_det_impl_ce,
+//         int* site_det_siteId
+//         )
+// {
+//     int chunk_size = DREAMPLACE_STD_NAMESPACE::max(int(num_clb_sites / num_threads / 16), 1);
 
-    #pragma omp parallel for num_threads(num_threads) schedule(dynamic, chunk_size)
-    for(int sIdx = 0; sIdx < num_clb_sites; ++sIdx)
-    {
-        if (site_det_sig_idx[sIdx] > 0)
-        {
-            int siteId = addr2site_map[sIdx];
+//     #pragma omp parallel for num_threads(num_threads) schedule(dynamic, chunk_size)
+//     for(int sIdx = 0; sIdx < num_clb_sites; ++sIdx)
+//     {
+//         if (site_det_sig_idx[sIdx] > 0)
+//         {
+//             int siteId = addr2site_map[sIdx];
 
-            //initSlotAssign
-            int sdlutId(sIdx*SLICE_CAPACITY);
-            int sdckId(sIdx*CKSR_IN_CLB), sdceId(sIdx*CE_IN_CLB);
+//             //initSlotAssign
+//             int sdlutId(sIdx*SLICE_CAPACITY);
+//             int sdckId(sIdx*CKSR_IN_CLB), sdceId(sIdx*CE_IN_CLB);
 
-            std::vector<int> ff, lut;
+//             std::vector<int> ff, lut;
 
-            for (int sg = 0; sg < SLICE_CAPACITY; ++sg)
-            {
-                lut.push_back(site_det_impl_lut[sdlutId + sg]);
-                if (site_det_impl_ff[sdlutId + sg] != INVALID)
-                {
-                    ff.push_back(site_det_impl_ff[sdlutId + sg]);
-                }
-            }
+//             for (int sg = 0; sg < SLICE_CAPACITY; ++sg)
+//             {
+//                 lut.push_back(site_det_impl_lut[sdlutId + sg]);
+//                 if (site_det_impl_ff[sdlutId + sg] != INVALID)
+//                 {
+//                     ff.push_back(site_det_impl_ff[sdlutId + sg]);
+//                 }
+//             }
 
-            // Pre-assign control sets
-            // Note that the original impl FF assignment is feasible but it is optimized for minimum resource usage
-            // Therefore, to enlarge the solution space exploration, we do following modifications based on the original control set assignment:
-            //     (1) if ce[1] (ce[3]) is empty, we set it to ce[0] (ce[2]),
-            //     (2) if (cksr[1], ce[2], ce[3]) are empty, we set them to (cksr[0], ce[0], ce[1])
-            int cksr[2];
-            int ce[4];
+//             // Pre-assign control sets
+//             // Note that the original impl FF assignment is feasible but it is optimized for minimum resource usage
+//             // Therefore, to enlarge the solution space exploration, we do following modifications based on the original control set assignment:
+//             //     (1) if ce[1] (ce[3]) is empty, we set it to ce[0] (ce[2]),
+//             //     (2) if (cksr[1], ce[2], ce[3]) are empty, we set them to (cksr[0], ce[0], ce[1])
+//             int cksr[2];
+//             int ce[4];
 
-            for(int sg = 0; sg < CKSR_IN_CLB; ++sg)
-            {
-                cksr[sg] = site_det_impl_cksr[sdckId + sg];
-            }
-            for(int sg = 0; sg < CE_IN_CLB; ++sg)
-            {
-                ce[sg] = site_det_impl_ce[sdceId + sg];
-            }
+//             for(int sg = 0; sg < CKSR_IN_CLB; ++sg)
+//             {
+//                 cksr[sg] = site_det_impl_cksr[sdckId + sg];
+//             }
+//             for(int sg = 0; sg < CE_IN_CLB; ++sg)
+//             {
+//                 ce[sg] = site_det_impl_ce[sdceId + sg];
+//             }
 
-            if (ce[1] == INVALID)
-            {
-                ce[1] = ce[0];
-            }
-            if (ce[3] == INVALID)
-            {
-                ce[3] = ce[2];
-            }
-            if (cksr[1] == INVALID)
-            {
-                cksr[1] = cksr[0];
-                ce[2] = ce[0];
-                ce[3] = ce[1];
-            }
+//             if (ce[1] == INVALID)
+//             {
+//                 ce[1] = ce[0];
+//             }
+//             if (ce[3] == INVALID)
+//             {
+//                 ce[3] = ce[2];
+//             }
+//             if (cksr[1] == INVALID)
+//             {
+//                 cksr[1] = cksr[0];
+//                 ce[2] = ce[0];
+//                 ce[3] = ce[1];
+//             }
 
-            // Reset the existing slot assignment in site.det
-            for (int sg = 0; sg < SLICE_CAPACITY; ++sg)
-            {
-                site_det_impl_lut[sdlutId + sg] = INVALID;
-                site_det_impl_ff[sdlutId + sg] = INVALID;
-            }
-            for(int sg = 0; sg < CKSR_IN_CLB; ++sg)
-            {
-                site_det_impl_cksr[sdckId + sg] = INVALID;
-            }
-            for(int sg = 0; sg < CE_IN_CLB; ++sg)
-            {
-                site_det_impl_ce[sdceId + sg] = INVALID;
-            }
+//             // Reset the existing slot assignment in site.det
+//             for (int sg = 0; sg < SLICE_CAPACITY; ++sg)
+//             {
+//                 site_det_impl_lut[sdlutId + sg] = INVALID;
+//                 site_det_impl_ff[sdlutId + sg] = INVALID;
+//             }
+//             for(int sg = 0; sg < CKSR_IN_CLB; ++sg)
+//             {
+//                 site_det_impl_cksr[sdckId + sg] = INVALID;
+//             }
+//             for(int sg = 0; sg < CE_IN_CLB; ++sg)
+//             {
+//                 site_det_impl_ce[sdceId + sg] = INVALID;
+//             }
 
-            std::vector<T> scores;
-            scores.assign(NUM_BLE_PER_SLICE, 0.0);
-            // Record the number of available LUT pair slots in low/high half of the slice
-            int availLo = NUM_BLE_PER_HALF_SLICE;
-            int availHi = NUM_BLE_PER_HALF_SLICE;
+//             std::vector<T> scores;
+//             scores.assign(NUM_BLE_PER_SLICE, 0.0);
+//             // Record the number of available LUT pair slots in low/high half of the slice
+//             int availLo = NUM_BLE_PER_HALF_SLICE;
+//             int availHi = NUM_BLE_PER_HALF_SLICE;
 
-            //For LUTs only move those with large inputs to odd slots
-            //Assign FFs accordingly
-            for(unsigned int aIdx = 0; aIdx < lut.size(); aIdx+=BLE_CAPACITY)
-            {
-                const int lutA = lut[aIdx];
-                const int lutB = lut[aIdx + 1];
+//             //For LUTs only move those with large inputs to odd slots
+//             //Assign FFs accordingly
+//             for(unsigned int aIdx = 0; aIdx < lut.size(); aIdx+=BLE_CAPACITY)
+//             {
+//                 const int lutA = lut[aIdx];
+//                 const int lutB = lut[aIdx + 1];
 
-                BLE<T> ble;
-                // Assign LUTs with more inputs at odd slots
-                // In this way we can also make sure that all LUT6 are assigned at odd positions
-                int demA = (lutA == INVALID ? 0 : lut_type[lutA]);
-                int demB = (lutB == INVALID ? 0 : lut_type[lutB]);
+//                 BLE<T> ble;
+//                 // Assign LUTs with more inputs at odd slots
+//                 // In this way we can also make sure that all LUT6 are assigned at odd positions
+//                 int demA = (lutA == INVALID ? 0 : lut_type[lutA]);
+//                 int demB = (lutB == INVALID ? 0 : lut_type[lutB]);
 
-                if (demA > demB)
-                {
-                    ble.lut[0] = lutA;
-                    ble.lut[1] = lutB;
-                } else
-                {
-                    ble.lut[0] = lutB;
-                    ble.lut[1] = lutA;
-                }
+//                 if (demA > demB)
+//                 {
+//                     ble.lut[0] = lutA;
+//                     ble.lut[1] = lutB;
+//                 } else
+//                 {
+//                     ble.lut[0] = lutB;
+//                     ble.lut[1] = lutA;
+//                 }
 
-                BLE<T> tempBLE(ble);
+//                 BLE<T> tempBLE(ble);
 
-                //findBestFFs(ff, cksr[0], ce[0], ce[1], bleS[i])
-                findBestFFs(flop_ctrlSets, flop2ctrlSetId_map, flat_node2pin_start_map, flat_node2pin_map, flat_net2pin_start_map, flat_net2pin_map, pin2net_map, node2pincount, pin_typeIds, net2pincount, node2outpinIdx_map, pin2node_map, sorted_net_map, lut_type, ff, cksr[0], ce[0], ce[1], ble);
+//                 //findBestFFs(ff, cksr[0], ce[0], ce[1], bleS[i])
+//                 findBestFFs(flop_ctrlSets, flop2ctrlSetId_map, flat_node2pin_start_map, flat_node2pin_map, node2shape_map, node_z, flat_net2pin_start_map, flat_net2pin_map, pin2net_map, node2pincount, pin_typeIds, net2pincount, node2outpinIdx_map, pin2node_map, sorted_net_map, lut_type, ff, cksr[0], ce[0], ce[1], ble);
 
-                //findBestFFs(ff, cksr[1], ce[2], ce[3], tempBLE)
-                findBestFFs(flop_ctrlSets, flop2ctrlSetId_map, flat_node2pin_start_map, flat_node2pin_map, flat_net2pin_start_map, flat_net2pin_map, pin2net_map, node2pincount, pin_typeIds, net2pincount, node2outpinIdx_map, pin2node_map, sorted_net_map, lut_type, ff, cksr[1], ce[2], ce[3], tempBLE);
+//                 //findBestFFs(ff, cksr[1], ce[2], ce[3], tempBLE)
+//                 findBestFFs(flop_ctrlSets, flop2ctrlSetId_map, flat_node2pin_start_map, flat_node2pin_map, node2shape_map, node_z, flat_net2pin_start_map, flat_net2pin_map, pin2net_map, node2pincount, pin_typeIds, net2pincount, node2outpinIdx_map, pin2node_map, sorted_net_map, lut_type, ff, cksr[1], ce[2], ce[3], tempBLE);
 
-                // Try to fit the found BLE in the preferred feasible half slice
-                int lh = ((availLo && ble.score > tempBLE.score) || !availHi ? 0 : 1);
-                ble = (lh ? tempBLE : ble);
-                (lh ? availHi : availLo) -= 1;
+//                 // Try to fit the found BLE in the preferred feasible half slice
+//                 int lh = ((availLo && ble.score > tempBLE.score) || !availHi ? 0 : 1);
+//                 ble = (lh ? tempBLE : ble);
+//                 (lh ? availHi : availLo) -= 1;
 
-                int beg = lh * HALF_SLICE_CAPACITY;
-                int end = beg + HALF_SLICE_CAPACITY;
+//                 int beg = lh * HALF_SLICE_CAPACITY;
+//                 int end = beg + HALF_SLICE_CAPACITY;
 
-                for (int idx = beg; idx < end; idx += BLE_CAPACITY)
-                {
-                    int pos = idx % SLICE_CAPACITY;
-                    if (site_det_impl_lut[sdlutId + pos] == INVALID && site_det_impl_lut[sdlutId + pos + 1] == INVALID)
-                    {
-                        site_det_impl_lut[sdlutId + pos] = ble.lut[0];
-                        site_det_impl_lut[sdlutId + pos + 1] = ble.lut[1];
+//                 for (int idx = beg; idx < end; idx += BLE_CAPACITY)
+//                 {
+//                     int pos = idx % SLICE_CAPACITY;
+//                     if (site_det_impl_lut[sdlutId + pos] == INVALID && site_det_impl_lut[sdlutId + pos + 1] == INVALID)
+//                     {
+//                         site_det_impl_lut[sdlutId + pos] = ble.lut[0];
+//                         site_det_impl_lut[sdlutId + pos + 1] = ble.lut[1];
 
-                        // Realize FF assignment
-                        for (int k : {0, 1})
-                        {
-                            site_det_impl_ff[sdlutId + pos + k] = ble.ff[k];
-                            if (ble.ff[k] != INVALID)
-                            {
-                                const int ffId = ble.ff[k];
-                                site_det_impl_cksr[sdckId + lh]= flop_ctrlSets[flop2ctrlSetId_map[ffId]*3 + 1];
-                                site_det_impl_ce[sdceId + 2*lh + k]= flop_ctrlSets[flop2ctrlSetId_map[ffId]*3 + 2];
-                                // Remove the FF assigned from the active list
-                                ff.erase(std::find(ff.begin(), ff.end(), ble.ff[k]));
-                            }
-                        }
-                        scores[pos / BLE_CAPACITY] = ble.score;
-                        break;
-                    }
-                }
-            }
+//                         // Realize FF assignment
+//                         for (int k : {0, 1})
+//                         {
+//                             site_det_impl_ff[sdlutId + pos + k] = ble.ff[k];
+//                             if (ble.ff[k] != INVALID)
+//                             {
+//                                 const int ffId = ble.ff[k];
+//                                 site_det_impl_cksr[sdckId + lh]= flop_ctrlSets[flop2ctrlSetId_map[ffId]*3 + 1];
+//                                 site_det_impl_ce[sdceId + 2*lh + k]= flop_ctrlSets[flop2ctrlSetId_map[ffId]*3 + 2];
+//                                 // Remove the FF assigned from the active list
+//                                 ff.erase(std::find(ff.begin(), ff.end(), ble.ff[k]));
+//                             }
+//                         }
+//                         scores[pos / BLE_CAPACITY] = ble.score;
+//                         break;
+//                     }
+//                 }
+//             }
 
-            while (!ff.empty())
-            {
-                // Find the FF gives the best score improvement
-                int bestFFIdx(INVALID), bestPos(INVALID);
-                T bestImprov(-10000.0);
-                for(unsigned int ffIdx = 0; ffIdx < ff.size(); ++ffIdx)
-                {
-                    int ffI = ff[ffIdx];
-                    int ffcksr = flop_ctrlSets[flop2ctrlSetId_map[ffI]*3 + 1];
-                    int ffce = flop_ctrlSets[flop2ctrlSetId_map[ffI]*3 + 2];
+//             while (!ff.empty())
+//             {
+//                 // Find the FF gives the best score improvement
+//                 int bestFFIdx(INVALID), bestPos(INVALID);
+//                 T bestImprov(-10000.0);
+//                 for(unsigned int ffIdx = 0; ffIdx < ff.size(); ++ffIdx)
+//                 {
+//                     int ffI = ff[ffIdx];
+//                     int ffcksr = flop_ctrlSets[flop2ctrlSetId_map[ffI]*3 + 1];
+//                     int ffce = flop_ctrlSets[flop2ctrlSetId_map[ffI]*3 + 2];
 
-                    for (int pos = 0; pos < SLICE_CAPACITY; ++pos)
-                    {
-                        int lh = pos / HALF_SLICE_CAPACITY;
-                        int oe = pos % BLE_CAPACITY;
+//                     for (int pos = 0; pos < SLICE_CAPACITY; ++pos)
+//                     {
+//                         int lh = pos / HALF_SLICE_CAPACITY;
+//                         int oe = pos % BLE_CAPACITY;
 
-                        if (site_det_impl_ff[sdlutId + pos] == INVALID && ffcksr == cksr[lh] && ffce == ce[2 * lh + oe])
-                        {
-                            int k = pos / BLE_CAPACITY * BLE_CAPACITY;
-                            site_det_impl_ff[sdlutId + pos] = ffI;
-                            T improv(0.0);
-                            compute_ble_score(flat_node2pin_start_map, flat_node2pin_map, flat_net2pin_start_map, flat_net2pin_map, pin2net_map, pin2node_map, node2outpinIdx_map, pin_typeIds, sorted_net_map, lut_type, site_det_impl_lut[sdlutId + k], site_det_impl_lut[sdlutId + k + 1], site_det_impl_ff[sdlutId + k], site_det_impl_ff[sdlutId + k+1], improv);
-                            improv -= scores[k / BLE_CAPACITY];
-                            site_det_impl_ff[sdlutId + pos] = INVALID;
+//                         if (site_det_impl_ff[sdlutId + pos] == INVALID && ffcksr == cksr[lh] && ffce == ce[2 * lh + oe])
+//                         {
+//                             int k = pos / BLE_CAPACITY * BLE_CAPACITY;
+//                             site_det_impl_ff[sdlutId + pos] = ffI;
+//                             T improv(0.0);
+//                             compute_ble_score(flat_node2pin_start_map, flat_node2pin_map, flat_net2pin_start_map, flat_net2pin_map, pin2net_map, pin2node_map, node2outpinIdx_map, pin_typeIds, sorted_net_map, lut_type, site_det_impl_lut[sdlutId + k], site_det_impl_lut[sdlutId + k + 1], site_det_impl_ff[sdlutId + k], site_det_impl_ff[sdlutId + k+1], improv);
+//                             improv -= scores[k / BLE_CAPACITY];
+//                             site_det_impl_ff[sdlutId + pos] = INVALID;
 
-                            if (improv > bestImprov)
-                            {
-                                bestFFIdx = ffIdx;
-                                bestPos = pos;
-                                bestImprov = improv;
-                            }
-                        }
-                    }
-                }
+//                             if (improv > bestImprov)
+//                             {
+//                                 bestFFIdx = ffIdx;
+//                                 bestPos = pos;
+//                                 bestImprov = improv;
+//                             }
+//                         }
+//                     }
+//                 }
 
-                // Realize the best FF assignment found
-                int bestFF = ff[bestFFIdx];
-                int lh = bestPos / HALF_SLICE_CAPACITY;
-                int oe = bestPos % BLE_CAPACITY;
-                site_det_impl_ff[sdlutId + bestPos] = bestFF;
-                site_det_impl_cksr[sdckId + lh] = flop_ctrlSets[flop2ctrlSetId_map[bestFF]*3 + 1];
-                site_det_impl_ce[sdceId + 2 * lh + oe] = flop_ctrlSets[flop2ctrlSetId_map[bestFF]*3 + 2];
+//                 // Realize the best FF assignment found
+//                 int bestFF = ff[bestFFIdx];
+//                 int lh = bestPos / HALF_SLICE_CAPACITY;
+//                 int oe = bestPos % BLE_CAPACITY;
+//                 site_det_impl_ff[sdlutId + bestPos] = bestFF;
+//                 site_det_impl_cksr[sdckId + lh] = flop_ctrlSets[flop2ctrlSetId_map[bestFF]*3 + 1];
+//                 site_det_impl_ce[sdceId + 2 * lh + oe] = flop_ctrlSets[flop2ctrlSetId_map[bestFF]*3 + 2];
 
-                // Remove the best FF found from the active list
-                ff.erase(ff.begin() + bestFFIdx);
+//                 // Remove the best FF found from the active list
+//                 ff.erase(ff.begin() + bestFFIdx);
 
-                // Update the BLE slot score
-                //int posIdx = (int)bestPos/BLE_CAPACITY;
-                scores[bestPos/BLE_CAPACITY] += bestImprov;
-            }
+//                 // Update the BLE slot score
+//                 //int posIdx = (int)bestPos/BLE_CAPACITY;
+//                 scores[bestPos/BLE_CAPACITY] += bestImprov;
+//             }
 
-            std::vector<BLE<T> > bleLP;
-            //order BLEs
-            // Sort BLEs in each half slice by their Y centroid coordinates (cen.y - site.y)
-            T siteY = site_xy[2*site_det_siteId[sIdx] + 1];
-            for (int lh : {0, 1})
-            {
-                bleLP.clear();
+//             std::vector<BLE<T> > bleLP;
+//             //order BLEs
+//             // Sort BLEs in each half slice by their Y centroid coordinates (cen.y - site.y)
+//             T siteY = site_xy[2*site_det_siteId[sIdx] + 1];
+//             for (int lh : {0, 1})
+//             {
+//                 bleLP.clear();
 
-                int beg = lh * HALF_SLICE_CAPACITY;
-                int end = beg + HALF_SLICE_CAPACITY;
-                for (int offset = beg; offset < end; offset += BLE_CAPACITY)
-                {
-                    bleLP.emplace_back();
-                    auto &ble = bleLP.back();
-                    std::vector<int> insts;
+//                 int beg = lh * HALF_SLICE_CAPACITY;
+//                 int end = beg + HALF_SLICE_CAPACITY;
+//                 for (int offset = beg; offset < end; offset += BLE_CAPACITY)
+//                 {
+//                     bleLP.emplace_back();
+//                     auto &ble = bleLP.back();
+//                     std::vector<int> insts;
 
-                    for (int k : {0, 1})
-                    {
-                        if (site_det_impl_lut[sdlutId + offset + k] != INVALID)
-                        {
-                            insts.push_back(site_det_impl_lut[sdlutId + offset + k]);
-                            ble.lut[k] = site_det_impl_lut[sdlutId + offset + k];
-                        }
-                        if (site_det_impl_ff[sdlutId + offset + k] != INVALID)
-                        {
-                            insts.push_back(site_det_impl_ff[sdlutId + offset + k]);
-                            ble.ff[k] = site_det_impl_ff[sdlutId + offset + k];
-                        }
-                    }
+//                     for (int k : {0, 1})
+//                     {
+//                         if (site_det_impl_lut[sdlutId + offset + k] != INVALID)
+//                         {
+//                             insts.push_back(site_det_impl_lut[sdlutId + offset + k]);
+//                             ble.lut[k] = site_det_impl_lut[sdlutId + offset + k];
+//                         }
+//                         if (site_det_impl_ff[sdlutId + offset + k] != INVALID)
+//                         {
+//                             insts.push_back(site_det_impl_ff[sdlutId + offset + k]);
+//                             ble.ff[k] = site_det_impl_ff[sdlutId + offset + k];
+//                         }
+//                     }
 
-                    // We use ble.score to store centroid.y - site.y of this BLE
-                    if (insts.empty())
-                    {
-                        ble.score = 0.0;
-                    } else
-                    {
-                        //Centroid of insts
-                        T cenY(pos_y[insts[0]]*wlPrecond[insts[0]]), totalWt(wlPrecond[insts[0]]);
-                        for(unsigned int el = 1; el < insts.size(); ++el)
-                        {
-                            cenY += pos_y[insts[el]] * wlPrecond[insts[el]]; 
-                            totalWt += wlPrecond[insts[el]];
-                        }
-                        cenY /= totalWt;
+//                     // We use ble.score to store centroid.y - site.y of this BLE
+//                     if (insts.empty())
+//                     {
+//                         ble.score = 0.0;
+//                     } else
+//                     {
+//                         //Centroid of insts
+//                         T cenY(pos_y[insts[0]]*wlPrecond[insts[0]]), totalWt(wlPrecond[insts[0]]);
+//                         for(unsigned int el = 1; el < insts.size(); ++el)
+//                         {
+//                             cenY += pos_y[insts[el]] * wlPrecond[insts[el]]; 
+//                             totalWt += wlPrecond[insts[el]];
+//                         }
+//                         cenY /= totalWt;
 
-                        ble.score = cenY - siteY;
-                    }
-                }
+//                         ble.score = cenY - siteY;
+//                     }
+//                 }
 
-                // Sort BLEs in this half slice by their centroid.y - site.y from low to high
-                // Put them back to the implementation
-                std::sort(bleLP.begin(), bleLP.end(), [&](const BLE<T> &a, const BLE<T> &b){ return a.score < b.score; });
+//                 // Sort BLEs in this half slice by their centroid.y - site.y from low to high
+//                 // Put them back to the implementation
+//                 std::sort(bleLP.begin(), bleLP.end(), [&](const BLE<T> &a, const BLE<T> &b){ return a.score < b.score; });
 
-                for(unsigned int i = 0; i < bleLP.size(); ++i)
-                {
-                    const auto &ble = bleLP[i];
-                    int offset = lh * HALF_SLICE_CAPACITY + i * BLE_CAPACITY;
-                    for (int k : {0, 1})
-                    {
-                        site_det_impl_lut[sdlutId + offset + k] = ble.lut[k];
-                        site_det_impl_ff[sdlutId + offset + k] = ble.ff[k];
-                    }
-                }
-            }
-        }
-    }
-    //std::cout << "Slot assignment done" << std::endl;
-    return 0;
-}
+//                 for(unsigned int i = 0; i < bleLP.size(); ++i)
+//                 {
+//                     const auto &ble = bleLP[i];
+//                     int offset = lh * HALF_SLICE_CAPACITY + i * BLE_CAPACITY;
+//                     for (int k : {0, 1})
+//                     {
+//                         site_det_impl_lut[sdlutId + offset + k] = ble.lut[k];
+//                         site_det_impl_ff[sdlutId + offset + k] = ble.ff[k];
+//                     }
+//                 }
+//             }
+//         }
+//     }
+//     //std::cout << "Slot assignment done" << std::endl;
+//     return 0;
+// }
 
 // Cache the solution
 template <typename T>
@@ -5164,6 +6108,9 @@ void initLegalize(
               at::Tensor site2addr_map,
               at::Tensor addr2site_map,
               at::Tensor node_names,
+              at::Tensor node2shape_map,
+              int lutId,
+              int ffId,
               int num_nets,
               int num_nodes,
               int num_sites_x,
@@ -5295,43 +6242,459 @@ void initLegalize(
                     DREAMPLACE_TENSOR_DATA_PTR(pin2node_map, int),
                     DREAMPLACE_TENSOR_DATA_PTR(pin_typeIds, int),
                     DREAMPLACE_TENSOR_DATA_PTR(node_names, int),
-                    num_nodes, preClusteringMaxDist, enableTimingPreclustering,
+                    DREAMPLACE_TENSOR_DATA_PTR(node2shape_map, int),
+                    lutId, ffId, num_nodes, preClusteringMaxDist, enableTimingPreclustering,
                     DREAMPLACE_TENSOR_DATA_PTR(flat_node2precluster_map, int),
                     DREAMPLACE_TENSOR_DATA_PTR(flat_node2prclstrCount, int),
                     num_threads);
             });
-    //std::cout << "Completed preclustering" << std::endl;
+    // std::cout << "Completed preclustering" << std::endl;
 
-    DREAMPLACE_DISPATCH_FLOATING_TYPES(pos, "initSiteNeighbours", [&] {
-            initSiteNeighbours<scalar_t>(
-                    DREAMPLACE_TENSOR_DATA_PTR(pos, scalar_t), DREAMPLACE_TENSOR_DATA_PTR(pos, scalar_t) + numNodes,
-                    DREAMPLACE_TENSOR_DATA_PTR(wlPrecond, scalar_t),
-                    DREAMPLACE_TENSOR_DATA_PTR(site_xy, scalar_t),
-                    DREAMPLACE_TENSOR_DATA_PTR(sorted_node_idx, int),
-                    DREAMPLACE_TENSOR_DATA_PTR(node2fence_region_map, int),
-                    DREAMPLACE_TENSOR_DATA_PTR(flat_node2precluster_map, int),
-                    DREAMPLACE_TENSOR_DATA_PTR(flat_node2prclstrCount, int),
-                    DREAMPLACE_TENSOR_DATA_PTR(site_types, int),
-                    DREAMPLACE_TENSOR_DATA_PTR(spiral_accessor, int),
-                    DREAMPLACE_TENSOR_DATA_PTR(site2addr_map, int),
-                    DREAMPLACE_TENSOR_DATA_PTR(addr2site_map, int),
-                    num_nodes, num_sites_x, num_sites_y, num_clb_sites, num_threads,
-                    spiralBegin, spiralEnd, maxList, SCL_IDX, nbrDistEnd,
-                    nbrDistBeg, nbrDistIncr, numGroups,
-                    DREAMPLACE_TENSOR_DATA_PTR(site_nbrList, int),
-                    DREAMPLACE_TENSOR_DATA_PTR(site_nbrRanges, int),
-                    DREAMPLACE_TENSOR_DATA_PTR(site_nbrRanges_idx, int),
-                    DREAMPLACE_TENSOR_DATA_PTR(site_nbr, int),
-                    DREAMPLACE_TENSOR_DATA_PTR(site_nbr_idx, int),
-                    DREAMPLACE_TENSOR_DATA_PTR(site_nbrGroup_idx, int),
-                    DREAMPLACE_TENSOR_DATA_PTR(site_det_siteId, int),
-                    DREAMPLACE_TENSOR_DATA_PTR(site_curr_scl_siteId, int),
-                    DREAMPLACE_TENSOR_DATA_PTR(site_curr_scl_validIdx, int),
-                    DREAMPLACE_TENSOR_DATA_PTR(site_curr_scl_idx, int));
-    });
-    //std::cout << "Completed initSiteNeighbours" << std::endl;
+    // DREAMPLACE_DISPATCH_FLOATING_TYPES(pos, "initSiteNeighbours", [&] {
+    //         initSiteNeighbours<scalar_t>(
+    //                 DREAMPLACE_TENSOR_DATA_PTR(pos, scalar_t), DREAMPLACE_TENSOR_DATA_PTR(pos, scalar_t) + numNodes,
+    //                 DREAMPLACE_TENSOR_DATA_PTR(wlPrecond, scalar_t),
+    //                 DREAMPLACE_TENSOR_DATA_PTR(site_xy, scalar_t),
+    //                 DREAMPLACE_TENSOR_DATA_PTR(sorted_node_idx, int),
+    //                 DREAMPLACE_TENSOR_DATA_PTR(node2fence_region_map, int),
+    //                 DREAMPLACE_TENSOR_DATA_PTR(flat_node2precluster_map, int),
+    //                 DREAMPLACE_TENSOR_DATA_PTR(flat_node2prclstrCount, int),
+    //                 DREAMPLACE_TENSOR_DATA_PTR(site_types, int),
+    //                 DREAMPLACE_TENSOR_DATA_PTR(spiral_accessor, int),
+    //                 DREAMPLACE_TENSOR_DATA_PTR(site2addr_map, int),
+    //                 DREAMPLACE_TENSOR_DATA_PTR(addr2site_map, int),
+    //                 num_nodes, num_sites_x, num_sites_y, num_clb_sites, num_threads,
+    //                 spiralBegin, spiralEnd, maxList, SCL_IDX, nbrDistEnd,
+    //                 nbrDistBeg, nbrDistIncr, numGroups,
+    //                 DREAMPLACE_TENSOR_DATA_PTR(site_nbrList, int),
+    //                 DREAMPLACE_TENSOR_DATA_PTR(site_nbrRanges, int),
+    //                 DREAMPLACE_TENSOR_DATA_PTR(site_nbrRanges_idx, int),
+    //                 DREAMPLACE_TENSOR_DATA_PTR(site_nbr, int),
+    //                 DREAMPLACE_TENSOR_DATA_PTR(site_nbr_idx, int),
+    //                 DREAMPLACE_TENSOR_DATA_PTR(site_nbrGroup_idx, int),
+    //                 DREAMPLACE_TENSOR_DATA_PTR(site_det_siteId, int),
+    //                 DREAMPLACE_TENSOR_DATA_PTR(site_curr_scl_siteId, int),
+    //                 DREAMPLACE_TENSOR_DATA_PTR(site_curr_scl_validIdx, int),
+    //                 DREAMPLACE_TENSOR_DATA_PTR(site_curr_scl_idx, int));
+    // });
+    // std::cout << "Completed initSiteNeighbours" << std::endl;
 
 }
+
+//Legalize carry-chains
+void legalizeCarryChain(
+        at::Tensor pos,
+        at::Tensor node_z,
+        at::Tensor site_xy,
+        at::Tensor node_size_x,
+        at::Tensor node_size_y,
+        at::Tensor org_node_x_offset,
+        at::Tensor org_node_y_offset,
+        at::Tensor site2addr_map,
+        at::Tensor carry_indices,
+        at::Tensor spiral_accessor,
+        at::Tensor site_types,
+        at::Tensor flop2ctrlSetId_map,
+        at::Tensor flop_ctrlSets,
+        at::Tensor node2shape_map,
+        at::Tensor flat_shape2org_node_map,
+        at::Tensor flat_shape2org_node_start_map,
+        at::Tensor original_node2node_map,
+        at::Tensor node2fence_region_map,
+        int spiralBegin,
+        int spiralEnd,
+        int num_sites_x,
+        int num_sites_y,
+        int sliceLId,
+        int sliceMId,
+        int lutId,
+        int SIG_IDX,
+        int SLICE_CAPACITY,
+        int CKSR_IN_CLB,
+        int CE_IN_CLB,
+        int num_carry_chains,
+        int num_carryInstsInSlice,
+        at::Tensor carry_chain_displacements,
+        at::Tensor site_det_score,
+        at::Tensor inst_curr_bestScoreImprov,
+        at::Tensor inst_next_bestScoreImprov,
+        at::Tensor legal_carry_x,
+        at::Tensor legal_carry_y,
+        at::Tensor sites_with_carry,
+        at::Tensor inst_curr_detSite,
+        at::Tensor inst_curr_bestSite,
+        at::Tensor inst_next_detSite,
+        at::Tensor inst_next_bestSite,
+        at::Tensor site_det_siteId,
+        at::Tensor site_det_sig,
+        at::Tensor site_det_sig_idx,
+        at::Tensor site_det_impl_lut,
+        at::Tensor site_unavail_lut,
+        at::Tensor site_det_impl_ff,
+        at::Tensor site_det_impl_cksr,
+        at::Tensor site_det_impl_ce,
+        int num_threads)
+{
+    CHECK_FLAT(pos);
+    CHECK_EVEN(pos);
+    CHECK_CONTIGUOUS(pos);
+
+    CHECK_FLAT(node_z);
+    CHECK_CONTIGUOUS(node_z);
+
+    CHECK_FLAT(site_xy);
+    CHECK_CONTIGUOUS(site_xy);
+
+    CHECK_FLAT(site2addr_map);
+    CHECK_CONTIGUOUS(site2addr_map);
+
+    CHECK_FLAT(spiral_accessor);
+    CHECK_CONTIGUOUS(spiral_accessor);
+
+    CHECK_FLAT(site_types);
+    CHECK_CONTIGUOUS(site_types);
+
+    int numNodes = pos.numel() / 2;
+
+    DREAMPLACE_DISPATCH_FLOATING_TYPES(pos, "legalizeCarryChainsLauncher", [&] {
+            legalizeCarryChainsLauncher<scalar_t>(
+                    DREAMPLACE_TENSOR_DATA_PTR(pos, scalar_t),
+                    DREAMPLACE_TENSOR_DATA_PTR(pos, scalar_t) + numNodes,
+                    DREAMPLACE_TENSOR_DATA_PTR(site_xy, scalar_t),
+                    DREAMPLACE_TENSOR_DATA_PTR(node_size_x, scalar_t),
+                    DREAMPLACE_TENSOR_DATA_PTR(node_size_y, scalar_t),
+                    DREAMPLACE_TENSOR_DATA_PTR(org_node_x_offset, scalar_t),
+                    DREAMPLACE_TENSOR_DATA_PTR(org_node_y_offset, scalar_t),
+                    DREAMPLACE_TENSOR_DATA_PTR(site2addr_map, int),
+                    DREAMPLACE_TENSOR_DATA_PTR(carry_indices, int),
+                    DREAMPLACE_TENSOR_DATA_PTR(spiral_accessor, int),
+                    DREAMPLACE_TENSOR_DATA_PTR(site_types, int),
+                    DREAMPLACE_TENSOR_DATA_PTR(flop2ctrlSetId_map, int),
+                    DREAMPLACE_TENSOR_DATA_PTR(flop_ctrlSets, int),
+                    DREAMPLACE_TENSOR_DATA_PTR(node2shape_map, int),
+                    DREAMPLACE_TENSOR_DATA_PTR(flat_shape2org_node_map, int),
+                    DREAMPLACE_TENSOR_DATA_PTR(flat_shape2org_node_start_map, int),
+                    DREAMPLACE_TENSOR_DATA_PTR(original_node2node_map, int),
+                    DREAMPLACE_TENSOR_DATA_PTR(node2fence_region_map, int),
+                    DREAMPLACE_TENSOR_DATA_PTR(node_z, int),
+                    spiralBegin, spiralEnd, num_carry_chains, num_sites_x, num_sites_y,
+                    sliceLId, sliceMId, lutId, SIG_IDX, SLICE_CAPACITY, 
+                    CKSR_IN_CLB, CE_IN_CLB, num_carryInstsInSlice,
+                    DREAMPLACE_TENSOR_DATA_PTR(carry_chain_displacements, scalar_t),
+                    DREAMPLACE_TENSOR_DATA_PTR(site_det_score, scalar_t),
+                    DREAMPLACE_TENSOR_DATA_PTR(inst_curr_bestScoreImprov, scalar_t),
+                    DREAMPLACE_TENSOR_DATA_PTR(inst_next_bestScoreImprov, scalar_t),
+                    DREAMPLACE_TENSOR_DATA_PTR(legal_carry_x, scalar_t),
+                    DREAMPLACE_TENSOR_DATA_PTR(legal_carry_y, scalar_t),
+                    DREAMPLACE_TENSOR_DATA_PTR(site_det_siteId, int),
+                    DREAMPLACE_TENSOR_DATA_PTR(site_det_sig_idx, int),
+                    DREAMPLACE_TENSOR_DATA_PTR(site_det_sig, int),
+                    DREAMPLACE_TENSOR_DATA_PTR(site_det_impl_lut, int),
+                    DREAMPLACE_TENSOR_DATA_PTR(site_unavail_lut, int),
+                    DREAMPLACE_TENSOR_DATA_PTR(site_det_impl_ff, int),
+                    DREAMPLACE_TENSOR_DATA_PTR(site_det_impl_cksr, int),
+                    DREAMPLACE_TENSOR_DATA_PTR(site_det_impl_ce, int),
+                    DREAMPLACE_TENSOR_DATA_PTR(inst_curr_detSite, int),
+                    DREAMPLACE_TENSOR_DATA_PTR(inst_curr_bestSite, int),
+                    DREAMPLACE_TENSOR_DATA_PTR(inst_next_detSite, int),
+                    DREAMPLACE_TENSOR_DATA_PTR(inst_next_bestSite, int),
+                    DREAMPLACE_TENSOR_DATA_PTR(sites_with_carry, int),
+                    num_threads);
+    });
+
+}
+
+//Legalize Lutrams
+void legalizeLutram(
+        at::Tensor pos,
+        at::Tensor site_xy,
+        at::Tensor lutram_locX,
+        at::Tensor lutram_locY,
+        at::Tensor lutram_indices,
+        at::Tensor site2addr_map,
+        int num_lutrams,
+        int num_sites_y,
+        int SIG_IDX,
+        int SLICE_CAPACITY,
+        at::Tensor dist_moved,
+        at::Tensor site_det_score,
+        at::Tensor inst_curr_bestScoreImprov,
+        at::Tensor inst_next_bestScoreImprov,
+        at::Tensor sites_with_lutram,
+        at::Tensor inst_curr_detSite,
+        at::Tensor inst_curr_bestSite,
+        at::Tensor inst_next_detSite,
+        at::Tensor inst_next_bestSite,
+        at::Tensor site_det_siteId,
+        at::Tensor site_det_sig,
+        at::Tensor site_det_sig_idx,
+        at::Tensor site_det_impl_lut,
+        int num_threads)
+{
+    CHECK_FLAT(pos);
+    CHECK_EVEN(pos);
+    CHECK_CONTIGUOUS(pos);
+
+    CHECK_FLAT(site_xy);
+    CHECK_CONTIGUOUS(site_xy);
+
+    CHECK_FLAT(lutram_locX);
+    CHECK_CONTIGUOUS(lutram_locX);
+    CHECK_FLAT(lutram_locY);
+    CHECK_CONTIGUOUS(lutram_locY);
+
+    CHECK_FLAT(lutram_indices);
+    CHECK_CONTIGUOUS(lutram_indices);
+
+    CHECK_FLAT(site2addr_map);
+    CHECK_CONTIGUOUS(site2addr_map);
+
+    int numNodes = pos.numel() / 2;
+
+    DREAMPLACE_DISPATCH_FLOATING_TYPES(pos, "legalizeLutramsLauncher", [&] {
+            legalizeLutramsLauncher<scalar_t>(
+                    DREAMPLACE_TENSOR_DATA_PTR(pos, scalar_t),
+                    DREAMPLACE_TENSOR_DATA_PTR(pos, scalar_t) + numNodes,
+                    DREAMPLACE_TENSOR_DATA_PTR(site_xy, scalar_t),
+                    DREAMPLACE_TENSOR_DATA_PTR(lutram_locX, scalar_t),
+                    DREAMPLACE_TENSOR_DATA_PTR(lutram_locY, scalar_t),
+                    DREAMPLACE_TENSOR_DATA_PTR(lutram_indices, int),
+                    DREAMPLACE_TENSOR_DATA_PTR(site2addr_map, int),
+                    num_lutrams, num_sites_y, 
+                    SIG_IDX, SLICE_CAPACITY,
+                    DREAMPLACE_TENSOR_DATA_PTR(dist_moved, scalar_t),
+                    DREAMPLACE_TENSOR_DATA_PTR(site_det_score, scalar_t),
+                    DREAMPLACE_TENSOR_DATA_PTR(inst_curr_bestScoreImprov, scalar_t),
+                    DREAMPLACE_TENSOR_DATA_PTR(inst_next_bestScoreImprov, scalar_t),
+                    DREAMPLACE_TENSOR_DATA_PTR(site_det_siteId, int),
+                    DREAMPLACE_TENSOR_DATA_PTR(site_det_sig_idx, int),
+                    DREAMPLACE_TENSOR_DATA_PTR(site_det_sig, int),
+                    DREAMPLACE_TENSOR_DATA_PTR(site_det_impl_lut, int),
+                    DREAMPLACE_TENSOR_DATA_PTR(inst_curr_detSite, int),
+                    DREAMPLACE_TENSOR_DATA_PTR(inst_curr_bestSite, int),
+                    DREAMPLACE_TENSOR_DATA_PTR(inst_next_detSite, int),
+                    DREAMPLACE_TENSOR_DATA_PTR(inst_next_bestSite, int),
+                    DREAMPLACE_TENSOR_DATA_PTR(sites_with_lutram, int),
+                    num_threads);
+    });
+}
+
+//Legalize muxshapes
+void legalizeMuxshapes(
+        at::Tensor pos,
+        at::Tensor site_xy,
+        at::Tensor muxshape_locX,
+        at::Tensor muxshape_locY,
+        at::Tensor muxshape_indices,
+        at::Tensor mux_type,
+        at::Tensor site2addr_map,
+        at::Tensor flop2ctrlSetId_map,
+        at::Tensor flop_ctrlSets,
+        at::Tensor flat_shape2org_node_start_map,
+        at::Tensor flat_shape2org_node_map,
+        at::Tensor original_node2node_map,
+        at::Tensor node2fence_region_map,
+        at::Tensor node_z,
+        int num_muxshapes,
+        int num_sites_y,
+        int SIG_IDX,
+        int SLICE_CAPACITY,
+        int CKSR_IN_CLB,
+        int CE_IN_CLB,
+        int lutId,
+        int ffId,
+        int muxId,
+        at::Tensor dist_moved,
+        at::Tensor site_det_score,
+        at::Tensor inst_curr_bestScoreImprov,
+        at::Tensor inst_next_bestScoreImprov,
+        at::Tensor sites_with_muxshape,
+        at::Tensor inst_curr_detSite,
+        at::Tensor inst_curr_bestSite,
+        at::Tensor inst_next_detSite,
+        at::Tensor inst_next_bestSite,
+        at::Tensor site_det_siteId,
+        at::Tensor site_det_sig,
+        at::Tensor site_det_sig_idx,
+        at::Tensor site_det_impl_lut,
+        at::Tensor site_det_impl_ff,
+        at::Tensor site_unavail_ff,
+        at::Tensor site_det_impl_cksr,
+        at::Tensor site_det_impl_ce,
+        int num_threads)
+{
+    CHECK_FLAT(pos);
+    CHECK_EVEN(pos);
+    CHECK_CONTIGUOUS(pos);
+
+    CHECK_FLAT(site_xy);
+    CHECK_CONTIGUOUS(site_xy);
+
+    CHECK_FLAT(muxshape_locX);
+    CHECK_CONTIGUOUS(muxshape_locX);
+    CHECK_FLAT(muxshape_locY);
+    CHECK_CONTIGUOUS(muxshape_locY);
+
+    CHECK_FLAT(muxshape_indices);
+    CHECK_CONTIGUOUS(muxshape_indices);
+
+    CHECK_FLAT(site2addr_map);
+    CHECK_CONTIGUOUS(site2addr_map);
+
+    int numNodes = pos.numel() / 2;
+
+    DREAMPLACE_DISPATCH_FLOATING_TYPES(pos, "legalizeMuxshapesLauncher", [&] {
+            legalizeMuxshapesLauncher<scalar_t>(
+                    DREAMPLACE_TENSOR_DATA_PTR(pos, scalar_t),
+                    DREAMPLACE_TENSOR_DATA_PTR(pos, scalar_t) + numNodes,
+                    DREAMPLACE_TENSOR_DATA_PTR(site_xy, scalar_t),
+                    DREAMPLACE_TENSOR_DATA_PTR(muxshape_locX, scalar_t),
+                    DREAMPLACE_TENSOR_DATA_PTR(muxshape_locY, scalar_t),
+                    DREAMPLACE_TENSOR_DATA_PTR(muxshape_indices, int),
+                    DREAMPLACE_TENSOR_DATA_PTR(mux_type, int),
+                    DREAMPLACE_TENSOR_DATA_PTR(site2addr_map, int),
+                    DREAMPLACE_TENSOR_DATA_PTR(flat_shape2org_node_start_map, int),
+                    DREAMPLACE_TENSOR_DATA_PTR(flat_shape2org_node_map, int),
+                    DREAMPLACE_TENSOR_DATA_PTR(original_node2node_map, int),
+                    DREAMPLACE_TENSOR_DATA_PTR(node2fence_region_map, int),
+                    DREAMPLACE_TENSOR_DATA_PTR(node_z, int),
+                    DREAMPLACE_TENSOR_DATA_PTR(flop2ctrlSetId_map, int),
+                    DREAMPLACE_TENSOR_DATA_PTR(flop_ctrlSets, int),
+                    num_muxshapes, num_sites_y, SIG_IDX, SLICE_CAPACITY, 
+                    CKSR_IN_CLB, CE_IN_CLB, lutId, ffId, muxId,
+                    DREAMPLACE_TENSOR_DATA_PTR(dist_moved, scalar_t),
+                    DREAMPLACE_TENSOR_DATA_PTR(site_det_score, scalar_t),
+                    DREAMPLACE_TENSOR_DATA_PTR(inst_curr_bestScoreImprov, scalar_t),
+                    DREAMPLACE_TENSOR_DATA_PTR(inst_next_bestScoreImprov, scalar_t),
+                    DREAMPLACE_TENSOR_DATA_PTR(site_det_siteId, int),
+                    DREAMPLACE_TENSOR_DATA_PTR(site_det_sig_idx, int),
+                    DREAMPLACE_TENSOR_DATA_PTR(site_det_sig, int),
+                    DREAMPLACE_TENSOR_DATA_PTR(site_det_impl_lut, int),
+                    DREAMPLACE_TENSOR_DATA_PTR(site_det_impl_ff, int),
+                    DREAMPLACE_TENSOR_DATA_PTR(site_unavail_ff, int),
+                    DREAMPLACE_TENSOR_DATA_PTR(site_det_impl_cksr, int),
+                    DREAMPLACE_TENSOR_DATA_PTR(site_det_impl_ce, int),
+                    DREAMPLACE_TENSOR_DATA_PTR(inst_curr_detSite, int),
+                    DREAMPLACE_TENSOR_DATA_PTR(inst_curr_bestSite, int),
+                    DREAMPLACE_TENSOR_DATA_PTR(inst_next_detSite, int),
+                    DREAMPLACE_TENSOR_DATA_PTR(inst_next_bestSite, int),
+                    DREAMPLACE_TENSOR_DATA_PTR(sites_with_muxshape, int),
+                    num_threads);
+    });
+}
+
+//MinCost to find sites
+void minCostFlow(
+    pybind11::array_t<double, pybind11::array::c_style | pybind11::array::forcecast> const& locX,
+    pybind11::array_t<double, pybind11::array::c_style | pybind11::array::forcecast> const& locY,
+    int const num_sites, int const num_nodes,
+    pybind11::array_t<double, pybind11::array::c_style | pybind11::array::forcecast> const& sites,
+    pybind11::array_t<double, pybind11::array::c_style | pybind11::array::forcecast> const& precond,
+    double const &lg_max_dist_init, double const &lg_max_dist_incr,
+    double const &lg_flow_cost_scale, pybind11::list &movVal, pybind11::list &out)
+{
+    typedef lemon::ListDigraph graphType;
+    graphType graph; 
+    graphType::ArcMap<double> capLo(graph);
+    graphType::ArcMap<double> capHi(graph);
+    graphType::ArcMap<double> cost(graph);
+    std::vector<graphType::Node> lNodes, rNodes;
+    std::vector<graphType::Arc> lArcs, rArcs, mArcs;
+    std::vector<std::pair<int, int> > mArcPairs;
+
+    //Source and target Nodes
+    graphType::Node s = graph.addNode(), t = graph.addNode();
+
+    //Add left nodes (blocks) and arcs between source node and left nodes
+    for (int i = 0; i < num_nodes; ++i)
+    {
+        lNodes.emplace_back(graph.addNode());
+        lArcs.emplace_back(graph.addArc(s, lNodes.back()));
+        cost[lArcs.back()] = 0.0;
+        capLo[lArcs.back()] = 0.0;
+        capHi[lArcs.back()] = 1.0;
+    }
+
+    //Add right nodes (sites) and arc between right nodes and target node
+    for (int j=0; j < num_sites; ++j)
+    {
+        rNodes.emplace_back(graph.addNode());
+        rArcs.emplace_back(graph.addArc(rNodes.back(), t));
+        cost[rArcs.back()] = 0.0;
+        capLo[rArcs.back()] = 0.0;
+        capHi[rArcs.back()] = 1.0;
+    }
+
+    //To improve efficiency, we do not run matching for complete bipartite graph but incrementally add arcs when needed
+    double distMin = 0.0;
+    double distMax = lg_max_dist_init;
+
+    while (true)
+    {
+        //Generate arcs between left (blocks) and right (sites) nodes, pruning based on distance
+        for (int blk = 0; blk < num_nodes; ++blk)
+        {
+            for (int st = 0; st < num_sites; ++st)
+            {
+                double dist = std::abs(locX.at(blk) - sites.at(st*2)) + std::abs(locY.at(blk) - sites.at(st*2+1));
+                if (dist >= distMin && dist < distMax)
+                {
+                    mArcs.emplace_back(graph.addArc(lNodes[blk], rNodes[st]));
+                    mArcPairs.emplace_back(blk, st);
+                    double mArcCost = dist * precond.at(blk) * lg_flow_cost_scale;
+                    cost[mArcs.back()] = mArcCost;
+                    capLo[mArcs.back()] = 0.0;
+                    capHi[mArcs.back()] = 1.0;
+                }
+            }
+        }
+
+        //Run min-cost flow
+        lemon::NetworkSimplex<graphType, double> mcf(graph);
+        mcf.stSupply(s, t, num_nodes);
+        mcf.lowerMap(capLo).upperMap(capHi).costMap(cost);
+        mcf.run();
+
+        //A feasible solution must have flow size equal to the no of blocks
+        //If not, we need to increase the max distance constraint
+        double flowSize = 0.0;
+        for (const auto &arc : rArcs)
+        {
+            flowSize += mcf.flow(arc);
+        }
+        if (flowSize != num_nodes)
+        {
+            //Increase searching range
+            distMin = distMax;
+            distMax += lg_max_dist_incr;
+            continue;
+        }
+
+        double maxMov = 0;
+        double avgMov = 0;
+        //If the execution hits here, we found a feasible solution
+        for (int i = 0; i < mArcs.size(); ++i)
+        {
+            if (mcf.flow(mArcs[i]))
+            {
+                const auto &p = mArcPairs[i];
+                double mov = std::abs(locX.at(p.first) - sites.at(p.second*2)) + std::abs(locY.at(p.first) - sites.at(p.second*2+1));
+                avgMov += mov;
+                maxMov = std::max(maxMov, mov);
+                out[p.first] = sites.at(p.second*2);
+                out[num_nodes+p.first] = sites.at(p.second*2+1);
+            }
+        }
+        if (num_nodes)
+        {
+            avgMov /= num_nodes;
+        }
+        movVal[0] = maxMov;
+        movVal[1] = avgMov;
+        return;
+    }
+}
+
 
 //runDLIteration
 void runDLIter(at::Tensor pos,
@@ -5359,6 +6722,11 @@ void runDLIter(at::Tensor pos,
                at::Tensor pin2node_map,
                at::Tensor flat_node2prclstrCount,
                at::Tensor flat_node2precluster_map,
+               at::Tensor node2shape_map,
+               at::Tensor node_z,
+               at::Tensor sites_with_lutram,
+               at::Tensor sites_with_carry,
+               at::Tensor sites_with_muxshape,
                at::Tensor site_nbrList,
                at::Tensor site_nbrRanges,
                at::Tensor site_nbrRanges_idx,
@@ -5390,6 +6758,8 @@ void runDLIter(at::Tensor pos,
                int SCL_IDX,
                int PQ_IDX,
                int SIG_IDX,
+               int lutId,
+               int ffId,
                int num_nodes,
                int num_threads,
                at::Tensor site_nbr_idx,
@@ -5444,7 +6814,9 @@ void runDLIter(at::Tensor pos,
                at::Tensor site_det_sig_idx,
                at::Tensor site_det_sig,
                at::Tensor site_det_impl_lut,
+               at::Tensor site_unavail_lut,
                at::Tensor site_det_impl_ff,
+               at::Tensor site_unavail_ff,
                at::Tensor site_det_impl_cksr,
                at::Tensor site_det_impl_ce,
                at::Tensor inst_curr_detSite,
@@ -5558,6 +6930,11 @@ void runDLIter(at::Tensor pos,
                     DREAMPLACE_TENSOR_DATA_PTR(sorted_net_map, int),
                     DREAMPLACE_TENSOR_DATA_PTR(flat_node2prclstrCount, int),
                     DREAMPLACE_TENSOR_DATA_PTR(flat_node2precluster_map, int),
+                    DREAMPLACE_TENSOR_DATA_PTR(node2shape_map, int),
+                    DREAMPLACE_TENSOR_DATA_PTR(node_z, int),
+                    DREAMPLACE_TENSOR_DATA_PTR(sites_with_lutram, int),
+                    DREAMPLACE_TENSOR_DATA_PTR(sites_with_carry, int),
+                    DREAMPLACE_TENSOR_DATA_PTR(sites_with_muxshape, int),
                     DREAMPLACE_TENSOR_DATA_PTR(site_nbrList, int),
                     DREAMPLACE_TENSOR_DATA_PTR(site_nbrRanges, int),
                     DREAMPLACE_TENSOR_DATA_PTR(site_nbrRanges_idx, int),
@@ -5569,7 +6946,7 @@ void runDLIter(at::Tensor pos,
                     HALF_SLICE_CAPACITY, NUM_BLE_PER_SLICE, minNeighbors, numGroups, 
                     netShareScoreMaxNetDegree, wlScoreMaxNetDegree,
                     xWirelenWt, yWirelenWt, wirelenImprovWt, timing_alpha, timing_beta, extNetCountWt, 
-                    CKSR_IN_CLB, CE_IN_CLB, SCL_IDX, PQ_IDX, SIG_IDX, num_threads,
+                    lutId, ffId, CKSR_IN_CLB, CE_IN_CLB, SCL_IDX, PQ_IDX, SIG_IDX, num_threads,
                     DREAMPLACE_TENSOR_DATA_PTR(site_nbr_idx, int),
                     DREAMPLACE_TENSOR_DATA_PTR(site_nbr, int),
                     DREAMPLACE_TENSOR_DATA_PTR(site_nbrGroup_idx, int),
@@ -5622,7 +6999,9 @@ void runDLIter(at::Tensor pos,
                     DREAMPLACE_TENSOR_DATA_PTR(site_det_sig_idx, int),
                     DREAMPLACE_TENSOR_DATA_PTR(site_det_sig, int),
                     DREAMPLACE_TENSOR_DATA_PTR(site_det_impl_lut, int),
+                    DREAMPLACE_TENSOR_DATA_PTR(site_unavail_lut, int),
                     DREAMPLACE_TENSOR_DATA_PTR(site_det_impl_ff, int),
+                    DREAMPLACE_TENSOR_DATA_PTR(site_unavail_ff, int),
                     DREAMPLACE_TENSOR_DATA_PTR(site_det_impl_cksr, int),
                     DREAMPLACE_TENSOR_DATA_PTR(site_det_impl_ce, int),
                     DREAMPLACE_TENSOR_DATA_PTR(inst_curr_detSite, int),
@@ -5640,7 +7019,7 @@ void runDLIter(at::Tensor pos,
                                 DREAMPLACE_TENSOR_DATA_PTR(node2fence_region_map, int),
                                 DREAMPLACE_TENSOR_DATA_PTR(addr2site_map, int),
                                 num_clb_sites, CKSR_IN_CLB, CE_IN_CLB, 
-                                SCL_IDX, PQ_IDX, SIG_IDX, num_nodes, num_threads,
+                                SCL_IDX, PQ_IDX, SIG_IDX, lutId, ffId, num_nodes, num_threads,
                                 DREAMPLACE_TENSOR_DATA_PTR(site_nbrGroup_idx, int),
                                 DREAMPLACE_TENSOR_DATA_PTR(site_nbrRanges_idx, int),
                                 DREAMPLACE_TENSOR_DATA_PTR(site_curr_pq_top_idx, int),
@@ -5731,6 +7110,11 @@ void ripUp_SlotAssign(at::Tensor pos,
                    at::Tensor flat_tnet2pin_map,
                    at::Tensor flat_node2prclstrCount,
                    at::Tensor flat_node2precluster_map,
+                   at::Tensor node2shape_map,
+                   at::Tensor shape_node_z,
+                   at::Tensor sites_with_lutram,
+                   at::Tensor sites_with_carry,
+                   at::Tensor sites_with_muxshape,
                    at::Tensor sorted_node_map,
                    at::Tensor sorted_node_idx,
                    at::Tensor sorted_net_map,
@@ -5755,6 +7139,10 @@ void ripUp_SlotAssign(at::Tensor pos,
                    int num_clb_sites,
                    int spiralBegin,
                    int spiralEnd,
+                   int lutId,
+                   int ffId,
+                   int sliceLId,
+                   int sliceMId,
                    int CKSR_IN_CLB,
                    int CE_IN_CLB,
                    int HALF_SLICE_CAPACITY,
@@ -5769,7 +7157,9 @@ void ripUp_SlotAssign(at::Tensor pos,
                    at::Tensor site_det_sig_idx,
                    at::Tensor site_det_sig,
                    at::Tensor site_det_impl_lut,
+                   at::Tensor site_unavail_lut, 
                    at::Tensor site_det_impl_ff,
+                   at::Tensor site_unavail_ff, 
                    at::Tensor site_det_impl_cksr,
                    at::Tensor site_det_impl_ce,
                    at::Tensor site_det_siteId,
@@ -5909,6 +7299,11 @@ void ripUp_SlotAssign(at::Tensor pos,
                     DREAMPLACE_TENSOR_DATA_PTR(flat_tnet2pin_map, int),
                     DREAMPLACE_TENSOR_DATA_PTR(flat_node2prclstrCount, int),
                     DREAMPLACE_TENSOR_DATA_PTR(flat_node2precluster_map, int),
+                    DREAMPLACE_TENSOR_DATA_PTR(node2shape_map, int),
+                    DREAMPLACE_TENSOR_DATA_PTR(shape_node_z, int),
+                    DREAMPLACE_TENSOR_DATA_PTR(sites_with_lutram, int),
+                    DREAMPLACE_TENSOR_DATA_PTR(sites_with_carry, int),
+                    DREAMPLACE_TENSOR_DATA_PTR(sites_with_muxshape, int),
                     DREAMPLACE_TENSOR_DATA_PTR(sorted_node_map, int),
                     DREAMPLACE_TENSOR_DATA_PTR(sorted_node_idx, int),
                     DREAMPLACE_TENSOR_DATA_PTR(sorted_net_map, int),
@@ -5917,21 +7312,24 @@ void ripUp_SlotAssign(at::Tensor pos,
                     DREAMPLACE_TENSOR_DATA_PTR(node_names, int),
                     nbrDistEnd, xWirelenWt, yWirelenWt, extNetCountWt,
                     wirelenImprovWt, timing_alpha, timing_beta, num_nodes, num_sites_x, num_sites_y, num_clb_sites,
-                    spiralBegin, spiralEnd, CKSR_IN_CLB, CE_IN_CLB, HALF_SLICE_CAPACITY, 
+                    spiralBegin, spiralEnd, lutId, ffId, sliceLId, sliceMId, 
+                    CKSR_IN_CLB, CE_IN_CLB, HALF_SLICE_CAPACITY, 
                     NUM_BLE_PER_SLICE, netShareScoreMaxNetDegree,
                     wlScoreMaxNetDegree, ripupExpansion, greedyExpansion, SIG_IDX,
                     DREAMPLACE_TENSOR_DATA_PTR(inst_curr_detSite, int),
                     DREAMPLACE_TENSOR_DATA_PTR(site_det_sig_idx, int),
                     DREAMPLACE_TENSOR_DATA_PTR(site_det_sig, int),
                     DREAMPLACE_TENSOR_DATA_PTR(site_det_impl_lut, int),
+                    DREAMPLACE_TENSOR_DATA_PTR(site_unavail_lut, int),
                     DREAMPLACE_TENSOR_DATA_PTR(site_det_impl_ff, int),
+                    DREAMPLACE_TENSOR_DATA_PTR(site_unavail_ff, int),
                     DREAMPLACE_TENSOR_DATA_PTR(site_det_impl_cksr, int),
                     DREAMPLACE_TENSOR_DATA_PTR(site_det_impl_ce, int),
                     DREAMPLACE_TENSOR_DATA_PTR(site_det_siteId, int),
                     DREAMPLACE_TENSOR_DATA_PTR(site_det_score, scalar_t));
                 });
 
-    //std::cout << "Completed RipUp & Greedy Legalization" << std::endl;
+    // std::cout << "Completed RipUp & Greedy Legalization" << std::endl;
 
     DREAMPLACE_DISPATCH_FLOATING_TYPES(pos, "slotAssign", [&] {
             slotAssign<scalar_t>(
@@ -5955,18 +7353,26 @@ void ripUp_SlotAssign(at::Tensor pos,
                     DREAMPLACE_TENSOR_DATA_PTR(sorted_net_map, int),
                     DREAMPLACE_TENSOR_DATA_PTR(addr2site_map, int),
                     DREAMPLACE_TENSOR_DATA_PTR(node_names, int),
+                    DREAMPLACE_TENSOR_DATA_PTR(node2shape_map, int),
+                    DREAMPLACE_TENSOR_DATA_PTR(shape_node_z, int),
+                    DREAMPLACE_TENSOR_DATA_PTR(sites_with_lutram, int),
+                    DREAMPLACE_TENSOR_DATA_PTR(sites_with_carry, int),
+                    DREAMPLACE_TENSOR_DATA_PTR(sites_with_muxshape, int),
                     slotAssignFlowWeightScale, slotAssignFlowWeightIncr,
                     num_sites_x, num_sites_y, num_clb_sites, CKSR_IN_CLB,
                     CE_IN_CLB, HALF_SLICE_CAPACITY,
                     NUM_BLE_PER_SLICE, NUM_BLE_PER_HALF_SLICE, num_threads, 
                     DREAMPLACE_TENSOR_DATA_PTR(site_det_sig_idx, int),
                     DREAMPLACE_TENSOR_DATA_PTR(site_det_impl_lut, int),
+                    DREAMPLACE_TENSOR_DATA_PTR(site_unavail_lut, int),
                     DREAMPLACE_TENSOR_DATA_PTR(site_det_impl_ff, int),
+                    DREAMPLACE_TENSOR_DATA_PTR(site_unavail_ff, int),
                     DREAMPLACE_TENSOR_DATA_PTR(site_det_impl_cksr, int),
                     DREAMPLACE_TENSOR_DATA_PTR(site_det_impl_ce, int),
                     DREAMPLACE_TENSOR_DATA_PTR(site_det_siteId, int));
                 });
-    //std::cout << "Completed slot assign" << std::endl;
+
+    // std::cout << "Completed slot assign" << std::endl;
 
     //Cache Solution
     DREAMPLACE_DISPATCH_FLOATING_TYPES(pos, "cacheSolution", [&] {
@@ -5980,46 +7386,166 @@ void ripUp_SlotAssign(at::Tensor pos,
                     DREAMPLACE_TENSOR_DATA_PTR(node_y, scalar_t),
                     DREAMPLACE_TENSOR_DATA_PTR(node_z, int));
                 });
-    //std::cout << "Completed cache solution" << std::endl;
+    // std::cout << "Completed cache solution" << std::endl;
 }
 
-//For GPU use
-void updateNbrListMap(
+// //For GPU use
+// void updateNbrListMap(
+//               at::Tensor pos,
+//               at::Tensor wlPrecond,
+//               at::Tensor site_xy,
+//               at::Tensor sorted_node_idx,
+//               at::Tensor node2fence_region_map,
+//               at::Tensor flat_node2precluster_map,
+//               at::Tensor flat_node2prclstrCount,
+//               at::Tensor site_types,
+//               at::Tensor spiral_accessor,
+//               at::Tensor site2addr_map,
+//               at::Tensor addr2site_map,
+//               int num_nodes,
+//               int num_sites_x,
+//               int num_sites_y,
+//               int num_clb_sites,
+//               int SCL_IDX,
+//               int spiralBegin,
+//               int spiralEnd,
+//               int maxList,
+//               double nbrDistEnd,
+//               double nbrDistBeg,
+//               double nbrDistIncr,
+//               int numGroups,
+//               int num_threads,
+//               at::Tensor site_nbrList,
+//               at::Tensor site_nbrRanges,
+//               at::Tensor site_nbrRanges_idx,
+//               at::Tensor site_nbr,
+//               at::Tensor site_nbr_idx,
+//               at::Tensor site_nbrGroup_idx,
+//               at::Tensor site_det_siteId,
+//               at::Tensor site_curr_scl_siteId,
+//               at::Tensor site_curr_scl_validIdx,
+//               at::Tensor site_curr_scl_idx
+//               )
+// {
+//     CHECK_FLAT(pos);
+//     CHECK_EVEN(pos);
+//     CHECK_CONTIGUOUS(pos);
+
+//     CHECK_FLAT(wlPrecond);
+//     CHECK_CONTIGUOUS(wlPrecond);
+
+//     CHECK_FLAT(sorted_node_idx);
+//     CHECK_CONTIGUOUS(sorted_node_idx);
+
+//     CHECK_FLAT(node2fence_region_map);
+//     CHECK_CONTIGUOUS(node2fence_region_map);
+
+//     CHECK_FLAT(flat_node2precluster_map);
+//     CHECK_CONTIGUOUS(flat_node2precluster_map);
+//     CHECK_FLAT(flat_node2prclstrCount);
+//     CHECK_CONTIGUOUS(flat_node2prclstrCount);
+
+//     CHECK_FLAT(site_types);
+//     CHECK_CONTIGUOUS(site_types);
+
+//     CHECK_FLAT(spiral_accessor);
+//     CHECK_CONTIGUOUS(spiral_accessor);
+
+//     int numNodes = pos.numel() / 2;
+
+//     DREAMPLACE_DISPATCH_FLOATING_TYPES(pos, "initSiteNeighbours", [&] {
+//             initSiteNeighbours<scalar_t>(
+//                     DREAMPLACE_TENSOR_DATA_PTR(pos, scalar_t), DREAMPLACE_TENSOR_DATA_PTR(pos, scalar_t) + numNodes,
+//                     DREAMPLACE_TENSOR_DATA_PTR(wlPrecond, scalar_t),
+//                     DREAMPLACE_TENSOR_DATA_PTR(site_xy, scalar_t),
+//                     DREAMPLACE_TENSOR_DATA_PTR(sorted_node_idx, int),
+//                     DREAMPLACE_TENSOR_DATA_PTR(node2fence_region_map, int),
+//                     DREAMPLACE_TENSOR_DATA_PTR(flat_node2precluster_map, int),
+//                     DREAMPLACE_TENSOR_DATA_PTR(flat_node2prclstrCount, int),
+//                     DREAMPLACE_TENSOR_DATA_PTR(site_types, int),
+//                     DREAMPLACE_TENSOR_DATA_PTR(spiral_accessor, int),
+//                     DREAMPLACE_TENSOR_DATA_PTR(site2addr_map, int),
+//                     DREAMPLACE_TENSOR_DATA_PTR(addr2site_map, int),
+//                     num_nodes, num_sites_x, num_sites_y, num_clb_sites, num_threads,
+//                     spiralBegin, spiralEnd, maxList, SCL_IDX, nbrDistEnd,
+//                     nbrDistBeg, nbrDistIncr, numGroups,
+//                     DREAMPLACE_TENSOR_DATA_PTR(site_nbrList, int),
+//                     DREAMPLACE_TENSOR_DATA_PTR(site_nbrRanges, int),
+//                     DREAMPLACE_TENSOR_DATA_PTR(site_nbrRanges_idx, int),
+//                     DREAMPLACE_TENSOR_DATA_PTR(site_nbr, int),
+//                     DREAMPLACE_TENSOR_DATA_PTR(site_nbr_idx, int),
+//                     DREAMPLACE_TENSOR_DATA_PTR(site_nbrGroup_idx, int),
+//                     DREAMPLACE_TENSOR_DATA_PTR(site_det_siteId, int),
+//                     DREAMPLACE_TENSOR_DATA_PTR(site_curr_scl_siteId, int),
+//                     DREAMPLACE_TENSOR_DATA_PTR(site_curr_scl_validIdx, int),
+//                     DREAMPLACE_TENSOR_DATA_PTR(site_curr_scl_idx, int));
+//     });
+//     //std::cout << "Completed NbrListMap update" << std::endl;
+// }
+
+//Initialize site neighbors
+void initSiteNbrs(
               at::Tensor pos,
               at::Tensor wlPrecond,
               at::Tensor site_xy,
+              at::Tensor site_det_score,
               at::Tensor sorted_node_idx,
               at::Tensor node2fence_region_map,
-              at::Tensor flat_node2precluster_map,
-              at::Tensor flat_node2prclstrCount,
               at::Tensor site_types,
               at::Tensor spiral_accessor,
               at::Tensor site2addr_map,
               at::Tensor addr2site_map,
+              at::Tensor flat_node2precluster_map,
+              at::Tensor flat_node2prclstrCount,
+              at::Tensor node2shape_map,
+              at::Tensor sites_with_lutram,
+              at::Tensor sites_with_carry,
+              at::Tensor sites_with_muxshape,
+              double nbrDistEnd,
+              double nbrDistBeg,
+              double nbrDistIncr,
+              int lutId,
+              int ffId,
+              int sliceLId,
+              int sliceMId,
               int num_nodes,
               int num_sites_x,
               int num_sites_y,
               int num_clb_sites,
               int SCL_IDX,
+              int SIG_IDX,
+              int SLICE_CAPACITY,
+              int CKSR_IN_CLB,
+              int CE_IN_CLB,
+              int numGroups,
+              int maxList,
               int spiralBegin,
               int spiralEnd,
-              int maxList,
-              double nbrDistEnd,
-              double nbrDistBeg,
-              double nbrDistIncr,
-              int numGroups,
-              int num_threads,
-              at::Tensor site_nbrList,
+              at::Tensor site_curr_scl_score,
+              at::Tensor site_curr_scl_siteId,
+              at::Tensor site_curr_scl_validIdx,
+              at::Tensor site_curr_scl_idx,
+              at::Tensor site_curr_scl_sig,
+              at::Tensor site_curr_scl_sig_idx,
+              at::Tensor site_curr_scl_impl_lut,
+              at::Tensor site_curr_scl_impl_ff,
+              at::Tensor site_curr_scl_impl_cksr,
+              at::Tensor site_curr_scl_impl_ce,
               at::Tensor site_nbrRanges,
               at::Tensor site_nbrRanges_idx,
+              at::Tensor site_nbrList,
               at::Tensor site_nbr,
               at::Tensor site_nbr_idx,
               at::Tensor site_nbrGroup_idx,
               at::Tensor site_det_siteId,
-              at::Tensor site_curr_scl_siteId,
-              at::Tensor site_curr_scl_validIdx,
-              at::Tensor site_curr_scl_idx
-              )
+              at::Tensor site_det_sig,
+              at::Tensor site_det_sig_idx,
+              at::Tensor site_det_impl_lut,
+              at::Tensor site_det_impl_ff,
+              at::Tensor site_det_impl_cksr,
+              at::Tensor site_det_impl_ce,
+              int num_threads
+              ) 
 {
     CHECK_FLAT(pos);
     CHECK_EVEN(pos);
@@ -6028,16 +7554,14 @@ void updateNbrListMap(
     CHECK_FLAT(wlPrecond);
     CHECK_CONTIGUOUS(wlPrecond);
 
+    CHECK_FLAT(site_xy);
+    CHECK_CONTIGUOUS(site_xy);
+
     CHECK_FLAT(sorted_node_idx);
     CHECK_CONTIGUOUS(sorted_node_idx);
 
     CHECK_FLAT(node2fence_region_map);
     CHECK_CONTIGUOUS(node2fence_region_map);
-
-    CHECK_FLAT(flat_node2precluster_map);
-    CHECK_CONTIGUOUS(flat_node2precluster_map);
-    CHECK_FLAT(flat_node2prclstrCount);
-    CHECK_CONTIGUOUS(flat_node2prclstrCount);
 
     CHECK_FLAT(site_types);
     CHECK_CONTIGUOUS(site_types);
@@ -6045,13 +7569,27 @@ void updateNbrListMap(
     CHECK_FLAT(spiral_accessor);
     CHECK_CONTIGUOUS(spiral_accessor);
 
+    CHECK_FLAT(site2addr_map);
+    CHECK_CONTIGUOUS(site2addr_map);
+
+    CHECK_FLAT(addr2site_map);
+    CHECK_CONTIGUOUS(addr2site_map);
+
+    CHECK_FLAT(flat_node2precluster_map);
+    CHECK_CONTIGUOUS(flat_node2precluster_map);
+
+    CHECK_FLAT(flat_node2prclstrCount);
+    CHECK_CONTIGUOUS(flat_node2prclstrCount);
+
     int numNodes = pos.numel() / 2;
 
     DREAMPLACE_DISPATCH_FLOATING_TYPES(pos, "initSiteNeighbours", [&] {
             initSiteNeighbours<scalar_t>(
-                    DREAMPLACE_TENSOR_DATA_PTR(pos, scalar_t), DREAMPLACE_TENSOR_DATA_PTR(pos, scalar_t) + numNodes,
+                    DREAMPLACE_TENSOR_DATA_PTR(pos, scalar_t),
+                    DREAMPLACE_TENSOR_DATA_PTR(pos, scalar_t) + numNodes,
                     DREAMPLACE_TENSOR_DATA_PTR(wlPrecond, scalar_t),
                     DREAMPLACE_TENSOR_DATA_PTR(site_xy, scalar_t),
+                    DREAMPLACE_TENSOR_DATA_PTR(site_det_score, scalar_t),
                     DREAMPLACE_TENSOR_DATA_PTR(sorted_node_idx, int),
                     DREAMPLACE_TENSOR_DATA_PTR(node2fence_region_map, int),
                     DREAMPLACE_TENSOR_DATA_PTR(flat_node2precluster_map, int),
@@ -6060,9 +7598,14 @@ void updateNbrListMap(
                     DREAMPLACE_TENSOR_DATA_PTR(spiral_accessor, int),
                     DREAMPLACE_TENSOR_DATA_PTR(site2addr_map, int),
                     DREAMPLACE_TENSOR_DATA_PTR(addr2site_map, int),
-                    num_nodes, num_sites_x, num_sites_y, num_clb_sites, num_threads,
-                    spiralBegin, spiralEnd, maxList, SCL_IDX, nbrDistEnd,
-                    nbrDistBeg, nbrDistIncr, numGroups,
+                    DREAMPLACE_TENSOR_DATA_PTR(node2shape_map, int),
+                    DREAMPLACE_TENSOR_DATA_PTR(sites_with_lutram, int),
+                    DREAMPLACE_TENSOR_DATA_PTR(sites_with_carry, int),
+                    DREAMPLACE_TENSOR_DATA_PTR(sites_with_muxshape, int),
+                    lutId, ffId, sliceLId, sliceMId, num_nodes, num_sites_x, num_sites_y, num_clb_sites,
+                    num_threads, spiralBegin, spiralEnd, maxList, SCL_IDX, SIG_IDX, SLICE_CAPACITY, CKSR_IN_CLB, CE_IN_CLB,
+                    nbrDistEnd, nbrDistBeg, nbrDistIncr, numGroups,
+                    DREAMPLACE_TENSOR_DATA_PTR(site_curr_scl_score, scalar_t),
                     DREAMPLACE_TENSOR_DATA_PTR(site_nbrList, int),
                     DREAMPLACE_TENSOR_DATA_PTR(site_nbrRanges, int),
                     DREAMPLACE_TENSOR_DATA_PTR(site_nbrRanges_idx, int),
@@ -6070,18 +7613,35 @@ void updateNbrListMap(
                     DREAMPLACE_TENSOR_DATA_PTR(site_nbr_idx, int),
                     DREAMPLACE_TENSOR_DATA_PTR(site_nbrGroup_idx, int),
                     DREAMPLACE_TENSOR_DATA_PTR(site_det_siteId, int),
+                    DREAMPLACE_TENSOR_DATA_PTR(site_det_sig, int),
+                    DREAMPLACE_TENSOR_DATA_PTR(site_det_sig_idx, int),
+                    DREAMPLACE_TENSOR_DATA_PTR(site_det_impl_lut, int),
+                    DREAMPLACE_TENSOR_DATA_PTR(site_det_impl_ff, int),
+                    DREAMPLACE_TENSOR_DATA_PTR(site_det_impl_cksr, int),
+                    DREAMPLACE_TENSOR_DATA_PTR(site_det_impl_ce, int),
                     DREAMPLACE_TENSOR_DATA_PTR(site_curr_scl_siteId, int),
                     DREAMPLACE_TENSOR_DATA_PTR(site_curr_scl_validIdx, int),
-                    DREAMPLACE_TENSOR_DATA_PTR(site_curr_scl_idx, int));
+                    DREAMPLACE_TENSOR_DATA_PTR(site_curr_scl_idx, int),
+                    DREAMPLACE_TENSOR_DATA_PTR(site_curr_scl_sig, int),
+                    DREAMPLACE_TENSOR_DATA_PTR(site_curr_scl_sig_idx, int),
+                    DREAMPLACE_TENSOR_DATA_PTR(site_curr_scl_impl_lut, int),
+                    DREAMPLACE_TENSOR_DATA_PTR(site_curr_scl_impl_ff, int),
+                    DREAMPLACE_TENSOR_DATA_PTR(site_curr_scl_impl_cksr, int),
+                    DREAMPLACE_TENSOR_DATA_PTR(site_curr_scl_impl_ce, int));
     });
     //std::cout << "Completed NbrListMap update" << std::endl;
 }
+
 
 DREAMPLACE_END_NAMESPACE
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
   m.def("initLegalize", &DREAMPLACE_NAMESPACE::initLegalize, "Initialize LUT/FF legalization");
+  m.def("legalizeCarryChain", &DREAMPLACE_NAMESPACE::legalizeCarryChain, "Legalize Carry Chain");
+  m.def("minCostFlow", &DREAMPLACE_NAMESPACE::minCostFlow, "Min Cost flow to get site locations");
+  m.def("legalizeLutram", &DREAMPLACE_NAMESPACE::legalizeLutram, "Legalize LUTRAM");
+  m.def("legalizeMuxshapes", &DREAMPLACE_NAMESPACE::legalizeMuxshapes, "Legalize Muxshapes");
   m.def("runDLIter", &DREAMPLACE_NAMESPACE::runDLIter, "Run DL Iteration");
   m.def("ripUp_SlotAssign", &DREAMPLACE_NAMESPACE::ripUp_SlotAssign, "Run RipUp and Greedy Legalization and Slot Assign");
-  m.def("updateNbrListMap", &DREAMPLACE_NAMESPACE::updateNbrListMap, "update NbrListMap (Sequential)");
+  m.def("initSiteNbrs", &DREAMPLACE_NAMESPACE::initSiteNbrs, "update NbrListMap (Sequential)");
 }

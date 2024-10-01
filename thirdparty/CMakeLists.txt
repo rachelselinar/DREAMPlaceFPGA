@@ -1,6 +1,8 @@
-#project(thirdparty)
+#
+# Modifications Copyright(C) 2024 Advanced Micro Devices, Inc. All rights reserved
+#
 
-add_subdirectory(flute-3.1)
+#project(thirdparty)
 
 set(OPENBLAS OFF CACHE BOOL "Turn off OPENBLAS for Limbo")
 set(INSTALL_LIMBO OFF CACHE BOOL "Turn off installation for Limbo")
