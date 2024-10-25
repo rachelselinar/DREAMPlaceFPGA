@@ -1,0 +1,92 @@
+#!/bin/bash
+# Modifications Copyright(C) 2024 Advanced Micro Devices, Inc. All rights reserved
+
+# usage: dreamplacefpga -DREAMPlaceFPGA_dir <DREAMPlaceFPGA_dir> -result_dir <result_dir> -interchange_netlist <interchange_netlist> -interchange_device <interchange_device> -gpu <gpu>
+
+# default values
+bin_dir=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+DREAMPlaceFPGA_dir="$(dirname "$bin_dir")"
+result_dir="result"
+interchange_netlist="design.netlist"
+interchange_device="xcvu095.device"
+gpu=0
+
+## if no arguments are given, print usage, else check if all arguments are given
+if [ $# -eq 0 ]; then
+    echo "Usage: bin/dreamplacefpga -DREAMPlaceFPGA_dir <DREAMPlaceFPGA_dir> -result_dir <result_dir> -interchange_netlist <interchange_netlist> -interchange_device <interchange_device> -gpu <gpu>"
+    exit 0
+fi
+
+# check if all arguments are given
+while [[ $# -gt 0 ]]; do 
+    key="$1"
+    case $key in
+        -DREAMPlaceFPGA_dir)
+            DREAMPlaceFPGA_dir=$2
+            shift
+            shift
+            ;;
+        -result_dir)
+            result_dir=$2
+            shift
+            shift
+            ;;
+        -interchange_netlist)
+            interchange_netlist=$2
+            shift
+            shift
+            ;;
+        -interchange_device)
+            interchange_device=$2
+            shift
+            shift
+            ;;
+        -gpu)
+            gpu=$2
+            shift
+            shift
+            ;;
+        *)
+            echo "Unknown argument: $1"
+            exit 1
+            ;;
+    esac
+done
+
+
+#create design.json file
+if [ -f "$(pwd)/design.json" ]; then
+    rm $(pwd)/design.json
+fi
+
+cat > $(pwd)/design.json <<EOF
+{
+    "interchange_netlist" : "${interchange_netlist}",
+    "interchange_device" : "${interchange_device}",
+    "result_dir" : "${result_dir}",
+    "io_pl": "",
+    "gpu" : ${gpu},
+    "num_bins_x" : 512,
+    "num_bins_y" : 512,
+    "global_place_stages" : [
+        {"num_bins_x" : 512, "num_bins_y" : 512, "iteration" : 2000, "learning_rate" : 0.01, "wirelength" : "weighted_average", "optimizer" : "nesterov"}
+    ],
+    "target_density" : 1.0,
+    "density_weight" : 8e-5,
+    "random_seed" : 1000,
+    "scale_factor" : 1.0,
+    "global_place_flag" : 1,
+    "routability_opt_flag": 0,
+    "legalize_flag" : 1,
+    "detailed_place_flag" : 0,
+    "dtype" : "float32",
+    "plot_flag" : 0,
+    "num_threads" : 8,
+    "deterministic_flag" : 1,
+    "enable_if" : 1,
+    "enable_site_routing" : 0
+}
+EOF
+
+#run the design
+python ${DREAMPlaceFPGA_dir}/dreamplacefpga/Placer.py $(pwd)/design.json 

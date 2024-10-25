@@ -1,7 +1,8 @@
 {
     "interchange_netlist" : "benchmarks/IF_netlist/gnl_2_4_3_1.3_gnl_3000_07_3_80_80.netlist",
-    "interchange_device" : "/group/zircon2/zhixiong/RapidWright/device_interchange_files/xcvu3p-ffvc1517-1-e.device",
-    "gpu" : 0,
+    "interchange_device" : "/home/local/eda12/zhilix/projects/RapidWright/device_interchange_files/xcvu3p-ffvc1517-1-e.device",
+    "result_dir" : "results",
+    "gpu" : 1,
     "num_bins_x" : 512,
     "num_bins_y" : 512,
     "global_place_stages" : [
@@ -19,5 +20,6 @@
     "plot_flag" : 0,
     "num_threads" : 1,
     "deterministic_flag" : 1,
-    "enable_if" : 1
+    "enable_if" : 1,
+    "enable_site_routing" : 0
     }

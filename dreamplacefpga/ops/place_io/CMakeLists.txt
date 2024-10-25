@@ -28,7 +28,7 @@ set(LINK_LIBS
   CapnProto::kj
   CapnProto::kj-gzip
   CapnProto::kj-async
-  CapnProto::capnpc
+  CapnProto::capnp
   )
 
 if(CAIRO_FOUND)

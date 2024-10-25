@@ -393,10 +393,6 @@ void InterchangeDriver::addNetsToDataBase()
                             } else {
                                 int busPortId = busPort2Index.at(portName);
                                 std::string busName = port2BusNames.at(busPortId).at(port.getBusIdx().getIdx());
-                                // if (netName == "net_5071")
-                                // {
-                                //     std::cout << "Net: " << netName << " Cell: " << cellName << " Port: " << portName << " Bus: " << busName << std::endl;
-                                // }
                                 m_net.vNetPin.push_back(BookshelfParser::NetPin(cellName, busName));
                                 
                             }

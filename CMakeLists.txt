@@ -62,6 +62,8 @@ message(STATUS "Boost_INCLUDE_DIRS = ${Boost_INCLUDE_DIRS}")
 # set(Capnp_NO_CAPNP_CMAKE TRUE)
 find_package(CapnProto REQUIRED)
 message(STATUS "capnp_INCLUDE_DIRS = ${capnp_INCLUDE_DIRS}")
+# message(STATUS "capnp_LIBRARY_DIRS = ${capnp_LIBRARY_DIRS}")
+
 
 # fpga interchange
 set(IF_SOURCE_DIR ${CMAKE_INSTALL_PREFIX}/thirdparty/fpga-interchange-schema)
