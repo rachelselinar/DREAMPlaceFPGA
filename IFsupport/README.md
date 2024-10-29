@@ -13,7 +13,7 @@ The IF format uses a set of schema to describe
 
 The figure below shows the steps involved in running a GNL design on ``DREAMPlaceFPGA``.
 <p align="center">
-    <img src=/images/IF_support_upd.png height="500">
+    <img src=/images/IF_support_upd.png height="350">
 </p>
 
 ## <a name="dependencies"></a>External Dependencies
