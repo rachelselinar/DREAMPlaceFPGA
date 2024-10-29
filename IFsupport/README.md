@@ -85,9 +85,9 @@ The placement results can be found at **results/**
 
 #### Run placement (Bash option):
 
-``bash bin/dreamplacefpga`` This bash scripts automatically generates a ***.json** file and launch placement.
+``bash bin/dreamplacefpga`` If the ***.json** file is not provided, this bash scripts automatically generates a ***.json** file and launch placement.
 
-**Usage** : bin/dreamplacefpga -DREAMPlaceFPGA_dir <DREAMPlaceFPGA_dir> -result_dir <result_dir> -interchange_netlist <interchange_netlist> -interchange_device <interchange_device> -gpu <gpu_flag>
+**Usage** : bin/dreamplacefpga -DREAMPlaceFPGA_dir <DREAMPlaceFPGA_dir> -result_dir <result_dir> -interchange_netlist <interchange_netlist> -interchange_device <interchange_device> -gpu <gpu_flag> -json <json_file> -python_exe <python_executable>
 
 ### III: Use RapidWright to generate the ``design.dcp`` using the IF ``design.phys``
 
