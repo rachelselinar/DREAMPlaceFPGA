@@ -75,9 +75,8 @@ protected:
 
     // std::vector<std::vector<std::string>> cellType2PortNames
 
-    std::vector<std::vector<std::string>> port2BusNames;
-    // hashspace::unordered_map<std::string, int> cellType2Index;
-    hashspace::unordered_map<std::string, int> busPort2Index;
+    std::vector<std::vector<std::string>> port2BusNames; /// Port to bus names
+    hashspace::unordered_map<int, int> busPort2Index; /// port_id to bus_id
 
     hashspace::unordered_map<std::string, int> netName2Index;
     std::vector<std::string> netNames;

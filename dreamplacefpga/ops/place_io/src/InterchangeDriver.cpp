@@ -246,7 +246,6 @@ void InterchangeDriver::addLibCellsToDataBase()
             std::string portName = strings[cellPorts[portIdx].getName()].cStr();
             auto portDir = cellPorts[portIdx].getDir();
             std::vector<std::string> busNames;
-            // std::cout << "Cell Type: " << cellTypeName << " Port: " << portName <<std::endl;
 
             //Address the bus ports
             if (cellPorts[portIdx].isBus())
@@ -289,7 +288,7 @@ void InterchangeDriver::addLibCellsToDataBase()
                     }
                 }
                 port2BusNames.emplace_back(busNames);
-                busPort2Index.insert(std::make_pair(portName, busPortId));
+                busPort2Index.insert(std::make_pair(portIdx, busPortId));
 
             // for ports that are not bus
             } else {
@@ -368,6 +367,8 @@ void InterchangeDriver::addNetsToDataBase()
                 int netId(netNames.size());
                 netName2Index.insert(std::make_pair(netName, netId));
                 netNames.emplace_back(netName);
+                bool isExtPortNet = false;
+                bool isVCCGND = false;
 
                 m_net.net_name = netName;
                 m_net.vNetPin.clear();
@@ -377,30 +378,29 @@ void InterchangeDriver::addNetsToDataBase()
                 { 
                     auto port = netPorts[k];
                     std::string portName = strings[cellPorts[port.getPort()].getName()].cStr();
-                    
+
+                    if (port.getBusIdx().isIdx())
+                    {
+                        int busPortId = busPort2Index.at(port.getPort());
+                        std::string busName = port2BusNames.at(busPortId).at(port.getBusIdx().getIdx());
+                        portName = busName;
+                    }
+
                     if (port.isInst())
                     {
                         auto inst = instList[port.getInst()];
                         std::string cellName = strings[inst.getName()].cStr();
                         std::string cellTypeName = strings[libCells[inst.getCell()].getName()].cStr();
-
-                        if (port.getBusIdx().isIdx())
+                        if (limbo::iequals(cellTypeName, "VCC")|| limbo::iequals(cellTypeName, "GND"))
                         {
-                            if (port.isExtPort())
-                            {   
-                                m_net.vNetPin.push_back(BookshelfParser::NetPin(cellName, netName));
-                               
-                            } else {
-                                int busPortId = busPort2Index.at(portName);
-                                std::string busName = port2BusNames.at(busPortId).at(port.getBusIdx().getIdx());
-                                m_net.vNetPin.push_back(BookshelfParser::NetPin(cellName, busName));
-                                
-                            }
-
-                        } else {
-                            m_net.vNetPin.push_back(BookshelfParser::NetPin(cellName, portName));
+                            isVCCGND = true;
                         }
-                    }
+                        m_net.vNetPin.push_back(BookshelfParser::NetPin(cellName, portName));
+
+                    } else if (port.isExtPort())
+                    {
+                        isExtPortNet = true;
+                    }   
                     
                 }
 
