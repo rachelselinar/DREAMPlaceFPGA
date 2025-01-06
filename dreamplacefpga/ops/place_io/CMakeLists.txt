@@ -7,7 +7,7 @@ set(INCLUDE_DIRS
   ${LIMBO_SOURCE_DIR}
   ${Boost_INCLUDE_DIRS}
   ${ZLIB_INCLUDE_DIRS}
-  ${IF_SOURCE_DIR}
+  ${IF_BINARY_DIR}
   ${capnp_INCLUDE_DIRS}
   )
 
@@ -25,10 +25,11 @@ set(LINK_LIBS
   # end targets in Limbo 
   OpenMP::OpenMP_CXX
   ${ZLIB_LIBRARIES}
-  CapnProto::kj
-  CapnProto::kj-gzip
-  CapnProto::kj-async
-  CapnProto::capnp
+  fpga_interchange_capnp
+  kj
+  kj-gzip
+  kj-async
+  capnp
   )
 
 if(CAIRO_FOUND)
