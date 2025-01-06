@@ -1,6 +1,6 @@
 {
     "interchange_netlist" : "benchmarks/IF_netlist/gnl_2_4_3_1.3_gnl_3000_07_3_80_80.netlist",
-    "interchange_device" : "/home/local/eda12/zhilix/projects/RapidWright/device_interchange_files/xcvu3p-ffvc1517-1-e.device",
+    "interchange_device" : "xcvu3p-ffvc1517-1-e.device",
     "result_dir" : "results",
     "gpu" : 1,
     "num_bins_x" : 512,
