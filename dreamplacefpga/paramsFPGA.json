@@ -240,6 +240,14 @@
     "descripton" : "Enable IF Writer", 
     "default" : 0
     },
+"enable_site_routing" : {
+    "descripton" : "Enable site routing", 
+    "default" : 0
+    },
+"io_pl":{
+    "descripton" : "design.pl file for fixed IO placement", 
+    "default" : ""
+    },
 "timing_driven_flag" : {
     "descripton" : "Enable timing driven placement", 
     "default" : 0

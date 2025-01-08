@@ -102,6 +102,16 @@ PlaceDB place_io_forward(pybind11::str const& auxPath)
     return db; 
 }
 
+
+//TODO: Don't call this function unless functions in interchange parser are all tested
+PlaceDB place_io_forward_interchange(pybind11::str const& deviceFile, pybind11::str const& netlistFile)
+{   
+    DREAMPLACE_NAMESPACE::PlaceDB db; 
+    bool flag;
+    flag = DREAMPLACE_NAMESPACE::readInterchange(db, deviceFile, netlistFile);
+    return db;
+}
+
 DREAMPLACE_END_NAMESPACE
 
 // create Python binding 
@@ -136,6 +146,7 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
              "Apply Placement Solution (double)");
     m.def("pydb", [](DREAMPLACE_NAMESPACE::PlaceDB const& db){return DREAMPLACE_NAMESPACE::PyPlaceDB(db);}, "Convert PlaceDB to PyPlaceDB");
     m.def("forward", &DREAMPLACE_NAMESPACE::place_io_forward, "PlaceDB IO Read");
+    m.def("forward_interchange", &DREAMPLACE_NAMESPACE::place_io_forward_interchange, "PlaceDB IO Read Interchange");
 }
 
 

@@ -73,6 +73,7 @@ class PlaceDBFPGA (object):
         self.num_sites_x = None # number of sites in horizontal direction
         self.num_sites_y = None # number of sites in vertical direction 
         self.site_type_map = None # site type of each site 
+        self.site_name_map = None # site type of each site, except IOs
         self.lg_siteXYs = None # site type of each site 
         self.dspSiteXYs = [] #Sites for DSP instances
         self.ramSiteXYs = [] #Sites for RAM instances
@@ -304,6 +305,8 @@ class PlaceDBFPGA (object):
         self.num_sites_y = pydb.num_sites_y
         self.site_type_map = pydb.site_type_map
         self.site_type_map = np.array(self.site_type_map)
+        self.site_name_map = pydb.site_name_map
+        self.site_name_map = np.array(self.site_name_map)
         self.lg_siteXYs = pydb.lg_siteXYs
         self.lg_siteXYs = np.array(self.lg_siteXYs, dtype=self.dtype)
 
@@ -341,55 +344,74 @@ class PlaceDBFPGA (object):
         self.num_routing_layers = 1
         self.unit_horizontal_capacity = 0.95 * params.unit_horizontal_capacity
         self.unit_vertical_capacity = 0.95 * params.unit_vertical_capacity
+        
+        if "io_pl" in params.__dict__ and params.io_pl:
+            self.read_pl(params, params.io_pl)
 
-        self.loc2site_map = self.create_loc2site_map()
+        self.loc2site_map = self.create_loc2site_map(params)
 
-    def create_loc2site_map(self):
+    def create_loc2site_map(self, params):
         """
         @brief create a loc2site_map for a given placedb
         this map is used to convert x, y, z location in bookshelf to the site names, and it's UltraScale-only
         """
         loc2site_map = {}
-
-        dsp_cnt = 0
-        bram_cnt = 0
         IO_cols = []
 
-        dsp_y_num = self. num_sites_y / 2.5
-        bram_y_num = self. num_sites_y / 5
+        # if not using interchange parser, using this method to create loc2site_map
+        if params.aux_input:
+            dsp_cnt = 0
+            bram_cnt = 0
+            dsp_y_num = self. num_sites_y / 2.5
+            bram_y_num = self. num_sites_y / 5
+            slice_x = 0
+            # initialize loc2site_map
+            for i in range(self.num_sites_x):
+                slice_flag = False
+                for j in range(self.num_sites_y):
+                    # LUT/FF
+                    if self.site_type_map[i, j] == 1: 
+                        slice_flag = True
+                        slice_y = j
+                        #  16 is the num of LUT/FF in a SLICE
+                        for k in range(0, 16):
+                            loc2site_map[i, j, k] = "SLICE_X" + str(slice_x) + "Y" + str(slice_y)
 
-        slice_x = 0
-        # initialize loc2site_map
-        for i in range(self.num_sites_x):
-            slice_flag = False
-            for j in range(self.num_sites_y):
-                # LUT/FF
-                if self.site_type_map[i, j] == 1: 
-                    slice_flag = True
-                    slice_y = j
-                    #  16 is the num of LUT/FF in a SLICE
-                    for k in range(0, 16):
-                        loc2site_map[i, j, k] = "SLICE_X" + str(slice_x) + "Y" + str(slice_y)
+                    # DSP
+                    elif self.site_type_map[i, j] == 2:
+                        site_x = int(dsp_cnt / dsp_y_num)
+                        site_y = int(dsp_cnt - site_x * dsp_y_num)
+                        loc2site_map[i, j, 0] = "DSP48E2_X" + str(site_x) + "Y" + str(site_y)
+                        dsp_cnt += 1
+                    # BRAM
+                    elif self.site_type_map[i, j] == 3:
+                        site_x = int(bram_cnt / bram_y_num)
+                        site_y = int(bram_cnt - site_x * bram_y_num)
+                        loc2site_map[i, j, 0] = "RAMB36_X" + str(site_x) + "Y" + str(site_y)
+                        bram_cnt += 1
+                    # IO
+                    elif self.site_type_map[i, j] == 4:
+                        if i not in IO_cols:
+                            IO_cols.append(i)
 
-                # DSP
-                elif self.site_type_map[i, j] == 2:
-                    site_x = int(dsp_cnt / dsp_y_num)
-                    site_y = int(dsp_cnt - site_x * dsp_y_num)
-                    loc2site_map[i, j, 0] = "DSP48E2_X" + str(site_x) + "Y" + str(site_y)
-                    dsp_cnt += 1
-                # BRAM
-                elif self.site_type_map[i, j] == 3:
-                    site_x = int(bram_cnt / bram_y_num)
-                    site_y = int(bram_cnt - site_x * bram_y_num)
-                    loc2site_map[i, j, 0] = "RAMB36_X" + str(site_x) + "Y" + str(site_y)
-                    bram_cnt += 1
-                # IO
-                elif self.site_type_map[i, j] == 4:
-                    if i not in IO_cols:
-                        IO_cols.append(i)
+                if slice_flag == True:
+                    slice_x += 1
 
-            if slice_flag == True:
-                slice_x += 1
+        # if using interchange parser, using self.site_name_map 
+        else:
+            for i in range(self.num_sites_x):
+                for j in range(self.num_sites_y):
+                    # LUT/FF
+                    if self.site_type_map[i, j] == 1: 
+                        for k in range(0, 16):
+                            loc2site_map[i, j, k] = self.site_name_map[i, j]
+                    # DSP and BRAM
+                    elif self.site_type_map[i, j] == 2 or self.site_type_map[i, j] == 3:
+                        loc2site_map[i, j, 0] = self.site_name_map[i, j]
+                    # IO
+                    elif self.site_type_map[i, j] == 4:  
+                        if i not in IO_cols:
+                            IO_cols.append(i)
 
         IOB_col = []
         BUFGCE_col = []
@@ -868,14 +890,19 @@ class PlaceDBFPGA (object):
                 line = line.strip()
                 if line.startswith("UCLA"):
                     continue
+                node_name, node_x, node_y, node_z, _ = line.split()
+                node_id = self.node_name2id_map[node_name]
+                self.node_x[node_id] = float(node_x)
+                self.node_y[node_id] = float(node_y)
+                self.node_z[node_id] = int(node_z)
                 # node positions
-                pos = re.search(r"(\w+)\s+([+-]?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?)\s+([+-]?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?)\s*:\s*(\w+)", line)
-                if pos:
-                    node_id = self.node_name2id_map[pos.group(1)]
-                    self.node_x[node_id] = float(pos.group(2))
-                    self.node_y[node_id] = float(pos.group(6))
-                    self.node_orient[node_id] = pos.group(10)
-                    orient = pos.group(4)
+                # pos = re.search(r"(\w+)\s+([+-]?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?)\s+([+-]?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?)\s*:\s*(\w+)", line)
+                # if pos:
+                #     node_id = self.node_name2id_map[pos.group(1)]
+                #     self.node_x[node_id] = float(pos.group(2))
+                #     self.node_y[node_id] = float(pos.group(6))
+                #     self.node_orient[node_id] = pos.group(10)
+                #     orient = pos.group(4)
         #if params.scale_factor != 1.0:
         #    self.scale_pl(params.scale_factor)
         logging.info("read_pl takes %.3f seconds" % (time.time()-tt))

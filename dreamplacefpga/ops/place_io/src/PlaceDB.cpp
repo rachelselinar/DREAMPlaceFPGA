@@ -50,7 +50,7 @@ void PlaceDB::add_bookshelf_node(std::string& name, std::string& type)
       m_numFF += 1;
       ++num_movable_nodes;
     }
-    else if (limbo::iequals(type, "LUT0"))
+    else if (limbo::iequals(type, "LUT0") || limbo::iequals(type, "GND") || limbo::iequals(type, "VCC"))
     {
       node_name2id_map.insert(std::make_pair(name, mov_node_names.size()));
       mov_node_names.emplace_back(name);
@@ -394,10 +394,15 @@ void PlaceDB::resize_sites(int xSize, int ySize)
 {
     m_dieArea.set(0, 0, xSize, ySize);
     m_siteDB.resize(xSize, std::vector<index_type>(ySize, 0));
+    m_siteNameDB.resize(xSize, std::vector<std::string>(ySize, ""));
 }
 void PlaceDB::site_info_update(int x, int y, int val)
 {
     m_siteDB[x][y] = val;
+}
+void PlaceDB::add_site_name(int x, int y, std::string const& name)
+{
+    m_siteNameDB[x][y] = name;
 }
 void PlaceDB::resize_clk_regions(int xReg, int yReg)
 {

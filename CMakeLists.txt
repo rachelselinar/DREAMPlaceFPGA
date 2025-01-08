@@ -59,6 +59,13 @@ find_package(ZLIB REQUIRED)
 set(Boost_NO_BOOST_CMAKE TRUE)
 find_package(Boost 1.55.0 REQUIRED)
 message(STATUS "Boost_INCLUDE_DIRS = ${Boost_INCLUDE_DIRS}")
+# set(Capnp_NO_CAPNP_CMAKE TRUE)
+
+# fpga interchange
+set(IF_SOURCE_DIR ${CMAKE_INSTALL_PREFIX}/thirdparty/fpga-interchange-schema)
+message(STATUS "IF_SOURCE_DIR ${IF_SOURCE_DIR}")
+set(IF_BINARY_DIR ${CMAKE_CURRENT_BINARY_DIR}/thirdparty/fpga-interchange-schema)
+message(STATUS "IF_BINARY_DIR ${IF_BINARY_DIR}")
 
 #find_package(CUDA 9.0)
 find_package(Cairo)
@@ -71,12 +78,6 @@ message(STATUS "OPS_DIR ${OPS_DIR}")
 message(STATUS "UTILITY_LIBRARY_DIRS ${UTILITY_LIBRARY_DIRS}")
 
 # thirdparty libraries 
-# flute for steiner tree generation 
-find_path(FLUTE_INCLUDE_DIRS flute.h PATHS ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/*)
-string(REPLACE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR} FLUTE_LINK_DIRS ${FLUTE_INCLUDE_DIRS})
-message(STATUS "FLUTE_INCLUDE_DIRS ${FLUTE_INCLUDE_DIRS}")
-message(STATUS "FLUTE_LINK_DIRS ${FLUTE_LINK_DIRS}")
-
 # Limbo for parsers 
 set(LIMBO_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/Limbo)
 message(STATUS "LIMBO_SOURCE_DIR ${LIMBO_SOURCE_DIR}")
